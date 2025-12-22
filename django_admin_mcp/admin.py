@@ -17,18 +17,28 @@ class MCPTokenAdmin(admin.ModelAdmin):
     list_display = [
         "name",
         "token_preview",
+        "user",
         "is_active",
         "status_display",
         "created_at",
         "expires_at",
         "last_used_at",
     ]
-    list_filter = ["is_active", "created_at", "expires_at"]
-    search_fields = ["name", "token"]
+    list_filter = ["is_active", "created_at", "expires_at", "groups"]
+    search_fields = ["name", "token", "user__username"]
     readonly_fields = ["token", "created_at", "last_used_at", "status_display"]
+    filter_horizontal = ["groups", "permissions"]
 
     fieldsets = (
         (None, {"fields": ("name", "is_active", "expires_at")}),
+        (
+            "Permissions",
+            {
+                "fields": ("user", "groups", "permissions"),
+                "description": "Assign a user, groups, or specific permissions to control access. "
+                "If none are set, token has full access (backward compatibility).",
+            },
+        ),
         (
             "Token Information",
             {

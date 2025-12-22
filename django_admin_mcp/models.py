@@ -6,6 +6,7 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.auth.models import Group, Permission
 from django.db import models
 from django.utils import timezone
 
@@ -45,6 +46,18 @@ class MCPToken(models.Model):
         help_text="Token expiration date (leave empty for indefinite tokens)",
     )
     last_used_at = models.DateTimeField(null=True, blank=True, help_text="Last time this token was used")
+    groups = models.ManyToManyField(
+        Group,
+        blank=True,
+        related_name="mcp_tokens",
+        help_text="Groups this token belongs to for permission management",
+    )
+    permissions = models.ManyToManyField(
+        Permission,
+        blank=True,
+        related_name="mcp_tokens",
+        help_text="Specific permissions granted to this token",
+    )
 
     class Meta:
         verbose_name = "MCP Token"
@@ -89,3 +102,84 @@ class MCPToken(models.Model):
     def is_valid(self):
         """Check if token is valid (active and not expired)."""
         return self.is_active and not self.is_expired()
+
+    def has_perm(self, perm):
+        """
+        Check if token has a specific permission.
+        
+        Args:
+            perm: Permission string in format 'app_label.codename' (e.g., 'blog.change_article')
+                  or Permission object
+        
+        Returns:
+            bool: True if token has permission, False otherwise
+        """
+        # If no user, groups, or permissions set, grant all access (backward compatibility)
+        if not self.user and not self.groups.exists() and not self.permissions.exists():
+            return True
+        
+        # Parse permission if it's a string
+        if isinstance(perm, str):
+            if "." in perm:
+                app_label, codename = perm.split(".", 1)
+            else:
+                # If no app_label, we can't check it
+                return False
+        else:
+            app_label = perm.content_type.app_label
+            codename = perm.codename
+        
+        # Check direct permissions
+        if self.permissions.filter(
+            content_type__app_label=app_label, codename=codename
+        ).exists():
+            return True
+        
+        # Check group permissions
+        if self.groups.filter(
+            permissions__content_type__app_label=app_label,
+            permissions__codename=codename,
+        ).exists():
+            return True
+        
+        # Check user permissions if user is set
+        if self.user:
+            return self.user.has_perm(f"{app_label}.{codename}")
+        
+        return False
+    
+    def has_perms(self, perm_list):
+        """
+        Check if token has all permissions in the list.
+        
+        Args:
+            perm_list: List of permission strings
+        
+        Returns:
+            bool: True if token has all permissions, False otherwise
+        """
+        return all(self.has_perm(perm) for perm in perm_list)
+    
+    def get_all_permissions(self):
+        """
+        Get all permissions available to this token.
+        
+        Returns:
+            set: Set of permission strings in 'app_label.codename' format
+        """
+        perms = set()
+        
+        # Add direct permissions
+        for perm in self.permissions.select_related("content_type").all():
+            perms.add(f"{perm.content_type.app_label}.{perm.codename}")
+        
+        # Add group permissions
+        for group in self.groups.prefetch_related("permissions__content_type").all():
+            for perm in group.permissions.all():
+                perms.add(f"{perm.content_type.app_label}.{perm.codename}")
+        
+        # Add user permissions if user is set
+        if self.user:
+            perms.update(self.user.get_all_permissions())
+        
+        return perms
