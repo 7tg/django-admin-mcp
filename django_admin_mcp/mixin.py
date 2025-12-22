@@ -102,6 +102,25 @@ class MCPAdminMixin:
             )]
     
     @classmethod
+    def _serialize_model_instance(cls, obj_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Serialize a model instance dictionary by converting non-serializable fields.
+        
+        Args:
+            obj_dict: Dictionary representation of a model instance
+            
+        Returns:
+            Serialized dictionary with all values converted to JSON-serializable types
+        """
+        serialized = {}
+        for key, value in obj_dict.items():
+            if isinstance(value, models.Model):
+                serialized[key] = str(value)
+            else:
+                serialized[key] = value
+        return serialized
+    
+    @classmethod
     async def _handle_list(cls, model: Type[models.Model], arguments: Dict[str, Any]) -> List[TextContent]:
         """Handle list operation for a model."""
         try:
@@ -109,15 +128,7 @@ class MCPAdminMixin:
             offset = arguments.get('offset', 0)
             
             queryset = model.objects.all()[offset:offset + limit]
-            results = []
-            
-            for obj in queryset:
-                obj_dict = model_to_dict(obj)
-                # Convert non-serializable fields
-                for key, value in obj_dict.items():
-                    if isinstance(value, models.Model):
-                        obj_dict[key] = str(value)
-                results.append(obj_dict)
+            results = [cls._serialize_model_instance(model_to_dict(obj)) for obj in queryset]
             
             return [TextContent(
                 type="text",
@@ -144,12 +155,7 @@ class MCPAdminMixin:
                 )]
             
             obj = model.objects.get(pk=obj_id)
-            obj_dict = model_to_dict(obj)
-            
-            # Convert non-serializable fields
-            for key, value in obj_dict.items():
-                if isinstance(value, models.Model):
-                    obj_dict[key] = str(value)
+            obj_dict = cls._serialize_model_instance(model_to_dict(obj))
             
             return [TextContent(
                 type="text",
@@ -172,12 +178,7 @@ class MCPAdminMixin:
         try:
             data = arguments.get('data', {})
             obj = model.objects.create(**data)
-            obj_dict = model_to_dict(obj)
-            
-            # Convert non-serializable fields
-            for key, value in obj_dict.items():
-                if isinstance(value, models.Model):
-                    obj_dict[key] = str(value)
+            obj_dict = cls._serialize_model_instance(model_to_dict(obj))
             
             return [TextContent(
                 type="text",
@@ -207,16 +208,22 @@ class MCPAdminMixin:
                 )]
             
             obj = model.objects.get(pk=obj_id)
+            
+            # Validate that only model fields are being updated (protect against mass assignment)
+            valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, 'name')}
+            for key in data.keys():
+                if key not in valid_fields:
+                    return [TextContent(
+                        type="text",
+                        text=json.dumps({'error': f'Invalid field: {key}'})
+                    )]
+            
+            # Update only the specified fields
             for key, value in data.items():
                 setattr(obj, key, value)
             obj.save()
             
-            obj_dict = model_to_dict(obj)
-            
-            # Convert non-serializable fields
-            for key, value in obj_dict.items():
-                if isinstance(value, models.Model):
-                    obj_dict[key] = str(value)
+            obj_dict = cls._serialize_model_instance(model_to_dict(obj))
             
             return [TextContent(
                 type="text",
@@ -279,10 +286,18 @@ class MCPAdminMixin:
         fields = []
         for field in model._meta.get_fields():
             if hasattr(field, 'get_internal_type'):
+                # A field is required if it's not nullable and not blank
+                null_allowed = getattr(field, 'null', False)
+                blank_allowed = getattr(field, 'blank', False)
+                has_default = getattr(field, 'has_default', lambda: False)()
+                
+                # Field is required if it doesn't allow null, doesn't allow blank, and has no default
+                required = not null_allowed and not blank_allowed and not has_default
+                
                 fields.append({
                     'name': field.name,
                     'type': field.get_internal_type(),
-                    'required': not field.blank if hasattr(field, 'blank') else False
+                    'required': required
                 })
         
         fields_doc = '\n'.join([
