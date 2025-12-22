@@ -333,12 +333,20 @@ class MCPAdminMixin:
             return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
     @classmethod
+    def _model_matches_query(cls, query: str, model_name: str, verbose_name: str) -> bool:
+        """Check if a model matches the search query."""
+        if not query:
+            return True
+        query_lower = query.lower()
+        return query_lower in model_name.lower() or query_lower in verbose_name.lower()
+    
+    @classmethod
     async def _handle_find_models(
         cls, arguments: Dict[str, Any]
     ) -> List[TextContent]:
         """Handle find_models operation to discover available models."""
         try:
-            query = arguments.get("query", "").lower()
+            query = arguments.get("query", "")
             
             models_info = []
             for model_name, model_info in cls._registered_models.items():
@@ -348,7 +356,7 @@ class MCPAdminMixin:
                 verbose_name_plural = str(model._meta.verbose_name_plural)
                 
                 # Filter by query if provided
-                if query and query not in model_name.lower() and query not in verbose_name.lower():
+                if not cls._model_matches_query(query, model_name, verbose_name):
                     continue
                 
                 # Check if model has tools exposed
