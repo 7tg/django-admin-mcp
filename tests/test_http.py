@@ -68,12 +68,13 @@ class TestHTTPInterface:
         data = json.loads(response.content)
         assert 'tools' in data
         
-        # Check that tools are exposed (should have find, list, get, create, update, delete for each model)
+        # Check that tools are exposed
         tool_names = [tool['name'] for tool in data['tools']]
+        # Should always have find_models tool
+        assert 'find_models' in tool_names
+        # Should have model-specific tools since mcp_expose=True
         assert 'list_author' in tool_names
-        assert 'find_author' in tool_names
         assert 'list_article' in tool_names
-        assert 'find_article' in tool_names
 
     def test_mcp_endpoint_with_inactive_token(self):
         """Test MCP endpoint rejects inactive tokens."""
@@ -220,10 +221,10 @@ class TestMCPExpose:
             assert response.status_code == 200
             data = json.loads(response.content)
             
-            # Tools for Author should NOT be in the list
+            # Tools for Author should NOT be in the list (but find_models should be)
             tool_names = [tool['name'] for tool in data['tools']]
+            assert 'find_models' in tool_names  # This tool is always available
             assert 'list_author' not in tool_names
-            assert 'find_author' not in tool_names
         finally:
             # Restore original value
             if original_mcp_expose is not None:

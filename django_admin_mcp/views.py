@@ -85,15 +85,18 @@ class MCPHTTPView(View):
     async def handle_list_tools(self, request):
         """Handle tools/list request."""
         tools = []
+        
+        # Always include the find_models tool
+        tools.append(MCPAdminMixin.get_find_models_tool())
+        
+        # Only include model-specific tools if explicitly exposed
         for model_name, model_info in MCPAdminMixin._registered_models.items():
             model = model_info["model"]
             admin = model_info["admin"]
             
             # Check if tools should be exposed
-            if not getattr(admin, 'mcp_expose', False):
-                continue
-            
-            tools.extend(MCPAdminMixin.get_mcp_tools(model))
+            if getattr(admin, 'mcp_expose', False):
+                tools.extend(MCPAdminMixin.get_mcp_tools(model))
         
         # Serialize tools to dict format
         tools_data = []

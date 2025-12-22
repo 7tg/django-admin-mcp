@@ -67,6 +67,10 @@ class MCPAdminMixin:
         cls, name: str, arguments: Dict[str, Any]
     ) -> List[TextContent]:
         """Central handler for all tool calls."""
+        # Handle the find_models tool specially
+        if name == "find_models":
+            return await cls._handle_find_models(arguments)
+        
         # Parse the tool name to get operation and model
         parts = name.split("_", 1)
         if len(parts) != 2:
@@ -101,8 +105,6 @@ class MCPAdminMixin:
             return await cls._handle_update(model, arguments)
         elif operation == "delete":
             return await cls._handle_delete(model, arguments)
-        elif operation == "find":
-            return await cls._handle_find(model, arguments)
         else:
             return [
                 TextContent(
@@ -331,63 +333,44 @@ class MCPAdminMixin:
             return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
     @classmethod
-    async def _handle_find(
-        cls, model: Type[models.Model], arguments: Dict[str, Any]
+    async def _handle_find_models(
+        cls, arguments: Dict[str, Any]
     ) -> List[TextContent]:
-        """Handle find/search operation for a model."""
+        """Handle find_models operation to discover available models."""
         try:
-            query = arguments.get("query", "")
-            limit = arguments.get("limit", 100)
-            offset = arguments.get("offset", 0)
+            query = arguments.get("query", "").lower()
             
-            if not query:
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps({"error": "query parameter is required"}),
-                    )
-                ]
-            
-            @sync_to_async
-            def search_objects():
-                from django.db.models import Q
+            models_info = []
+            for model_name, model_info in cls._registered_models.items():
+                model = model_info["model"]
+                admin = model_info["admin"]
+                verbose_name = str(model._meta.verbose_name)
+                verbose_name_plural = str(model._meta.verbose_name_plural)
                 
-                # Build search query across text fields
-                search_query = Q()
-                text_fields = []
+                # Filter by query if provided
+                if query and query not in model_name.lower() and query not in verbose_name.lower():
+                    continue
                 
-                for field in model._meta.get_fields():
-                    # Search in CharField, TextField, and EmailField
-                    if hasattr(field, 'get_internal_type'):
-                        field_type = field.get_internal_type()
-                        if field_type in ['CharField', 'TextField', 'EmailField']:
-                            search_query |= Q(**{f"{field.name}__icontains": query})
-                            text_fields.append(field.name)
+                # Check if model has tools exposed
+                has_tools_exposed = getattr(admin, 'mcp_expose', False)
                 
-                if not text_fields:
-                    return [], []
-                
-                queryset = model.objects.filter(search_query)[offset : offset + limit]
-                results = [
-                    cls._serialize_model_instance(model_to_dict(obj))
-                    for obj in queryset
-                ]
-                return results, text_fields
-            
-            results, searched_fields = await search_objects()
+                models_info.append({
+                    "model_name": model_name,
+                    "verbose_name": verbose_name,
+                    "verbose_name_plural": verbose_name_plural,
+                    "app_label": model._meta.app_label,
+                    "tools_exposed": has_tools_exposed,
+                })
             
             return [
                 TextContent(
                     type="text",
                     text=json.dumps(
                         {
-                            "count": len(results),
-                            "results": results,
-                            "searched_fields": searched_fields,
-                            "query": query,
+                            "count": len(models_info),
+                            "models": models_info,
                         },
                         indent=2,
-                        default=str,
                     ),
                 )
             ]
@@ -507,31 +490,24 @@ class MCPAdminMixin:
                     "required": ["id"],
                 },
             ),
-            Tool(
-                name=f"find_{model_name}",
-                description=f"Search for {verbose_name} instances by text query",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query string to find in text fields",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of items to return (default: 100)",
-                            "default": 100,
-                        },
-                        "offset": {
-                            "type": "integer",
-                            "description": "Number of items to skip (default: 0)",
-                            "default": 0,
-                        },
-                    },
-                    "required": ["query"],
-                },
-            ),
         ]
+
+    @classmethod
+    def get_find_models_tool(cls) -> Tool:
+        """Get the find_models tool for discovering available models."""
+        return Tool(
+            name="find_models",
+            description="Discover available Django models registered with MCP. Use this to find which models have tools available.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Optional search query to filter models by name (case-insensitive)",
+                    }
+                },
+            },
+        )
 
     def __init__(self, *args, **kwargs):
         """Initialize the mixin and register MCP tools."""

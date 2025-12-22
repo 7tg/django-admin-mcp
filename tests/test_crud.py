@@ -170,21 +170,11 @@ class TestCRUDOperations:
         assert response["success"] is True
         assert response["object"]["title"] == "Test Article"
 
-    async def test_find_author(self):
-        """Test finding authors via search."""
-        # Create test data
-        await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: [
-                Author.objects.create(name="John Smith", email="john@example.com"),
-                Author.objects.create(name="Jane Doe", email="jane@example.com"),
-                Author.objects.create(name="Bob Johnson", email="bob@example.com"),
-            ],
-        )
-
-        # Search for "john"
+    async def test_find_models(self):
+        """Test finding models via find_models tool."""
+        # Call find_models without query
         result = await MCPAdminMixin.handle_tool_call(
-            "find_author", {"query": "john", "limit": 10}
+            "find_models", {}
         )
 
         assert len(result) == 1
@@ -192,11 +182,21 @@ class TestCRUDOperations:
 
         response = json.loads(result[0].text)
         assert "count" in response
-        assert response["count"] >= 2  # Should find "John Smith" and "Bob Johnson"
-        assert "results" in response
-        assert "searched_fields" in response
+        assert "models" in response
+        assert response["count"] >= 2  # Should find at least author and article
         
-        # Verify found authors contain "john" in name or email
-        for author in response["results"]:
-            name_or_email = f"{author.get('name', '')} {author.get('email', '')}".lower()
-            assert "john" in name_or_email
+        # Verify that models are in the results
+        model_names = [m["model_name"] for m in response["models"]]
+        assert "author" in model_names
+        assert "article" in model_names
+        
+        # Test with query filter
+        result = await MCPAdminMixin.handle_tool_call(
+            "find_models", {"query": "author"}
+        )
+        
+        response = json.loads(result[0].text)
+        assert "count" in response
+        assert response["count"] >= 1
+        model_names = [m["model_name"] for m in response["models"]]
+        assert "author" in model_names
