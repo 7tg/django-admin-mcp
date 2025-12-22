@@ -96,7 +96,7 @@ class MCPHTTPView(View):
         """Handle tools/call request."""
         # Get token from request (it was validated in post method)
         token = await authenticate_token(request)
-        
+
         tool_name = data.get("name")
         arguments = data.get("arguments", {})
 
@@ -179,7 +179,7 @@ async def handle_call_tool_request(request, data, token=None):
     """Handle tools/call request."""
     # Get token from request (it was validated in mcp_endpoint)
     token = await authenticate_token(request)
-    
+
     tool_name = data.get("name")
     arguments = data.get("arguments", {})
 

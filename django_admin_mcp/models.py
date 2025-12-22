@@ -106,18 +106,18 @@ class MCPToken(models.Model):
     def has_perm(self, perm):
         """
         Check if token has a specific permission.
-        
+
         Args:
             perm: Permission string in format 'app_label.codename' (e.g., 'blog.change_article')
                   or Permission object
-        
+
         Returns:
             bool: True if token has permission, False otherwise
         """
         # If no user, groups, or permissions set, grant all access (backward compatibility)
         if not self.user and not self.groups.exists() and not self.permissions.exists():
             return True
-        
+
         # Parse permission if it's a string
         if isinstance(perm, str):
             if "." in perm:
@@ -128,58 +128,56 @@ class MCPToken(models.Model):
         else:
             app_label = perm.content_type.app_label
             codename = perm.codename
-        
+
         # Check direct permissions
-        if self.permissions.filter(
-            content_type__app_label=app_label, codename=codename
-        ).exists():
+        if self.permissions.filter(content_type__app_label=app_label, codename=codename).exists():
             return True
-        
+
         # Check group permissions
         if self.groups.filter(
             permissions__content_type__app_label=app_label,
             permissions__codename=codename,
         ).exists():
             return True
-        
+
         # Check user permissions if user is set
         if self.user:
             return self.user.has_perm(f"{app_label}.{codename}")
-        
+
         return False
-    
+
     def has_perms(self, perm_list):
         """
         Check if token has all permissions in the list.
-        
+
         Args:
             perm_list: List of permission strings
-        
+
         Returns:
             bool: True if token has all permissions, False otherwise
         """
         return all(self.has_perm(perm) for perm in perm_list)
-    
+
     def get_all_permissions(self):
         """
         Get all permissions available to this token.
-        
+
         Returns:
             set: Set of permission strings in 'app_label.codename' format
         """
         perms = set()
-        
+
         # Add direct permissions
         for perm in self.permissions.select_related("content_type").all():
             perms.add(f"{perm.content_type.app_label}.{perm.codename}")
-        
+
         # Add group permissions
         for group in self.groups.prefetch_related("permissions__content_type").all():
             for perm in group.permissions.all():
                 perms.add(f"{perm.content_type.app_label}.{perm.codename}")
-        
+
         # Add user permissions if user is set
         if self.user:
             perms.update(self.user.get_all_permissions())
-        
+
         return perms
