@@ -164,6 +164,33 @@ for model_name, model_info in models.items():
 - Django >= 3.2
 - mcp >= 0.9.0
 
+## Development
+
+### Running Tests
+
+Install development dependencies:
+```bash
+pip install -e ".[dev]"
+```
+
+Run the test suite:
+```bash
+pytest
+```
+
+Run tests with coverage:
+```bash
+pytest --cov=django_admin_mcp --cov-report=html
+```
+
+The package includes comprehensive tests covering:
+- Model registration and tool generation
+- CRUD operations
+- Error handling and field validation
+- Async database operations
+
+See `tests/README.md` for more details.
+
 ## License
 
 MIT License - see LICENSE file for details
