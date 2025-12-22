@@ -134,6 +134,68 @@ class TestMCPToken:
         assert 'My Token' in str_repr
         assert token.token[:8] in str_repr
 
+    def test_token_default_expiry(self):
+        """Test that tokens have default 90-day expiry."""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        token = MCPToken.objects.create(name='Test Token')
+        assert token.expires_at is not None
+        
+        # Check that expiry is approximately 90 days from now
+        expected_expiry = timezone.now() + timedelta(days=90)
+        time_diff = abs((token.expires_at - expected_expiry).total_seconds())
+        assert time_diff < 60  # Allow 1 minute tolerance
+
+    def test_token_indefinite_expiry(self):
+        """Test creating token with no expiry."""
+        from django.utils import timezone
+        
+        token = MCPToken.objects.create(name='Indefinite Token', expires_at=None)
+        assert token.expires_at is None
+        assert not token.is_expired()
+        assert token.is_valid()
+
+    def test_token_custom_expiry(self):
+        """Test creating token with custom expiry."""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        custom_expiry = timezone.now() + timedelta(days=30)
+        token = MCPToken.objects.create(name='Custom Token', expires_at=custom_expiry)
+        assert token.expires_at == custom_expiry
+        assert not token.is_expired()
+
+    def test_token_expired(self):
+        """Test that expired tokens are detected."""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        past_date = timezone.now() - timedelta(days=1)
+        token = MCPToken.objects.create(name='Expired Token', expires_at=past_date)
+        assert token.is_expired()
+        assert not token.is_valid()
+
+    def test_expired_token_rejected(self):
+        """Test that expired tokens are rejected in authentication."""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        past_date = timezone.now() - timedelta(days=1)
+        token = MCPToken.objects.create(name='Expired Token', expires_at=past_date)
+        
+        client = Client()
+        response = client.post(
+            '/api/mcp/',
+            data=json.dumps({'method': 'tools/list'}),
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {token.token}'
+        )
+        
+        assert response.status_code == 401
+        data = json.loads(response.content)
+        assert 'error' in data
+
 
 @pytest.mark.django_db
 class TestMCPExpose:

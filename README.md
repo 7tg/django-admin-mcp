@@ -87,7 +87,14 @@ Create a token via Django admin at `/admin/django_admin_mcp/mcptoken/`:
 2. Navigate to "MCP Tokens"
 3. Click "Add MCP Token"
 4. Enter a name (e.g., "Production API")
-5. Save and copy the generated token
+5. **Optional**: Set an expiration date or leave empty for an indefinite token (default: 90 days)
+6. Save and copy the generated token
+
+**Token Expiry:**
+- By default, new tokens expire after 90 days
+- To create an indefinite token, clear the "Expires at" field when creating the token
+- Expired tokens are automatically rejected during authentication
+- The admin interface shows token status with color coding (Active, Expires in X days, Expired)
 
 #### 2. Make HTTP Requests
 
@@ -240,6 +247,8 @@ For each model with `MCPAdminMixin` and `mcp_expose = True`, the following tools
 ### Token Management
 
 - Tokens are automatically generated with secure random values
+- **Token Expiry**: By default, tokens expire after 90 days for security
+- **Indefinite Tokens**: You can create tokens without expiry by clearing the expiration date
 - Tokens can be enabled/disabled via the `is_active` field
 - Token usage is tracked with `last_used_at` timestamp
 - Each token has a descriptive name for easy identification
