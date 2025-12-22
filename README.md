@@ -160,7 +160,7 @@ for model_name, model_info in models.items():
 
 ## Requirements
 
-- Python >= 3.8
+- Python >= 3.10
 - Django >= 3.2
 - mcp >= 0.9.0
 
