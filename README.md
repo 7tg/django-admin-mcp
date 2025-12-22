@@ -110,7 +110,17 @@ curl -X POST http://localhost:8000/api/mcp/ \
 **Call a Tool:**
 
 ```bash
-# List articles
+# Discover available models
+curl -X POST http://localhost:8000/api/mcp/ \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method": "tools/call",
+    "name": "find_models",
+    "arguments": {}
+  }'
+
+# List articles (requires mcp_expose=True)
 curl -X POST http://localhost:8000/api/mcp/ \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -H "Content-Type: application/json" \
@@ -118,16 +128,6 @@ curl -X POST http://localhost:8000/api/mcp/ \
     "method": "tools/call",
     "name": "list_article",
     "arguments": {"limit": 10, "offset": 0}
-  }'
-
-# Search for articles
-curl -X POST http://localhost:8000/api/mcp/ \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "method": "tools/call",
-    "name": "find_article",
-    "arguments": {"query": "django"}
   }'
 ```
 
@@ -156,14 +156,41 @@ python manage.py run_mcp_server
 
 ## Available Tools
 
-For each model with `MCPAdminMixin` and `mcp_expose = True`, the following tools are automatically created:
+### Model Discovery
+
+The `find_models` tool is always available to discover which Django models are registered:
+
+**Discover all models:**
+```json
+{
+    "method": "tools/call",
+    "name": "find_models",
+    "arguments": {}
+}
+```
+
+**Search for specific models:**
+```json
+{
+    "method": "tools/call",
+    "name": "find_models",
+    "arguments": {
+        "query": "article"
+    }
+}
+```
+
+This returns information about available models including their names, verbose names, and whether their tools are exposed.
+
+### Model-Specific Tools
+
+For each model with `MCPAdminMixin` and `mcp_expose = True`, the following CRUD tools are available:
 
 - `list_<model_name>`: List all instances with pagination
 - `get_<model_name>`: Get a specific instance by ID
 - `create_<model_name>`: Create a new instance
 - `update_<model_name>`: Update an existing instance
 - `delete_<model_name>`: Delete an instance
-- `find_<model_name>`: Search for instances by text query across all text fields
 
 ### Example Usage
 
@@ -186,18 +213,6 @@ For each model with `MCPAdminMixin` and `mcp_expose = True`, the following tools
     "name": "get_article",
     "arguments": {
         "id": 1
-    }
-}
-```
-
-**Search for articles:**
-```json
-{
-    "method": "tools/call",
-    "name": "find_article",
-    "arguments": {
-        "query": "django tutorial",
-        "limit": 10
     }
 }
 ```
@@ -255,19 +270,23 @@ For each model with `MCPAdminMixin` and `mcp_expose = True`, the following tools
 
 ### Opt-in Tool Exposure
 
-By default, models with `MCPAdminMixin` do **not** expose their tools. You must explicitly set `mcp_expose = True` in your admin class. This prevents accidental exposure of sensitive models.
+By default, models with `MCPAdminMixin` do **not** expose their CRUD tools. You must explicitly set `mcp_expose = True` in your admin class. This provides several benefits:
+
+- **Security**: Prevents accidental exposure of sensitive models
+- **Context Window Efficiency**: Only exposes tools when needed, reducing LLM token usage
+- **Progressive Disclosure**: Use `find_models` to discover what's available, then expose only what's needed
 
 ```python
 @admin.register(SensitiveModel)
 class SensitiveModelAdmin(MCPAdminMixin, admin.ModelAdmin):
     # mcp_expose is False by default
-    # This model's tools will NOT be exposed
+    # This model can be discovered via find_models but tools are NOT exposed
     pass
 
 @admin.register(PublicModel)
 class PublicModelAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True  # Explicitly enable
-    # This model's tools WILL be exposed
+    # This model's CRUD tools WILL be exposed
     pass
 ```
 
@@ -306,12 +325,14 @@ for model_name, model_info in models.items():
 
 ## How It Works
 
-1. **Mixin Integration**: When you add `MCPAdminMixin` to a `ModelAdmin` class, it automatically registers MCP tools for that model
-2. **Opt-in Exposure**: Only models with `mcp_expose = True` expose their tools
-3. **Tool Registration**: Each exposed model gets 6 tools: list, get, create, update, delete, and find
-4. **Schema Generation**: Tool schemas are automatically generated from model field definitions
-5. **Request Handling**: When an MCP client calls a tool, the request is routed to the appropriate handler which performs the database operation
-6. **Authentication**: HTTP requests are authenticated using Bearer tokens stored in the database
+1. **Mixin Integration**: When you add `MCPAdminMixin` to a `ModelAdmin` class, it automatically registers that model with MCP
+2. **Model Discovery**: The `find_models` tool is always available to discover registered models
+3. **Opt-in Tool Exposure**: Only models with `mcp_expose = True` expose their full CRUD tools
+4. **Reduced Context**: By default, only the discovery tool is exposed, minimizing LLM context window usage
+5. **Tool Registration**: Each exposed model gets 5 CRUD tools: list, get, create, update, and delete
+6. **Schema Generation**: Tool schemas are automatically generated from model field definitions
+7. **Request Handling**: When an MCP client calls a tool, the request is routed to the appropriate handler which performs the database operation
+8. **Authentication**: HTTP requests are authenticated using Bearer tokens stored in the database
 
 ## Requirements
 
