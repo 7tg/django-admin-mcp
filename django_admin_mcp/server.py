@@ -31,6 +31,12 @@ async def run_mcp_server():
         tools = []
         for model_name, model_info in MCPAdminMixin._registered_models.items():
             model = model_info["model"]
+            admin = model_info["admin"]
+            
+            # Check if admin class has mcp_expose attribute set to True
+            if not getattr(admin, 'mcp_expose', False):
+                continue
+                
             tools.extend(MCPAdminMixin.get_mcp_tools(model))
         return tools
 

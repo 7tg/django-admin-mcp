@@ -35,6 +35,7 @@ class TestMCPAdminMixin:
             "create_author",
             "update_author",
             "delete_author",
+            "find_author",
         ]
         assert (
             tool_names == expected_tools
@@ -51,6 +52,7 @@ class TestMCPAdminMixin:
             "create_article",
             "update_article",
             "delete_article",
+            "find_article",
         ]
         assert (
             tool_names == expected_tools

@@ -10,6 +10,7 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
     list_display = ['name', 'email', 'created_at']
     search_fields = ['name', 'email']
     list_filter = ['created_at']
+    mcp_expose = True  # Expose MCP tools for this model
 
 
 @admin.register(Article)
@@ -20,3 +21,4 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     list_filter = ['is_published', 'published_date', 'created_at']
     date_hierarchy = 'published_date'
     raw_id_fields = ['author']
+    mcp_expose = True  # Expose MCP tools for this model

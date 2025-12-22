@@ -24,12 +24,14 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
             """Author admin with MCP support."""
 
             list_display = ["name", "email"]
+            mcp_expose = True  # Expose MCP tools
 
         @admin.register(Article)
         class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
             """Article admin with MCP support."""
 
             list_display = ["title", "author", "is_published"]
+            mcp_expose = True  # Expose MCP tools
 
         yield
 

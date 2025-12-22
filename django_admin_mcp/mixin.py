@@ -101,6 +101,8 @@ class MCPAdminMixin:
             return await cls._handle_update(model, arguments)
         elif operation == "delete":
             return await cls._handle_delete(model, arguments)
+        elif operation == "find":
+            return await cls._handle_find(model, arguments)
         else:
             return [
                 TextContent(
@@ -329,6 +331,70 @@ class MCPAdminMixin:
             return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
     @classmethod
+    async def _handle_find(
+        cls, model: Type[models.Model], arguments: Dict[str, Any]
+    ) -> List[TextContent]:
+        """Handle find/search operation for a model."""
+        try:
+            query = arguments.get("query", "")
+            limit = arguments.get("limit", 100)
+            offset = arguments.get("offset", 0)
+            
+            if not query:
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps({"error": "query parameter is required"}),
+                    )
+                ]
+            
+            @sync_to_async
+            def search_objects():
+                from django.db.models import Q
+                
+                # Build search query across text fields
+                search_query = Q()
+                text_fields = []
+                
+                for field in model._meta.get_fields():
+                    # Search in CharField, TextField, and EmailField
+                    if hasattr(field, 'get_internal_type'):
+                        field_type = field.get_internal_type()
+                        if field_type in ['CharField', 'TextField', 'EmailField']:
+                            search_query |= Q(**{f"{field.name}__icontains": query})
+                            text_fields.append(field.name)
+                
+                if not text_fields:
+                    return [], []
+                
+                queryset = model.objects.filter(search_query)[offset : offset + limit]
+                results = [
+                    cls._serialize_model_instance(model_to_dict(obj))
+                    for obj in queryset
+                ]
+                return results, text_fields
+            
+            results, searched_fields = await search_objects()
+            
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "count": len(results),
+                            "results": results,
+                            "searched_fields": searched_fields,
+                            "query": query,
+                        },
+                        indent=2,
+                        default=str,
+                    ),
+                )
+            ]
+        except Exception as e:
+            return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+
+    @classmethod
     def get_mcp_tools(cls, model: Type[models.Model]) -> List[Tool]:
         """Get the list of MCP tools for a model."""
         model_name = model._meta.model_name
@@ -439,6 +505,30 @@ class MCPAdminMixin:
                         }
                     },
                     "required": ["id"],
+                },
+            ),
+            Tool(
+                name=f"find_{model_name}",
+                description=f"Search for {verbose_name} instances by text query",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query string to find in text fields",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of items to return (default: 100)",
+                            "default": 100,
+                        },
+                        "offset": {
+                            "type": "integer",
+                            "description": "Number of items to skip (default: 0)",
+                            "default": 0,
+                        },
+                    },
+                    "required": ["query"],
                 },
             ),
         ]

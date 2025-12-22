@@ -169,3 +169,34 @@ class TestCRUDOperations:
             pytest.fail(f"Failed to create article: {response['error']}")
         assert response["success"] is True
         assert response["object"]["title"] == "Test Article"
+
+    async def test_find_author(self):
+        """Test finding authors via search."""
+        # Create test data
+        await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: [
+                Author.objects.create(name="John Smith", email="john@example.com"),
+                Author.objects.create(name="Jane Doe", email="jane@example.com"),
+                Author.objects.create(name="Bob Johnson", email="bob@example.com"),
+            ],
+        )
+
+        # Search for "john"
+        result = await MCPAdminMixin.handle_tool_call(
+            "find_author", {"query": "john", "limit": 10}
+        )
+
+        assert len(result) == 1
+        import json
+
+        response = json.loads(result[0].text)
+        assert "count" in response
+        assert response["count"] >= 2  # Should find "John Smith" and "Bob Johnson"
+        assert "results" in response
+        assert "searched_fields" in response
+        
+        # Verify found authors contain "john" in name or email
+        for author in response["results"]:
+            name_or_email = f"{author.get('name', '')} {author.get('email', '')}".lower()
+            assert "john" in name_or_email
