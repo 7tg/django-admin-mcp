@@ -14,8 +14,8 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from asgiref.sync import sync_to_async
 
-from .models import MCPToken
-from .mixin import MCPAdminMixin
+from django_admin_mcp.models import MCPToken
+from django_admin_mcp.mixin import MCPAdminMixin
 
 
 @sync_to_async

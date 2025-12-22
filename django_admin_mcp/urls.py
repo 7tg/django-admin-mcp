@@ -3,7 +3,7 @@ URL patterns for django-admin-mcp HTTP interface
 """
 
 from django.urls import path
-from . import views
+from django_admin_mcp import views
 
 app_name = 'django_admin_mcp'
 

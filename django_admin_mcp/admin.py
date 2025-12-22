@@ -5,7 +5,7 @@ Admin configuration for django-admin-mcp models
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
-from .models import MCPToken
+from django_admin_mcp.models import MCPToken
 
 
 @admin.register(MCPToken)
