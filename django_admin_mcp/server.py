@@ -35,6 +35,12 @@ async def run_mcp_server():
             tools.extend(MCPAdminMixin.get_mcp_tools(model))
         return tools
     
+    # Register the centralized call_tool handler
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict):
+        """Handle all tool calls through the centralized handler."""
+        return await MCPAdminMixin.handle_tool_call(name, arguments)
+    
     # Run the server
     async with stdio_server() as (read_stream, write_stream):
         await server.run(

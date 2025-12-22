@@ -60,48 +60,46 @@ class MCPAdminMixin:
             'model': model,
             'admin': model_admin_instance
         }
+    
+    @classmethod
+    async def handle_tool_call(cls, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Central handler for all tool calls."""
+        # Parse the tool name to get operation and model
+        parts = name.split('_', 1)
+        if len(parts) != 2:
+            return [TextContent(
+                type="text",
+                text=json.dumps({'error': 'Invalid tool name format'})
+            )]
         
-        server = cls.get_mcp_server()
+        operation = parts[0]
+        model_name = parts[1]
         
-        # Register list tool
-        @server.call_tool()
-        async def handle_list_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-            """Handle list tool calls."""
-            if name == f"list_{model_name}":
-                return await cls._handle_list(model, arguments)
-            return []
+        # Get the model from registry
+        if model_name not in cls._registered_models:
+            return [TextContent(
+                type="text",
+                text=json.dumps({'error': f'Model {model_name} not registered'})
+            )]
         
-        # Register get tool
-        @server.call_tool()
-        async def handle_get_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-            """Handle get tool calls."""
-            if name == f"get_{model_name}":
-                return await cls._handle_get(model, arguments)
-            return []
+        model = cls._registered_models[model_name]['model']
         
-        # Register create tool
-        @server.call_tool()
-        async def handle_create_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-            """Handle create tool calls."""
-            if name == f"create_{model_name}":
-                return await cls._handle_create(model, arguments)
-            return []
-        
-        # Register update tool
-        @server.call_tool()
-        async def handle_update_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-            """Handle update tool calls."""
-            if name == f"update_{model_name}":
-                return await cls._handle_update(model, arguments)
-            return []
-        
-        # Register delete tool
-        @server.call_tool()
-        async def handle_delete_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-            """Handle delete tool calls."""
-            if name == f"delete_{model_name}":
-                return await cls._handle_delete(model, arguments)
-            return []
+        # Route to appropriate handler
+        if operation == 'list':
+            return await cls._handle_list(model, arguments)
+        elif operation == 'get':
+            return await cls._handle_get(model, arguments)
+        elif operation == 'create':
+            return await cls._handle_create(model, arguments)
+        elif operation == 'update':
+            return await cls._handle_update(model, arguments)
+        elif operation == 'delete':
+            return await cls._handle_delete(model, arguments)
+        else:
+            return [TextContent(
+                type="text",
+                text=json.dumps({'error': f'Unknown operation: {operation}'})
+            )]
     
     @classmethod
     async def _handle_list(cls, model: Type[models.Model], arguments: Dict[str, Any]) -> List[TextContent]:
