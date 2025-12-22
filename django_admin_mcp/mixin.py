@@ -67,6 +67,10 @@ class MCPAdminMixin:
         cls, name: str, arguments: Dict[str, Any]
     ) -> List[TextContent]:
         """Central handler for all tool calls."""
+        # Handle the find_models tool specially
+        if name == "find_models":
+            return await cls._handle_find_models(arguments)
+
         # Parse the tool name to get operation and model
         parts = name.split("_", 1)
         if len(parts) != 2:
@@ -329,6 +333,61 @@ class MCPAdminMixin:
             return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
     @classmethod
+    def _model_matches_query(
+        cls, query: str, model_name: str, verbose_name: str
+    ) -> bool:
+        """Check if a model matches the search query."""
+        if not query:
+            return True
+        query_lower = query.lower()
+        return query_lower in model_name.lower() or query_lower in verbose_name.lower()
+
+    @classmethod
+    async def _handle_find_models(cls, arguments: Dict[str, Any]) -> List[TextContent]:
+        """Handle find_models operation to discover available models."""
+        try:
+            query = arguments.get("query", "")
+
+            models_info = []
+            for model_name, model_info in cls._registered_models.items():
+                model = model_info["model"]
+                admin = model_info["admin"]
+                verbose_name = str(model._meta.verbose_name)
+                verbose_name_plural = str(model._meta.verbose_name_plural)
+
+                # Filter by query if provided
+                if not cls._model_matches_query(query, model_name, verbose_name):
+                    continue
+
+                # Check if model has tools exposed
+                has_tools_exposed = getattr(admin, "mcp_expose", False)
+
+                models_info.append(
+                    {
+                        "model_name": model_name,
+                        "verbose_name": verbose_name,
+                        "verbose_name_plural": verbose_name_plural,
+                        "app_label": model._meta.app_label,
+                        "tools_exposed": has_tools_exposed,
+                    }
+                )
+
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "count": len(models_info),
+                            "models": models_info,
+                        },
+                        indent=2,
+                    ),
+                )
+            ]
+        except Exception as e:
+            return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+
+    @classmethod
     def get_mcp_tools(cls, model: Type[models.Model]) -> List[Tool]:
         """Get the list of MCP tools for a model."""
         model_name = model._meta.model_name
@@ -442,6 +501,26 @@ class MCPAdminMixin:
                 },
             ),
         ]
+
+    @classmethod
+    def get_find_models_tool(cls) -> Tool:
+        """Get the find_models tool for discovering available models."""
+        return Tool(
+            name="find_models",
+            description=(
+                "Discover available Django models registered with MCP. "
+                "Use this to find which models have tools available."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Optional search query to filter models by name (case-insensitive)",
+                    }
+                },
+            },
+        )
 
     def __init__(self, *args, **kwargs):
         """Initialize the mixin and register MCP tools."""

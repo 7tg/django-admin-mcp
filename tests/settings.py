@@ -10,8 +10,11 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "django.contrib.admin",
+    "django_admin_mcp",
     "tests",
 ]
+
+ROOT_URLCONF = "tests.urls"
 
 DATABASES = {
     "default": {

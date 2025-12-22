@@ -169,3 +169,32 @@ class TestCRUDOperations:
             pytest.fail(f"Failed to create article: {response['error']}")
         assert response["success"] is True
         assert response["object"]["title"] == "Test Article"
+
+    async def test_find_models(self):
+        """Test finding models via find_models tool."""
+        # Call find_models without query
+        result = await MCPAdminMixin.handle_tool_call("find_models", {})
+
+        assert len(result) == 1
+        import json
+
+        response = json.loads(result[0].text)
+        assert "count" in response
+        assert "models" in response
+        assert response["count"] >= 2  # Should find at least author and article
+
+        # Verify that models are in the results
+        model_names = [m["model_name"] for m in response["models"]]
+        assert "author" in model_names
+        assert "article" in model_names
+
+        # Test with query filter
+        result = await MCPAdminMixin.handle_tool_call(
+            "find_models", {"query": "author"}
+        )
+
+        response = json.loads(result[0].text)
+        assert "count" in response
+        assert response["count"] >= 1
+        model_names = [m["model_name"] for m in response["models"]]
+        assert "author" in model_names

@@ -32,7 +32,10 @@ db.sqlite3
 db.sqlite3-journal
 /media
 /staticfiles
-migrations/
+# Ignore migrations in example and test apps, but not in the package
+example/**/migrations/
+tests/**/migrations/
+blog/**/migrations/
 
 # IDE
 .vscode/

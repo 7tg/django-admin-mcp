@@ -112,3 +112,10 @@ class TestMCPAdminMixin:
 
         assert "required" in delete_tool.inputSchema
         assert "id" in delete_tool.inputSchema["required"]
+
+    def test_find_models_tool_generated(self):
+        """Test that find_models tool is generated."""
+        find_models_tool = MCPAdminMixin.get_find_models_tool()
+        assert find_models_tool.name == "find_models"
+        assert "properties" in find_models_tool.inputSchema
+        assert "query" in find_models_tool.inputSchema["properties"]
