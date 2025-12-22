@@ -7,24 +7,55 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='MCPToken',
+            name="MCPToken",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(help_text="A descriptive name for this token (e.g., 'Production API', 'Dev Testing')", max_length=200)),
-                ('token', models.CharField(editable=False, help_text='The authentication token (auto-generated)', max_length=64, unique=True)),
-                ('is_active', models.BooleanField(default=True, help_text='Whether this token is currently active')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('last_used_at', models.DateTimeField(blank=True, help_text='Last time this token was used', null=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "name",
+                    models.CharField(
+                        help_text="A descriptive name for this token (e.g., 'Production API', 'Dev Testing')",
+                        max_length=200,
+                    ),
+                ),
+                (
+                    "token",
+                    models.CharField(
+                        editable=False,
+                        help_text="The authentication token (auto-generated)",
+                        max_length=64,
+                        unique=True,
+                    ),
+                ),
+                (
+                    "is_active",
+                    models.BooleanField(
+                        default=True, help_text="Whether this token is currently active"
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "last_used_at",
+                    models.DateTimeField(
+                        blank=True, help_text="Last time this token was used", null=True
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'MCP Token',
-                'verbose_name_plural': 'MCP Tokens',
-                'ordering': ['-created_at'],
+                "verbose_name": "MCP Token",
+                "verbose_name_plural": "MCP Tokens",
+                "ordering": ["-created_at"],
             },
         ),
     ]

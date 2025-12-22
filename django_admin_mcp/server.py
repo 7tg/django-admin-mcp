@@ -29,19 +29,19 @@ async def run_mcp_server():
     async def list_tools():
         """List all available MCP tools for registered models."""
         tools = []
-        
+
         # Always include the find_models tool
         tools.append(MCPAdminMixin.get_find_models_tool())
-        
+
         # Only include model-specific tools if explicitly exposed
         for model_name, model_info in MCPAdminMixin._registered_models.items():
             model = model_info["model"]
             admin = model_info["admin"]
-            
+
             # Check if admin class has mcp_expose attribute set to True
-            if getattr(admin, 'mcp_expose', False):
+            if getattr(admin, "mcp_expose", False):
                 tools.extend(MCPAdminMixin.get_mcp_tools(model))
-        
+
         return tools
 
     # Register the centralized call_tool handler

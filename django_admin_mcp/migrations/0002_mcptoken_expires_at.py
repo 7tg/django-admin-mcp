@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('django_admin_mcp', '0001_initial'),
+        ("django_admin_mcp", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='mcptoken',
-            name='expires_at',
-            field=models.DateTimeField(blank=True, help_text='Token expiration date (leave empty for indefinite tokens)', null=True),
+            model_name="mcptoken",
+            name="expires_at",
+            field=models.DateTimeField(
+                blank=True,
+                help_text="Token expiration date (leave empty for indefinite tokens)",
+                null=True,
+            ),
         ),
     ]
