@@ -4,7 +4,9 @@ Tests for HTTP interface and token authentication
 
 import json
 import pytest
+from datetime import timedelta
 from django.test import Client
+from django.utils import timezone
 from django_admin_mcp.models import MCPToken
 
 
@@ -136,9 +138,6 @@ class TestMCPToken:
 
     def test_token_default_expiry(self):
         """Test that tokens have default 90-day expiry."""
-        from django.utils import timezone
-        from datetime import timedelta
-        
         token = MCPToken.objects.create(name='Test Token')
         assert token.expires_at is not None
         
@@ -149,8 +148,6 @@ class TestMCPToken:
 
     def test_token_indefinite_expiry(self):
         """Test creating token with no expiry."""
-        from django.utils import timezone
-        
         token = MCPToken.objects.create(name='Indefinite Token', expires_at=None)
         assert token.expires_at is None
         assert not token.is_expired()
@@ -158,9 +155,6 @@ class TestMCPToken:
 
     def test_token_custom_expiry(self):
         """Test creating token with custom expiry."""
-        from django.utils import timezone
-        from datetime import timedelta
-        
         custom_expiry = timezone.now() + timedelta(days=30)
         token = MCPToken.objects.create(name='Custom Token', expires_at=custom_expiry)
         assert token.expires_at == custom_expiry
@@ -168,9 +162,6 @@ class TestMCPToken:
 
     def test_token_expired(self):
         """Test that expired tokens are detected."""
-        from django.utils import timezone
-        from datetime import timedelta
-        
         past_date = timezone.now() - timedelta(days=1)
         token = MCPToken.objects.create(name='Expired Token', expires_at=past_date)
         assert token.is_expired()
@@ -178,9 +169,6 @@ class TestMCPToken:
 
     def test_expired_token_rejected(self):
         """Test that expired tokens are rejected in authentication."""
-        from django.utils import timezone
-        from datetime import timedelta
-        
         past_date = timezone.now() - timedelta(days=1)
         token = MCPToken.objects.create(name='Expired Token', expires_at=past_date)
         

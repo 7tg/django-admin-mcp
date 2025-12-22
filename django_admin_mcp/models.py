@@ -41,9 +41,6 @@ class MCPToken(models.Model):
         help_text="Last time this token was used"
     )
     
-    # Sentinel to track if expires_at was explicitly set
-    _EXPIRES_AT_NOT_SET = object()
-    
     class Meta:
         verbose_name = "MCP Token"
         verbose_name_plural = "MCP Tokens"
@@ -58,13 +55,17 @@ class MCPToken(models.Model):
     def __str__(self):
         return f"{self.name} ({self.token[:8]}...)"
     
+    def _should_set_default_expiry(self):
+        """Check if default expiry should be set for new token."""
+        return self.pk is None and not self._expires_at_explicit and self.expires_at is None
+    
     def save(self, *args, **kwargs):
         """Generate token and set default expiry on first save."""
         if not self.token:
             self.token = secrets.token_urlsafe(48)
         
         # Set default expiry to 90 days only for new tokens where expires_at wasn't explicitly set
-        if self.pk is None and not self._expires_at_explicit and self.expires_at is None:
+        if self._should_set_default_expiry():
             self.expires_at = timezone.now() + timedelta(days=90)
         
         super().save(*args, **kwargs)
