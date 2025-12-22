@@ -137,7 +137,7 @@ async def mcp_endpoint(request):
     """Main MCP HTTP endpoint."""
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
-    
+
     # Authenticate request
     token = await authenticate_token(request)
     if not token:
