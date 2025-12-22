@@ -35,6 +35,13 @@ class TestMCPAdminMixin:
             "create_author",
             "update_author",
             "delete_author",
+            "describe_author",
+            "actions_author",
+            "action_author",
+            "bulk_author",
+            "related_author",
+            "history_author",
+            "autocomplete_author",
         ]
         assert (
             tool_names == expected_tools
@@ -51,6 +58,13 @@ class TestMCPAdminMixin:
             "create_article",
             "update_article",
             "delete_article",
+            "describe_article",
+            "actions_article",
+            "action_article",
+            "bulk_article",
+            "related_article",
+            "history_article",
+            "autocomplete_article",
         ]
         assert (
             tool_names == expected_tools
@@ -96,14 +110,16 @@ class TestMCPAdminMixin:
         assert "required" in create_tool.inputSchema
         assert "data" in create_tool.inputSchema["required"]
 
-    def test_update_tool_requires_id_and_data(self):
-        """Test that update tool requires id and data parameters."""
+    def test_update_tool_requires_id(self):
+        """Test that update tool requires id parameter (data is optional for inline-only updates)."""
         article_tools = MCPAdminMixin.get_mcp_tools(Article)
         update_tool = next(t for t in article_tools if t.name == "update_article")
 
         assert "required" in update_tool.inputSchema
         assert "id" in update_tool.inputSchema["required"]
-        assert "data" in update_tool.inputSchema["required"]
+        # data is optional since you might only update inlines
+        assert "data" in update_tool.inputSchema["properties"]
+        assert "inlines" in update_tool.inputSchema["properties"]
 
     def test_delete_tool_requires_id(self):
         """Test that delete tool requires id parameter."""

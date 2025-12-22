@@ -5,6 +5,7 @@ Models for django-admin-mcp authentication
 import secrets
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -15,6 +16,7 @@ class MCPToken(models.Model):
 
     Each token provides access to specific MCP tools and can be enabled/disabled.
     Tokens can have an expiry date or be indefinite (expires_at=None).
+    Tokens can optionally be linked to a Django User for permission checking.
     """
 
     name = models.CharField(
@@ -26,6 +28,14 @@ class MCPToken(models.Model):
         unique=True,
         editable=False,
         help_text="The authentication token (auto-generated)",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="mcp_tokens",
+        help_text="Optional user this token belongs to (for permission checking)",
     )
     is_active = models.BooleanField(
         default=True, help_text="Whether this token is currently active"

@@ -73,7 +73,7 @@ class MCPHTTPView(View):
         if method == "tools/list":
             return await self.handle_list_tools(request)
         elif method == "tools/call":
-            return await self.handle_call_tool(request, data)
+            return await self.handle_call_tool(request, data, token=token)
         else:
             return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
 
@@ -106,7 +106,7 @@ class MCPHTTPView(View):
 
         return JsonResponse({"tools": tools_data})
 
-    async def handle_call_tool(self, request, data):
+    async def handle_call_tool(self, request, data, token=None):
         """Handle tools/call request."""
         tool_name = data.get("name")
         arguments = data.get("arguments", {})
@@ -114,8 +114,11 @@ class MCPHTTPView(View):
         if not tool_name:
             return JsonResponse({"error": "Missing tool name"}, status=400)
 
-        # Call the tool
-        result = await MCPAdminMixin.handle_tool_call(tool_name, arguments)
+        # Get user from token for permission checking
+        user = token.user if token else None
+
+        # Call the tool with user context
+        result = await MCPAdminMixin.handle_tool_call(tool_name, arguments, user=user)
 
         # Extract text from result
         if result and len(result) > 0:
@@ -157,7 +160,7 @@ async def mcp_endpoint(request):
     if method == "tools/list":
         return await handle_list_tools_request(request)
     elif method == "tools/call":
-        return await handle_call_tool_request(request, data)
+        return await handle_call_tool_request(request, data, token=token)
     else:
         return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
 
@@ -196,7 +199,7 @@ async def handle_list_tools_request(request):
     return JsonResponse({"tools": tools_data})
 
 
-async def handle_call_tool_request(request, data):
+async def handle_call_tool_request(request, data, token=None):
     """Handle tools/call request."""
     tool_name = data.get("name")
     arguments = data.get("arguments", {})
@@ -204,8 +207,11 @@ async def handle_call_tool_request(request, data):
     if not tool_name:
         return JsonResponse({"error": "Missing tool name"}, status=400)
 
-    # Call the tool
-    result = await MCPAdminMixin.handle_tool_call(tool_name, arguments)
+    # Get user from token for permission checking
+    user = token.user if token else None
+
+    # Call the tool with user context
+    result = await MCPAdminMixin.handle_tool_call(tool_name, arguments, user=user)
 
     # Extract text from result
     if result and len(result) > 0:
