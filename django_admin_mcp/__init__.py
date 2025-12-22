@@ -1,0 +1,9 @@
+"""
+Django Admin MCP - Expose Django admin models to MCP clients
+"""
+
+from .mixin import MCPAdminMixin
+from .server import get_registered_models, get_server, run_mcp_server
+
+__version__ = "0.1.0"
+__all__ = ["MCPAdminMixin", "run_mcp_server", "get_registered_models", "get_server"]
