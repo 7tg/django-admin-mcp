@@ -133,9 +133,84 @@ def mcp_health(request):
     return JsonResponse({"status": "ok", "service": "django-admin-mcp"})
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
 async def mcp_endpoint(request):
     """Main MCP HTTP endpoint."""
-    view = MCPHTTPView()
-    return await view.post(request)
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    
+    # Authenticate request
+    token = await authenticate_token(request)
+    if not token:
+        return JsonResponse(
+            {"error": "Invalid or missing authentication token"}, status=401
+        )
+
+    # Parse request body
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON in request body"}, status=400)
+
+    # Get method from request
+    method = data.get("method")
+
+    if method == "tools/list":
+        return await handle_list_tools_request(request)
+    elif method == "tools/call":
+        return await handle_call_tool_request(request, data)
+    else:
+        return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
+
+
+# Mark as CSRF exempt
+mcp_endpoint.csrf_exempt = True
+
+
+async def handle_list_tools_request(request):
+    """Handle tools/list request."""
+    tools = []
+
+    # Always include the find_models tool
+    tools.append(MCPAdminMixin.get_find_models_tool())
+
+    # Only include model-specific tools if explicitly exposed
+    for model_name, model_info in MCPAdminMixin._registered_models.items():
+        model = model_info["model"]
+        admin = model_info["admin"]
+
+        # Check if tools should be exposed
+        if getattr(admin, "mcp_expose", False):
+            tools.extend(MCPAdminMixin.get_mcp_tools(model))
+
+    # Serialize tools to dict format
+    tools_data = []
+    for tool in tools:
+        tools_data.append(
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "inputSchema": tool.inputSchema,
+            }
+        )
+
+    return JsonResponse({"tools": tools_data})
+
+
+async def handle_call_tool_request(request, data):
+    """Handle tools/call request."""
+    tool_name = data.get("name")
+    arguments = data.get("arguments", {})
+
+    if not tool_name:
+        return JsonResponse({"error": "Missing tool name"}, status=400)
+
+    # Call the tool
+    result = await MCPAdminMixin.handle_tool_call(tool_name, arguments)
+
+    # Extract text from result
+    if result and len(result) > 0:
+        content = result[0]
+        response_data = json.loads(content.text)
+        return JsonResponse(response_data)
+    else:
+        return JsonResponse({"error": "No result from tool"}, status=500)

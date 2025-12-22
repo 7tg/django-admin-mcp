@@ -6,13 +6,14 @@ import json
 from datetime import timedelta
 
 import pytest
-from django.test import Client
+from asgiref.sync import sync_to_async
+from django.test import AsyncClient, Client
 from django.utils import timezone
 
 from django_admin_mcp.models import MCPToken
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 class TestHTTPInterface:
     """Test suite for HTTP interface."""
 
@@ -26,10 +27,11 @@ class TestHTTPInterface:
         assert data["status"] == "ok"
         assert data["service"] == "django-admin-mcp"
 
-    def test_mcp_endpoint_without_token(self):
+    @pytest.mark.asyncio
+    async def test_mcp_endpoint_without_token(self):
         """Test MCP endpoint rejects requests without token."""
-        client = Client()
-        response = client.post(
+        client = AsyncClient()
+        response = await client.post(
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
@@ -39,31 +41,33 @@ class TestHTTPInterface:
         data = json.loads(response.content)
         assert "error" in data
 
-    def test_mcp_endpoint_with_invalid_token(self):
+    @pytest.mark.asyncio
+    async def test_mcp_endpoint_with_invalid_token(self):
         """Test MCP endpoint rejects requests with invalid token."""
-        client = Client()
-        response = client.post(
+        client = AsyncClient()
+        response = await client.post(
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
-            HTTP_AUTHORIZATION="Bearer invalid-token",
+            headers={"Authorization": "Bearer invalid-token"},
         )
 
         assert response.status_code == 401
         data = json.loads(response.content)
         assert "error" in data
 
-    def test_mcp_endpoint_with_valid_token_list_tools(self):
+    @pytest.mark.asyncio
+    async def test_mcp_endpoint_with_valid_token_list_tools(self):
         """Test MCP endpoint with valid token lists tools."""
         # Create a token
-        token = MCPToken.objects.create(name="Test Token")
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
 
-        client = Client()
-        response = client.post(
+        client = AsyncClient()
+        response = await client.post(
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+            headers={"Authorization": f"Bearer {token.token}"},
         )
 
         assert response.status_code == 200
@@ -78,45 +82,49 @@ class TestHTTPInterface:
         assert "list_author" in tool_names
         assert "list_article" in tool_names
 
-    def test_mcp_endpoint_with_inactive_token(self):
+    @pytest.mark.asyncio
+    async def test_mcp_endpoint_with_inactive_token(self):
         """Test MCP endpoint rejects inactive tokens."""
         # Create an inactive token
-        token = MCPToken.objects.create(name="Inactive Token", is_active=False)
+        token = await sync_to_async(MCPToken.objects.create)(
+            name="Inactive Token", is_active=False
+        )
 
-        client = Client()
-        response = client.post(
+        client = AsyncClient()
+        response = await client.post(
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+            headers={"Authorization": f"Bearer {token.token}"},
         )
 
         assert response.status_code == 401
         data = json.loads(response.content)
         assert "error" in data
 
-    def test_token_last_used_updated(self):
+    @pytest.mark.asyncio
+    async def test_token_last_used_updated(self):
         """Test that token last_used_at is updated on use."""
         # Create a token
-        token = MCPToken.objects.create(name="Test Token")
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
         assert token.last_used_at is None
 
-        client = Client()
-        response = client.post(
+        client = AsyncClient()
+        response = await client.post(
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+            headers={"Authorization": f"Bearer {token.token}"},
         )
 
         assert response.status_code == 200
 
         # Reload token and check last_used_at is set
-        token.refresh_from_db()
+        await sync_to_async(token.refresh_from_db)()
         assert token.last_used_at is not None
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 class TestMCPToken:
     """Test suite for MCPToken model."""
 
@@ -170,17 +178,20 @@ class TestMCPToken:
         assert token.is_expired()
         assert not token.is_valid()
 
-    def test_expired_token_rejected(self):
+    @pytest.mark.asyncio
+    async def test_expired_token_rejected(self):
         """Test that expired tokens are rejected in authentication."""
         past_date = timezone.now() - timedelta(days=1)
-        token = MCPToken.objects.create(name="Expired Token", expires_at=past_date)
+        token = await sync_to_async(MCPToken.objects.create)(
+            name="Expired Token", expires_at=past_date
+        )
 
-        client = Client()
-        response = client.post(
+        client = AsyncClient()
+        response = await client.post(
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+            headers={"Authorization": f"Bearer {token.token}"},
         )
 
         assert response.status_code == 401
@@ -188,11 +199,12 @@ class TestMCPToken:
         assert "error" in data
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 class TestMCPExpose:
     """Test suite for mcp_expose opt-in behavior."""
 
-    def test_tools_not_exposed_without_mcp_expose(self):
+    @pytest.mark.asyncio
+    async def test_tools_not_exposed_without_mcp_expose(self):
         """Test that tools are not exposed when mcp_expose is False."""
         from django.contrib import admin
 
@@ -210,14 +222,14 @@ class TestMCPExpose:
 
         try:
             # Create a token
-            token = MCPToken.objects.create(name="Test Token")
+            token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
 
-            client = Client()
-            response = client.post(
+            client = AsyncClient()
+            response = await client.post(
                 "/api/mcp/",
                 data=json.dumps({"method": "tools/list"}),
                 content_type="application/json",
-                HTTP_AUTHORIZATION=f"Bearer {token.token}",
+                headers={"Authorization": f"Bearer {token.token}"},
             )
 
             assert response.status_code == 200
