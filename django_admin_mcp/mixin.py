@@ -12,6 +12,7 @@ from django.db import models
 from django.forms.models import model_to_dict
 from mcp.server import Server
 from mcp.types import Tool, TextContent
+from asgiref.sync import sync_to_async
 
 
 class MCPAdminMixin:
@@ -127,8 +128,12 @@ class MCPAdminMixin:
             limit = arguments.get('limit', 100)
             offset = arguments.get('offset', 0)
             
-            queryset = model.objects.all()[offset:offset + limit]
-            results = [cls._serialize_model_instance(model_to_dict(obj)) for obj in queryset]
+            @sync_to_async
+            def get_objects():
+                queryset = model.objects.all()[offset:offset + limit]
+                return [cls._serialize_model_instance(model_to_dict(obj)) for obj in queryset]
+            
+            results = await get_objects()
             
             return [TextContent(
                 type="text",
@@ -154,8 +159,12 @@ class MCPAdminMixin:
                     text=json.dumps({'error': 'id parameter is required'})
                 )]
             
-            obj = model.objects.get(pk=obj_id)
-            obj_dict = cls._serialize_model_instance(model_to_dict(obj))
+            @sync_to_async
+            def get_object():
+                obj = model.objects.get(pk=obj_id)
+                return cls._serialize_model_instance(model_to_dict(obj))
+            
+            obj_dict = await get_object()
             
             return [TextContent(
                 type="text",
@@ -177,14 +186,19 @@ class MCPAdminMixin:
         """Handle create operation for a model."""
         try:
             data = arguments.get('data', {})
-            obj = model.objects.create(**data)
-            obj_dict = cls._serialize_model_instance(model_to_dict(obj))
+            
+            @sync_to_async
+            def create_object():
+                obj = model.objects.create(**data)
+                return obj.pk, cls._serialize_model_instance(model_to_dict(obj))
+            
+            obj_id, obj_dict = await create_object()
             
             return [TextContent(
                 type="text",
                 text=json.dumps({
                     'success': True,
-                    'id': obj.pk,
+                    'id': obj_id,
                     'object': obj_dict
                 }, indent=2, default=str)
             )]
@@ -207,8 +221,6 @@ class MCPAdminMixin:
                     text=json.dumps({'error': 'id parameter is required'})
                 )]
             
-            obj = model.objects.get(pk=obj_id)
-            
             # Validate that only model fields are being updated (protect against mass assignment)
             valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, 'name')}
             for key in data.keys():
@@ -218,12 +230,16 @@ class MCPAdminMixin:
                         text=json.dumps({'error': f'Invalid field: {key}'})
                     )]
             
-            # Update only the specified fields
-            for key, value in data.items():
-                setattr(obj, key, value)
-            obj.save()
+            @sync_to_async
+            def update_object():
+                obj = model.objects.get(pk=obj_id)
+                # Update only the specified fields
+                for key, value in data.items():
+                    setattr(obj, key, value)
+                obj.save()
+                return cls._serialize_model_instance(model_to_dict(obj))
             
-            obj_dict = cls._serialize_model_instance(model_to_dict(obj))
+            obj_dict = await update_object()
             
             return [TextContent(
                 type="text",
@@ -255,8 +271,12 @@ class MCPAdminMixin:
                     text=json.dumps({'error': 'id parameter is required'})
                 )]
             
-            obj = model.objects.get(pk=obj_id)
-            obj.delete()
+            @sync_to_async
+            def delete_object():
+                obj = model.objects.get(pk=obj_id)
+                obj.delete()
+            
+            await delete_object()
             
             return [TextContent(
                 type="text",
