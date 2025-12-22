@@ -178,5 +178,5 @@ class TestMCPExpose:
             # Restore original value
             if original_mcp_expose is not None:
                 admin_instance.mcp_expose = original_mcp_expose
-            else:
+            elif hasattr(admin_instance, 'mcp_expose'):
                 delattr(admin_instance, 'mcp_expose')
