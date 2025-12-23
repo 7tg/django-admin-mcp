@@ -5,6 +5,7 @@ Admin configuration for django-admin-mcp models
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from django_admin_mcp.models import MCPToken
 
@@ -48,11 +49,11 @@ class MCPTokenAdmin(admin.ModelAdmin):
     def status_display(self, obj):
         """Display token status with color coding."""
         if not obj.is_active:
-            return format_html('<span style="color: #999;">Inactive</span>')
+            return mark_safe('<span style="color: #999;">Inactive</span>')
         elif obj.is_expired():
-            return format_html('<span style="color: #dc3545;">Expired</span>')
+            return mark_safe('<span style="color: #dc3545;">Expired</span>')
         elif obj.expires_at is None:
-            return format_html(
+            return mark_safe(
                 '<span style="color: #28a745;">Active (Indefinite)</span>'
             )
         else:
@@ -63,6 +64,6 @@ class MCPTokenAdmin(admin.ModelAdmin):
                     days_until_expiry,
                 )
             else:
-                return format_html('<span style="color: #28a745;">Active</span>')
+                return mark_safe('<span style="color: #28a745;">Active</span>')
 
     status_display.short_description = "Status"

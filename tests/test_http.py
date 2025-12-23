@@ -245,3 +245,353 @@ class TestMCPExpose:
                 admin_instance.mcp_expose = original_mcp_expose
             elif hasattr(admin_instance, "mcp_expose"):
                 delattr(admin_instance, "mcp_expose")
+
+
+@pytest.mark.django_db(transaction=True)
+class TestMCPHTTPView:
+    """Test suite for MCPHTTPView class-based view."""
+
+    @pytest.mark.asyncio
+    async def test_post_without_token(self):
+        """Test MCPHTTPView.post() rejects requests without token."""
+        from django_admin_mcp.views import MCPHTTPView
+        from django.test import RequestFactory
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/mcp-cbv/",
+            data=json.dumps({"method": "tools/list"}),
+            content_type="application/json",
+        )
+
+        view = MCPHTTPView.as_view()
+        response = await view(request)
+
+        assert response.status_code == 401
+        data = json.loads(response.content)
+        assert "error" in data
+        assert "authentication token" in data["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_post_with_invalid_token(self):
+        """Test MCPHTTPView.post() rejects requests with invalid token."""
+        from django_admin_mcp.views import MCPHTTPView
+        from django.test import RequestFactory
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/mcp-cbv/",
+            data=json.dumps({"method": "tools/list"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer invalid-token-value",
+        )
+
+        view = MCPHTTPView.as_view()
+        response = await view(request)
+
+        assert response.status_code == 401
+        data = json.loads(response.content)
+        assert "error" in data
+
+    @pytest.mark.asyncio
+    async def test_post_with_invalid_json(self):
+        """Test MCPHTTPView.post() handles invalid JSON."""
+        from django_admin_mcp.views import MCPHTTPView
+        from django.test import RequestFactory
+
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/mcp-cbv/",
+            data="invalid json {",
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+        )
+
+        view = MCPHTTPView.as_view()
+        response = await view(request)
+
+        assert response.status_code == 400
+        data = json.loads(response.content)
+        assert "error" in data
+        assert "JSON" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_post_with_unknown_method(self):
+        """Test MCPHTTPView.post() handles unknown methods."""
+        from django_admin_mcp.views import MCPHTTPView
+        from django.test import RequestFactory
+
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/mcp-cbv/",
+            data=json.dumps({"method": "unknown/method"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+        )
+
+        view = MCPHTTPView.as_view()
+        response = await view(request)
+
+        assert response.status_code == 400
+        data = json.loads(response.content)
+        assert "error" in data
+        assert "Unknown method" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_handle_list_tools(self):
+        """Test MCPHTTPView.handle_list_tools() method."""
+        from django_admin_mcp.views import MCPHTTPView
+        from django.test import RequestFactory
+
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/mcp-cbv/",
+            data=json.dumps({"method": "tools/list"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+        )
+
+        view = MCPHTTPView.as_view()
+        response = await view(request)
+
+        assert response.status_code == 200
+        data = json.loads(response.content)
+        assert "tools" in data
+
+        # Verify tools structure
+        tools = data["tools"]
+        assert len(tools) > 0
+
+        # Check for find_models tool
+        tool_names = [tool["name"] for tool in tools]
+        assert "find_models" in tool_names
+
+        # Verify tool structure has required fields
+        for tool in tools:
+            assert "name" in tool
+            assert "description" in tool
+            assert "inputSchema" in tool
+
+    @pytest.mark.asyncio
+    async def test_handle_call_tool_with_missing_tool_name(self):
+        """Test MCPHTTPView.handle_call_tool() with missing tool name."""
+        from django_admin_mcp.views import MCPHTTPView
+        from django.test import RequestFactory
+
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/mcp-cbv/",
+            data=json.dumps({"method": "tools/call", "arguments": {}}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+        )
+
+        view = MCPHTTPView.as_view()
+        response = await view(request)
+
+        assert response.status_code == 400
+        data = json.loads(response.content)
+        assert "error" in data
+        assert "Missing tool name" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_handle_call_tool_success(self):
+        """Test MCPHTTPView.handle_call_tool() with valid tool call."""
+        from django_admin_mcp.views import MCPHTTPView
+        from django.test import RequestFactory
+
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/mcp-cbv/",
+            data=json.dumps(
+                {"method": "tools/call", "name": "find_models", "arguments": {}}
+            ),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+        )
+
+        view = MCPHTTPView.as_view()
+        response = await view(request)
+
+        assert response.status_code == 200
+        data = json.loads(response.content)
+        # Should return model data
+        assert "models" in data
+
+
+@pytest.mark.django_db(transaction=True)
+class TestEmptyToolResult:
+    """Test suite for empty tool result edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_cbv_empty_tool_result(self):
+        """Test MCPHTTPView when handle_tool_call returns empty result (line 129)."""
+        from django_admin_mcp.views import MCPHTTPView
+        from django.test import RequestFactory
+        from unittest.mock import patch, AsyncMock
+
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/mcp-cbv/",
+            data=json.dumps(
+                {"method": "tools/call", "name": "test_tool", "arguments": {}}
+            ),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token.token}",
+        )
+
+        with patch(
+            "django_admin_mcp.mixin.MCPAdminMixin.handle_tool_call",
+            new_callable=AsyncMock
+        ) as mock_handle:
+            mock_handle.return_value = []  # Empty result
+
+            view = MCPHTTPView.as_view()
+            response = await view(request)
+
+            assert response.status_code == 500
+            data = json.loads(response.content)
+            assert "error" in data
+            assert "No result" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_fbv_empty_tool_result(self):
+        """Test mcp_endpoint when handle_tool_call returns empty result (line 222)."""
+        from unittest.mock import patch, AsyncMock
+
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        with patch(
+            "django_admin_mcp.views.MCPAdminMixin.handle_tool_call",
+            new_callable=AsyncMock
+        ) as mock_handle:
+            mock_handle.return_value = []  # Empty result
+
+            client = AsyncClient()
+            response = await client.post(
+                "/api/mcp/",
+                data=json.dumps(
+                    {"method": "tools/call", "name": "test_tool", "arguments": {}}
+                ),
+                content_type="application/json",
+                headers={"Authorization": f"Bearer {token.token}"},
+            )
+
+            assert response.status_code == 500
+            data = json.loads(response.content)
+            assert "error" in data
+            assert "No result" in data["error"]
+
+
+@pytest.mark.django_db(transaction=True)
+class TestFunctionBasedViewEdgeCases:
+    """Test suite for function-based view edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_mcp_endpoint_method_not_allowed(self):
+        """Test mcp_endpoint rejects non-POST requests."""
+        client = AsyncClient()
+
+        # Try GET request
+        response = await client.get("/api/mcp/")
+        assert response.status_code == 405
+        data = json.loads(response.content)
+        assert "error" in data
+        assert "Method not allowed" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_mcp_endpoint_invalid_json(self):
+        """Test mcp_endpoint handles invalid JSON."""
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        client = AsyncClient()
+        response = await client.post(
+            "/api/mcp/",
+            data="invalid json {",
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {token.token}"},
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.content)
+        assert "error" in data
+        assert "JSON" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_mcp_endpoint_unknown_method(self):
+        """Test mcp_endpoint handles unknown methods."""
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        client = AsyncClient()
+        response = await client.post(
+            "/api/mcp/",
+            data=json.dumps({"method": "unknown/method"}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {token.token}"},
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.content)
+        assert "error" in data
+        assert "Unknown method" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_handle_call_tool_request_missing_tool_name(self):
+        """Test handle_call_tool_request with missing tool name."""
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        client = AsyncClient()
+        response = await client.post(
+            "/api/mcp/",
+            data=json.dumps({"method": "tools/call", "arguments": {}}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {token.token}"},
+        )
+
+        assert response.status_code == 400
+        data = json.loads(response.content)
+        assert "error" in data
+        assert "Missing tool name" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_handle_call_tool_request_success(self):
+        """Test handle_call_tool_request with valid tool call."""
+        # Create a valid token
+        token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
+
+        client = AsyncClient()
+        response = await client.post(
+            "/api/mcp/",
+            data=json.dumps(
+                {"method": "tools/call", "name": "find_models", "arguments": {}}
+            ),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {token.token}"},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.content)
+        # Should return model data
+        assert "models" in data
