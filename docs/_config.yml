@@ -1,0 +1,24 @@
+# GitHub Pages configuration
+title: Django Admin MCP Documentation
+description: API documentation for Django Admin MCP - expose Django admin models to MCP clients
+
+# Use a blank theme since we're using Redoc
+theme: null
+
+# Don't process the docs folder with Jekyll
+include:
+  - docs
+
+# Exclude unnecessary files
+exclude:
+  - .github
+  - tests
+  - django_admin_mcp
+  - example
+  - README.md
+  - LICENSE
+  - MANIFEST.in
+  - pyproject.toml
+  - setup.py
+  - uv.lock
+  - .gitignore
