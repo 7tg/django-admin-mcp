@@ -2,6 +2,10 @@
 
 A Django package that exposes Django admin models to MCP (Model Context Protocol) clients, allowing programmatic access to your Django admin interface through both stdio and HTTP interfaces.
 
+## Documentation
+
+📚 **[API Documentation](https://7tg.github.io/django-admin-mcp/)** - Interactive API documentation with Redoc
+
 ## Features
 
 - **Easy Integration**: Add a simple mixin to your ModelAdmin classes
