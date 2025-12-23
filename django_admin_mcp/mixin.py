@@ -163,10 +163,12 @@ class MCPAdminMixin:
         return [
             TextContent(
                 type="text",
-                text=json.dumps({
-                    "error": f"Permission denied: cannot {operation} {model_name}",
-                    "code": "permission_denied"
-                }),
+                text=json.dumps(
+                    {
+                        "error": f"Permission denied: cannot {operation} {model_name}",
+                        "code": "permission_denied",
+                    }
+                ),
             )
         ]
 
@@ -262,7 +264,9 @@ class MCPAdminMixin:
 
         # Check permission for the operation
         required_permission = permission_map.get(operation)
-        if required_permission and not await cls._check_permission_async(admin, user, required_permission):
+        if required_permission and not await cls._check_permission_async(
+            admin, user, required_permission
+        ):
             return cls._permission_error(required_permission, model_name)
 
         # Route to appropriate handler
@@ -526,15 +530,21 @@ class MCPAdminMixin:
                     related_data = {}
                     for field in model._meta.get_fields():
                         if hasattr(field, "related_model") and field.related_model:
-                            if hasattr(field, "one_to_many") or hasattr(field, "one_to_one"):
+                            if hasattr(field, "one_to_many") or hasattr(
+                                field, "one_to_one"
+                            ):
                                 # Reverse relation
                                 accessor_name = field.get_accessor_name()
                                 if hasattr(obj, accessor_name):
                                     related_manager = getattr(obj, accessor_name)
                                     if hasattr(related_manager, "all"):
                                         related_data[accessor_name] = [
-                                            cls._serialize_model_instance(model_to_dict(r))
-                                            for r in related_manager.all()[:10]  # Limit to 10
+                                            cls._serialize_model_instance(
+                                                model_to_dict(r)
+                                            )
+                                            for r in related_manager.all()[
+                                                :10
+                                            ]  # Limit to 10
                                         ]
                     if related_data:
                         result["_related"] = related_data
@@ -598,7 +608,9 @@ class MCPAdminMixin:
             return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
     @classmethod
-    def _update_inlines(cls, obj, admin, inlines_data: Dict[str, List]) -> Dict[str, Any]:
+    def _update_inlines(
+        cls, obj, admin, inlines_data: Dict[str, List]
+    ) -> Dict[str, Any]:
         """Update inline related objects for a model instance."""
         results = {"created": [], "updated": [], "deleted": [], "errors": []}
 
@@ -636,7 +648,9 @@ class MCPAdminMixin:
                     if delete and item_id:
                         # Delete existing inline
                         inline_model.objects.filter(pk=item_id).delete()
-                        results["deleted"].append({"model": inline_model_name, "id": item_id})
+                        results["deleted"].append(
+                            {"model": inline_model_name, "id": item_id}
+                        )
                     elif item_id:
                         # Update existing inline
                         inline_obj = inline_model.objects.get(pk=item_id)
@@ -644,21 +658,30 @@ class MCPAdminMixin:
                             if key not in ["id", "_delete"]:
                                 setattr(inline_obj, key, value)
                         inline_obj.save()
-                        results["updated"].append({"model": inline_model_name, "id": item_id})
+                        results["updated"].append(
+                            {"model": inline_model_name, "id": item_id}
+                        )
                     else:
                         # Create new inline
                         item_data[fk_field.name] = obj
-                        new_obj = inline_model.objects.create(**{
-                            k: v for k, v in item_data.items()
-                            if k not in ["id", "_delete"]
-                        })
-                        results["created"].append({"model": inline_model_name, "id": new_obj.pk})
+                        new_obj = inline_model.objects.create(
+                            **{
+                                k: v
+                                for k, v in item_data.items()
+                                if k not in ["id", "_delete"]
+                            }
+                        )
+                        results["created"].append(
+                            {"model": inline_model_name, "id": new_obj.pk}
+                        )
                 except Exception as e:
-                    results["errors"].append({
-                        "model": inline_model_name,
-                        "id": item.get("id"),
-                        "error": str(e)
-                    })
+                    results["errors"].append(
+                        {
+                            "model": inline_model_name,
+                            "id": item.get("id"),
+                            "error": str(e),
+                        }
+                    )
 
         return results
 
@@ -705,10 +728,12 @@ class MCPAdminMixin:
                     return [
                         TextContent(
                             type="text",
-                            text=json.dumps({
-                                "error": f"Cannot update readonly fields: {', '.join(readonly_attempted)}",
-                                "readonly_fields": list(readonly_attempted),
-                            }),
+                            text=json.dumps(
+                                {
+                                    "error": f"Cannot update readonly fields: {', '.join(readonly_attempted)}",
+                                    "readonly_fields": list(readonly_attempted),
+                                }
+                            ),
                         )
                     ]
 
@@ -730,14 +755,22 @@ class MCPAdminMixin:
                 # Log the action
                 change_message = []
                 if data:
-                    change_message.append(f"Changed via MCP: {json.dumps(data, default=str)}")
+                    change_message.append(
+                        f"Changed via MCP: {json.dumps(data, default=str)}"
+                    )
                 if inlines_data:
-                    change_message.append(f"Updated inlines: {list(inlines_data.keys())}")
+                    change_message.append(
+                        f"Updated inlines: {list(inlines_data.keys())}"
+                    )
                 cls._log_action(
                     user=user,
                     obj=obj,
                     action_flag=CHANGE,
-                    change_message=" | ".join(change_message) if change_message else "Updated via MCP",
+                    change_message=(
+                        " | ".join(change_message)
+                        if change_message
+                        else "Updated via MCP"
+                    ),
                 )
 
                 return cls._serialize_model_instance(model_to_dict(obj)), inlines_result
@@ -792,13 +825,13 @@ class MCPAdminMixin:
                     user=user,
                     obj=obj,
                     action_flag=DELETION,
-                    change_message=f"Deleted via MCP",
+                    change_message="Deleted via MCP",
                 )
 
                 obj.delete()
                 return obj_repr
 
-            obj_repr = await delete_object()
+            await delete_object()
 
             return [
                 TextContent(
@@ -889,7 +922,9 @@ class MCPAdminMixin:
         null_allowed = getattr(field, "null", False)
         blank_allowed = getattr(field, "blank", False)
         has_default = getattr(field, "has_default", lambda: False)()
-        metadata["required"] = not null_allowed and not blank_allowed and not has_default
+        metadata["required"] = (
+            not null_allowed and not blank_allowed and not has_default
+        )
 
         # Common field attributes
         if hasattr(field, "max_length") and field.max_length:
@@ -904,7 +939,10 @@ class MCPAdminMixin:
                 for choice in field.choices
             ]
 
-        if hasattr(field, "default") and field.default is not models.fields.NOT_PROVIDED:
+        if (
+            hasattr(field, "default")
+            and field.default is not models.fields.NOT_PROVIDED
+        ):
             # Handle callable defaults
             default_val = field.default
             if callable(default_val):
@@ -961,7 +999,9 @@ class MCPAdminMixin:
             if admin:
                 admin_config["list_display"] = list(getattr(admin, "list_display", []))
                 admin_config["list_filter"] = list(getattr(admin, "list_filter", []))
-                admin_config["search_fields"] = list(getattr(admin, "search_fields", []))
+                admin_config["search_fields"] = list(
+                    getattr(admin, "search_fields", [])
+                )
                 admin_config["ordering"] = list(getattr(admin, "ordering", []))
                 admin_config["readonly_fields"] = list(
                     getattr(admin, "readonly_fields", [])
@@ -1119,7 +1159,10 @@ class MCPAdminMixin:
                 if admin:
                     admin_actions = getattr(admin, "actions", []) or []
                     for action in admin_actions:
-                        if callable(action) and getattr(action, "__name__", "") == action_name:
+                        if (
+                            callable(action)
+                            and getattr(action, "__name__", "") == action_name
+                        ):
                             # Create a mock request with user for the action
                             request = cls._create_mock_request(user)
 
@@ -1168,7 +1211,9 @@ class MCPAdminMixin:
                     TextContent(
                         type="text",
                         text=json.dumps(
-                            {"error": "operation must be 'create', 'update', or 'delete'"}
+                            {
+                                "error": "operation must be 'create', 'update', or 'delete'"
+                            }
                         ),
                     )
                 ]
@@ -1180,7 +1225,9 @@ class MCPAdminMixin:
                 "delete": "delete",
             }
             required_permission = permission_map.get(operation)
-            if required_permission and not await cls._check_permission_async(admin, user, required_permission):
+            if required_permission and not await cls._check_permission_async(
+                admin, user, required_permission
+            ):
                 model_name = model._meta.model_name
                 return cls._permission_error(required_permission, model_name)
 
@@ -1198,7 +1245,7 @@ class MCPAdminMixin:
                                 user=user,
                                 obj=obj,
                                 action_flag=ADDITION,
-                                change_message=f"Bulk created via MCP",
+                                change_message="Bulk created via MCP",
                             )
                             results["success"].append(
                                 {"index": i, "id": obj.pk, "created": True}
@@ -1232,7 +1279,10 @@ class MCPAdminMixin:
                             )
                         except model.DoesNotExist:
                             results["errors"].append(
-                                {"index": i, "error": f"Object with id {obj_id} not found"}
+                                {
+                                    "index": i,
+                                    "error": f"Object with id {obj_id} not found",
+                                }
                             )
                         except Exception as e:
                             results["errors"].append({"index": i, "error": str(e)})
@@ -1246,7 +1296,7 @@ class MCPAdminMixin:
                                 user=user,
                                 obj=obj,
                                 action_flag=DELETION,
-                                change_message=f"Bulk deleted via MCP",
+                                change_message="Bulk deleted via MCP",
                             )
                             obj.delete()
                             results["success"].append(
@@ -1254,7 +1304,10 @@ class MCPAdminMixin:
                             )
                         except model.DoesNotExist:
                             results["errors"].append(
-                                {"index": i, "error": f"Object with id {obj_id} not found"}
+                                {
+                                    "index": i,
+                                    "error": f"Object with id {obj_id} not found",
+                                }
                             )
                         except Exception as e:
                             results["errors"].append({"index": i, "error": str(e)})
@@ -1342,7 +1395,9 @@ class MCPAdminMixin:
                     return {
                         "relation": relation,
                         "type": "single",
-                        "result": cls._serialize_model_instance(model_to_dict(related_attr)),
+                        "result": cls._serialize_model_instance(
+                            model_to_dict(related_attr)
+                        ),
                     }
                 else:
                     # It's a simple field value
@@ -1421,10 +1476,12 @@ class MCPAdminMixin:
                 # Return simplified format suitable for autocomplete
                 autocomplete_results = []
                 for obj in results:
-                    autocomplete_results.append({
-                        "id": obj.pk,
-                        "text": str(obj),
-                    })
+                    autocomplete_results.append(
+                        {
+                            "id": obj.pk,
+                            "text": str(obj),
+                        }
+                    )
 
                 return {
                     "model": model_name,
@@ -1463,7 +1520,12 @@ class MCPAdminMixin:
 
             @sync_to_async
             def get_history():
-                from django.contrib.admin.models import LogEntry, ADDITION, CHANGE, DELETION
+                from django.contrib.admin.models import (
+                    ADDITION,
+                    CHANGE,
+                    DELETION,
+                    LogEntry,
+                )
                 from django.contrib.contenttypes.models import ContentType
 
                 # Verify the object exists
@@ -1486,15 +1548,17 @@ class MCPAdminMixin:
 
                 history = []
                 for entry in log_entries:
-                    history.append({
-                        "action": action_names.get(entry.action_flag, "unknown"),
-                        "action_flag": entry.action_flag,
-                        "action_time": entry.action_time.isoformat(),
-                        "user": entry.user.username if entry.user else None,
-                        "user_id": entry.user_id,
-                        "change_message": entry.change_message,
-                        "object_repr": entry.object_repr,
-                    })
+                    history.append(
+                        {
+                            "action": action_names.get(entry.action_flag, "unknown"),
+                            "action_flag": entry.action_flag,
+                            "action_time": entry.action_time.isoformat(),
+                            "user": entry.user.username if entry.user else None,
+                            "user_id": entry.user_id,
+                            "change_message": entry.change_message,
+                            "object_repr": entry.object_repr,
+                        }
+                    )
 
                 return {
                     "model": model._meta.model_name,
@@ -1559,8 +1623,10 @@ class MCPAdminMixin:
             Tool(
                 name=f"list_{model_name}",
                 description=(
-                    f"List {verbose_name} instances with filtering, searching, ordering, and pagination.\n\n"
-                    f"Filter lookups: field (exact), field__icontains, field__gte, field__lte, field__in, field__isnull\n\n"
+                    f"List {verbose_name} instances with filtering, searching, "
+                    f"ordering, and pagination.\n\n"
+                    f"Filter lookups: field (exact), field__icontains, field__gte, "
+                    f"field__lte, field__in, field__isnull\n\n"
                     f"Available fields:\n{fields_doc}"
                 ),
                 inputSchema={
