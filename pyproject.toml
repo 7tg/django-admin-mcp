@@ -56,7 +56,7 @@ Issues = "https://github.com/7tg/django-admin-mcp/issues"
 Changelog = "https://github.com/7tg/django-admin-mcp/releases"
 
 [tool.setuptools]
-packages = ["django_admin_mcp", "django_admin_mcp.migrations"]
+packages = {find = {where = ["."], exclude = ["tests", "tests.*", "example", "example.*"]}}
 
 [tool.setuptools.package-data]
 django_admin_mcp = ["py.typed"]

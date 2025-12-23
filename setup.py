@@ -1,10 +1,17 @@
 from setuptools import setup, find_packages
+from pathlib import Path
+
+# Read the README file
+readme_file = Path(__file__).parent / "README.md"
+long_description = ""
+if readme_file.exists():
+    long_description = readme_file.read_text(encoding="utf-8")
 
 setup(
     name="django-admin-mcp",
     version="0.1.0",
     description="Django admin MCP integration - expose Django admin models to MCP clients",
-    long_description=open("README.md").read(),
+    long_description=long_description,
     long_description_content_type="text/markdown",
     author="Barbaros Goren",
     author_email="tayyipgoren@gmail.com",
@@ -15,7 +22,7 @@ setup(
         "Issues": "https://github.com/7tg/django-admin-mcp/issues",
         "Changelog": "https://github.com/7tg/django-admin-mcp/releases",
     },
-    packages=find_packages(exclude=["tests", "tests.*"]),
+    packages=find_packages(exclude=["tests", "tests.*", "example", "example.*"]),
     install_requires=[
         "django>=3.2",
         "mcp>=0.9.0",
