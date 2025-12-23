@@ -7,7 +7,7 @@ from django_admin_mcp.server import get_registered_models, get_server, run_mcp_s
 
 __version__ = "0.1.0"
 __author__ = "Barbaros Goren"
-__email__ = "tayyipgoren@gmail.com"
+__email__ = "gorenbarbaros@gmail.com"
 __all__ = [
     "MCPAdminMixin",
     "run_mcp_server",

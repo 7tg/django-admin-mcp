@@ -14,7 +14,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Barbaros Goren",
-    author_email="tayyipgoren@gmail.com",
+    author_email="gorenbarbaros@gmail.com",
     url="https://github.com/7tg/django-admin-mcp",
     project_urls={
         "Homepage": "https://github.com/7tg/django-admin-mcp",

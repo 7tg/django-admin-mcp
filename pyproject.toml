@@ -10,10 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-or-later"
 authors = [
-    {name = "Barbaros Goren", email = "tayyipgoren@gmail.com"}
+    {name = "Barbaros Goren", email = "gorenbarbaros@gmail.com"}
 ]
 maintainers = [
-    {name = "Barbaros Goren", email = "tayyipgoren@gmail.com"}
+    {name = "Barbaros Goren", email = "gorenbarbaros@gmail.com"}
 ]
 keywords = [
     "django",
