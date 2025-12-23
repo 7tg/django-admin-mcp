@@ -212,7 +212,9 @@ class TestFilteringSearchingOrdering:
         # Create test data
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Alice Smith", email="alice@example.com"),
+            lambda: Author.objects.create(
+                name="Alice Smith", email="alice@example.com"
+            ),
         )
         await asyncio.get_event_loop().run_in_executor(
             None,
@@ -234,7 +236,9 @@ class TestFilteringSearchingOrdering:
         # Create test data
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Charlie Brown", email="charlie@example.com"),
+            lambda: Author.objects.create(
+                name="Charlie Brown", email="charlie@example.com"
+            ),
         )
 
         # Filter by name containing 'brown' (case-insensitive)
@@ -252,7 +256,9 @@ class TestFilteringSearchingOrdering:
         # Create test data
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Searchable Author", email="search@example.com"),
+            lambda: Author.objects.create(
+                name="Searchable Author", email="search@example.com"
+            ),
         )
 
         # Search for 'searchable'
@@ -273,16 +279,21 @@ class TestFilteringSearchingOrdering:
         )
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Order Zebra", email="zebra@example.com"),
+            lambda: Author.objects.create(
+                name="Order Zebra", email="zebra@example.com"
+            ),
         )
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Order Alpha", email="alpha@example.com"),
+            lambda: Author.objects.create(
+                name="Order Alpha", email="alpha@example.com"
+            ),
         )
 
         # Order by name ascending
         result = await MCPAdminMixin.handle_tool_call(
-            "list_author", {"filters": {"name__icontains": "Order"}, "order_by": ["name"]}
+            "list_author",
+            {"filters": {"name__icontains": "Order"}, "order_by": ["name"]},
         )
         response = json.loads(result[0].text)
         names = [r["name"] for r in response["results"]]
@@ -290,7 +301,8 @@ class TestFilteringSearchingOrdering:
 
         # Order by name descending
         result = await MCPAdminMixin.handle_tool_call(
-            "list_author", {"filters": {"name__icontains": "Order"}, "order_by": ["-name"]}
+            "list_author",
+            {"filters": {"name__icontains": "Order"}, "order_by": ["-name"]},
         )
         response = json.loads(result[0].text)
         names = [r["name"] for r in response["results"]]
@@ -331,12 +343,15 @@ class TestFilteringSearchingOrdering:
     async def test_list_combined_filters_search_ordering(self):
         """Test combining filters, search, and ordering."""
         import json
+
         from tests.models import Article
 
         # Create test author
         author = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Combined Author", email="combined@example.com"),
+            lambda: Author.objects.create(
+                name="Combined Author", email="combined@example.com"
+            ),
         )
 
         # Create test articles
@@ -421,9 +436,7 @@ class TestDescribeModel:
 
         # Article has FK to Author
         relationships = response["relationships"]
-        author_rel = next(
-            (r for r in relationships if r["name"] == "author"), None
-        )
+        author_rel = next((r for r in relationships if r["name"] == "author"), None)
         assert author_rel is not None
         assert author_rel["related_model"] == "author"
 
@@ -471,11 +484,15 @@ class TestActionsAndBulk:
         # Create test authors
         author1 = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Delete Me 1", email="delete1@example.com"),
+            lambda: Author.objects.create(
+                name="Delete Me 1", email="delete1@example.com"
+            ),
         )
         author2 = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Delete Me 2", email="delete2@example.com"),
+            lambda: Author.objects.create(
+                name="Delete Me 2", email="delete2@example.com"
+            ),
         )
 
         # Execute delete_selected action
@@ -500,9 +517,7 @@ class TestActionsAndBulk:
         import json
 
         # Missing action name
-        result = await MCPAdminMixin.handle_tool_call(
-            "action_author", {"ids": [1, 2]}
-        )
+        result = await MCPAdminMixin.handle_tool_call("action_author", {"ids": [1, 2]})
         response = json.loads(result[0].text)
         assert "error" in response
 
@@ -539,11 +554,15 @@ class TestActionsAndBulk:
         # Create test authors
         author1 = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Update Me 1", email="update1@example.com"),
+            lambda: Author.objects.create(
+                name="Update Me 1", email="update1@example.com"
+            ),
         )
         author2 = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Update Me 2", email="update2@example.com"),
+            lambda: Author.objects.create(
+                name="Update Me 2", email="update2@example.com"
+            ),
         )
 
         items = [
@@ -572,11 +591,15 @@ class TestActionsAndBulk:
         # Create test authors
         author1 = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Bulk Delete 1", email="bulkdel1@example.com"),
+            lambda: Author.objects.create(
+                name="Bulk Delete 1", email="bulkdel1@example.com"
+            ),
         )
         author2 = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Bulk Delete 2", email="bulkdel2@example.com"),
+            lambda: Author.objects.create(
+                name="Bulk Delete 2", email="bulkdel2@example.com"
+            ),
         )
 
         result = await MCPAdminMixin.handle_tool_call(
@@ -600,12 +623,17 @@ class TestActionsAndBulk:
         # First create an author with a specific email
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Existing", email="duplicate@example.com"),
+            lambda: Author.objects.create(
+                name="Existing", email="duplicate@example.com"
+            ),
         )
 
         items = [
             {"name": "Valid Author", "email": "bulkerror@example.com"},
-            {"name": "Duplicate Email", "email": "duplicate@example.com"},  # Will fail - duplicate email
+            {
+                "name": "Duplicate Email",
+                "email": "duplicate@example.com",
+            },  # Will fail - duplicate email
         ]
 
         result = await MCPAdminMixin.handle_tool_call(
@@ -626,12 +654,15 @@ class TestInlineAndRelated:
     async def test_get_with_include_related(self):
         """Test getting an object with related data."""
         import json
+
         from tests.models import Article
 
         # Create author with articles
         author = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Related Author", email="related@example.com"),
+            lambda: Author.objects.create(
+                name="Related Author", email="related@example.com"
+            ),
         )
         await asyncio.get_event_loop().run_in_executor(
             None,
@@ -660,12 +691,15 @@ class TestInlineAndRelated:
     async def test_get_with_include_inlines(self):
         """Test getting an object with inline data."""
         import json
+
         from tests.models import Article
 
         # Create author with articles (which are configured as inlines)
         author = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Inline Author", email="inline@example.com"),
+            lambda: Author.objects.create(
+                name="Inline Author", email="inline@example.com"
+            ),
         )
         await asyncio.get_event_loop().run_in_executor(
             None,
@@ -688,6 +722,7 @@ class TestInlineAndRelated:
     async def test_related_navigation(self):
         """Test fetching related objects via related_ tool."""
         import json
+
         from tests.models import Article
 
         # Create author with articles
@@ -722,12 +757,15 @@ class TestInlineAndRelated:
     async def test_related_with_pagination(self):
         """Test related navigation with pagination."""
         import json
+
         from tests.models import Article
 
         # Create author with many articles
         author = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Paginate Author", email="paginate@example.com"),
+            lambda: Author.objects.create(
+                name="Paginate Author", email="paginate@example.com"
+            ),
         )
         for i in range(5):
             await asyncio.get_event_loop().run_in_executor(
@@ -739,7 +777,8 @@ class TestInlineAndRelated:
 
         # Get first page
         result = await MCPAdminMixin.handle_tool_call(
-            "related_author", {"id": author.id, "relation": "articles", "limit": 2, "offset": 0}
+            "related_author",
+            {"id": author.id, "relation": "articles", "limit": 2, "offset": 0},
         )
         response = json.loads(result[0].text)
 
@@ -752,7 +791,9 @@ class TestInlineAndRelated:
 
         author = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Invalid Author", email="invalid@example.com"),
+            lambda: Author.objects.create(
+                name="Invalid Author", email="invalid@example.com"
+            ),
         )
 
         result = await MCPAdminMixin.handle_tool_call(
@@ -771,6 +812,7 @@ class TestUserLinkedTokens:
     async def test_token_with_user(self):
         """Test creating a token linked to a user."""
         from django.contrib.auth import get_user_model
+
         from django_admin_mcp.models import MCPToken
 
         User = get_user_model()
@@ -779,7 +821,9 @@ class TestUserLinkedTokens:
         user = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: User.objects.create_user(
-                username="testuser", email="testuser@example.com", password="testpass123"
+                username="testuser",
+                email="testuser@example.com",
+                password="testpass123",
             ),
         )
 
@@ -814,6 +858,7 @@ class TestPermissionChecks:
     async def test_superuser_can_do_everything(self):
         """Test that superuser has all permissions."""
         import json
+
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
@@ -822,14 +867,18 @@ class TestPermissionChecks:
         superuser = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: User.objects.create_superuser(
-                username="superadmin", email="superadmin@example.com", password="superpass123"
+                username="superadmin",
+                email="superadmin@example.com",
+                password="superpass123",
             ),
         )
 
         # Create an author first
         author = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Perm Test Author", email="permtest@example.com"),
+            lambda: Author.objects.create(
+                name="Perm Test Author", email="permtest@example.com"
+            ),
         )
 
         # Test list (view permission)
@@ -838,7 +887,9 @@ class TestPermissionChecks:
         assert "results" in response
 
         # Test get (view permission)
-        result = await MCPAdminMixin.handle_tool_call("get_author", {"id": author.id}, user=superuser)
+        result = await MCPAdminMixin.handle_tool_call(
+            "get_author", {"id": author.id}, user=superuser
+        )
         response = json.loads(result[0].text)
         assert response["name"] == "Perm Test Author"
 
@@ -865,9 +916,11 @@ class TestPermissionChecks:
         import json
 
         # Create an author
-        author = await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="No User Author", email="nouser@example.com"),
+            lambda: Author.objects.create(
+                name="No User Author", email="nouser@example.com"
+            ),
         )
 
         # Test list without user
@@ -887,6 +940,7 @@ class TestPermissionChecks:
     async def test_regular_user_without_permissions(self):
         """Test that regular user without permissions gets denied."""
         import json
+
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
@@ -895,7 +949,9 @@ class TestPermissionChecks:
         regular_user = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: User.objects.create_user(
-                username="regularuser", email="regular@example.com", password="regularpass123"
+                username="regularuser",
+                email="regular@example.com",
+                password="regularpass123",
             ),
         )
 
@@ -912,6 +968,7 @@ class TestPermissionChecks:
     async def test_staff_user_with_add_permission(self):
         """Test that staff user with add permission can create."""
         import json
+
         from django.contrib.auth import get_user_model
         from django.contrib.auth.models import Permission
         from django.contrib.contenttypes.models import ContentType
@@ -922,14 +979,19 @@ class TestPermissionChecks:
         staff_user = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: User.objects.create_user(
-                username="staffuser", email="staff@example.com", password="staffpass123", is_staff=True
+                username="staffuser",
+                email="staff@example.com",
+                password="staffpass123",
+                is_staff=True,
             ),
         )
 
         # Add the add_author permission
         def add_permission():
             content_type = ContentType.objects.get_for_model(Author)
-            permission = Permission.objects.get(codename="add_author", content_type=content_type)
+            permission = Permission.objects.get(
+                codename="add_author", content_type=content_type
+            )
             staff_user.user_permissions.add(permission)
             staff_user.save()
             # Clear permission cache
@@ -956,6 +1018,7 @@ class TestPermissionChecks:
     async def test_bulk_permission_check(self):
         """Test that bulk operations check permissions."""
         import json
+
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
@@ -990,7 +1053,8 @@ class TestLogEntryIntegration:
     async def test_create_logs_entry(self):
         """Test that creating an object logs an entry."""
         import json
-        from django.contrib.admin.models import LogEntry, ADDITION
+
+        from django.contrib.admin.models import ADDITION, LogEntry
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
@@ -1028,7 +1092,8 @@ class TestLogEntryIntegration:
     async def test_update_logs_entry(self):
         """Test that updating an object logs an entry."""
         import json
-        from django.contrib.admin.models import LogEntry, CHANGE
+
+        from django.contrib.admin.models import CHANGE, LogEntry
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
@@ -1037,14 +1102,18 @@ class TestLogEntryIntegration:
         superuser = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: User.objects.create_superuser(
-                username="logupdater", email="logupdater@example.com", password="logpass123"
+                username="logupdater",
+                email="logupdater@example.com",
+                password="logpass123",
             ),
         )
 
         # Create an author
         author = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Update Log Author", email="updatelog@example.com"),
+            lambda: Author.objects.create(
+                name="Update Log Author", email="updatelog@example.com"
+            ),
         )
 
         # Update the author with the user
@@ -1071,7 +1140,8 @@ class TestLogEntryIntegration:
     async def test_delete_logs_entry(self):
         """Test that deleting an object logs an entry."""
         import json
-        from django.contrib.admin.models import LogEntry, DELETION
+
+        from django.contrib.admin.models import DELETION, LogEntry
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
@@ -1080,14 +1150,18 @@ class TestLogEntryIntegration:
         superuser = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: User.objects.create_superuser(
-                username="logdeleter", email="logdeleter@example.com", password="logpass123"
+                username="logdeleter",
+                email="logdeleter@example.com",
+                password="logpass123",
             ),
         )
 
         # Create an author
         author = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Delete Log Author", email="deletelog@example.com"),
+            lambda: Author.objects.create(
+                name="Delete Log Author", email="deletelog@example.com"
+            ),
         )
         author_id = author.id
 
@@ -1115,6 +1189,7 @@ class TestLogEntryIntegration:
     async def test_no_log_without_user(self):
         """Test that no LogEntry is created without a user."""
         import json
+
         from django.contrib.admin.models import LogEntry
 
         # Get initial count
@@ -1146,6 +1221,7 @@ class TestHistoryTool:
     async def test_history_returns_log_entries(self):
         """Test that history tool returns LogEntry records."""
         import json
+
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
@@ -1154,7 +1230,9 @@ class TestHistoryTool:
         superuser = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: User.objects.create_superuser(
-                username="histadmin", email="histadmin@example.com", password="histpass123"
+                username="histadmin",
+                email="histadmin@example.com",
+                password="histpass123",
             ),
         )
 
@@ -1224,6 +1302,7 @@ class TestHistoryTool:
     async def test_history_with_limit(self):
         """Test that history tool respects limit parameter."""
         import json
+
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
@@ -1232,7 +1311,9 @@ class TestHistoryTool:
         superuser = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: User.objects.create_superuser(
-                username="limitadmin", email="limitadmin@example.com", password="limitpass123"
+                username="limitadmin",
+                email="limitadmin@example.com",
+                password="limitpass123",
             ),
         )
 
@@ -1318,15 +1399,21 @@ class TestPhase5Polish:
         # Create some authors with unique emails
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="John Doe", email=f"john_{unique_suffix}@example.com"),
+            lambda: Author.objects.create(
+                name="John Doe", email=f"john_{unique_suffix}@example.com"
+            ),
         )
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Jane Doe", email=f"jane_{unique_suffix}@example.com"),
+            lambda: Author.objects.create(
+                name="Jane Doe", email=f"jane_{unique_suffix}@example.com"
+            ),
         )
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Bob Smith", email=f"bob_{unique_suffix}@example.com"),
+            lambda: Author.objects.create(
+                name="Bob Smith", email=f"bob_{unique_suffix}@example.com"
+            ),
         )
 
         # Test autocomplete without term
@@ -1350,15 +1437,21 @@ class TestPhase5Polish:
         # Create some authors
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Alice Autocomplete", email="alice@auto.com"),
+            lambda: Author.objects.create(
+                name="Alice Autocomplete", email="alice@auto.com"
+            ),
         )
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Bob Autocomplete", email="bob@auto.com"),
+            lambda: Author.objects.create(
+                name="Bob Autocomplete", email="bob@auto.com"
+            ),
         )
         await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: Author.objects.create(name="Charlie Unique", email="charlie@unique.com"),
+            lambda: Author.objects.create(
+                name="Charlie Unique", email="charlie@unique.com"
+            ),
         )
 
         # Search for "Autocomplete"
@@ -1383,7 +1476,9 @@ class TestPhase5Polish:
         for i in range(10):
             await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda i=i: Author.objects.create(name=f"Limit Author {i}", email=f"limit{i}@auto.com"),
+                lambda i=i: Author.objects.create(
+                    name=f"Limit Author {i}", email=f"limit{i}@auto.com"
+                ),
             )
 
         # Test with limit
