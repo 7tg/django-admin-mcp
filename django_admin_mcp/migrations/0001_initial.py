@@ -15,21 +15,70 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='MCPToken',
+            name="MCPToken",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(help_text="A descriptive name for this token (e.g., 'Production API', 'Dev Testing')", max_length=200)),
-                ('token', models.CharField(editable=False, help_text='The authentication token (auto-generated)', max_length=64, unique=True)),
-                ('is_active', models.BooleanField(default=True, help_text='Whether this token is currently active')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('expires_at', models.DateTimeField(blank=True, help_text='Token expiration date (leave empty for indefinite tokens)', null=True)),
-                ('last_used_at', models.DateTimeField(blank=True, help_text='Last time this token was used', null=True)),
-                ('user', models.ForeignKey(blank=True, help_text='Optional user this token belongs to (for permission checking)', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='mcp_tokens', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "name",
+                    models.CharField(
+                        help_text="A descriptive name for this token (e.g., 'Production API', 'Dev Testing')",
+                        max_length=200,
+                    ),
+                ),
+                (
+                    "token",
+                    models.CharField(
+                        editable=False,
+                        help_text="The authentication token (auto-generated)",
+                        max_length=64,
+                        unique=True,
+                    ),
+                ),
+                (
+                    "is_active",
+                    models.BooleanField(
+                        default=True, help_text="Whether this token is currently active"
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "expires_at",
+                    models.DateTimeField(
+                        blank=True,
+                        help_text="Token expiration date (leave empty for indefinite tokens)",
+                        null=True,
+                    ),
+                ),
+                (
+                    "last_used_at",
+                    models.DateTimeField(
+                        blank=True, help_text="Last time this token was used", null=True
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        blank=True,
+                        help_text="Optional user this token belongs to (for permission checking)",
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="mcp_tokens",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'MCP Token',
-                'verbose_name_plural': 'MCP Tokens',
-                'ordering': ['-created_at'],
+                "verbose_name": "MCP Token",
+                "verbose_name_plural": "MCP Tokens",
+                "ordering": ["-created_at"],
             },
         ),
     ]
