@@ -36,17 +36,7 @@ class MCPAdminMixin:
     """
 
     # Class-level registry to track registered models
-    _mcp_server = None
     _registered_models: Dict[str, Dict[str, Any]] = {}
-
-    @classmethod
-    def get_mcp_server(cls):
-        """Get or create the MCP server instance."""
-        if cls._mcp_server is None:
-            # Lazy import to avoid top-level mcp dependency
-            from mcp.server import Server
-            cls._mcp_server = Server("django-admin-mcp")
-        return cls._mcp_server
 
     @classmethod
     def register_model_tools(cls, model_admin_instance):

@@ -4,7 +4,7 @@ Tests for MCPAdminMixin functionality
 
 import pytest
 
-from django_admin_mcp import MCPAdminMixin, get_registered_models, get_server
+from django_admin_mcp import MCPAdminMixin
 from tests.models import Article, Author
 
 
@@ -14,15 +14,9 @@ class TestMCPAdminMixin:
 
     def test_models_registered(self):
         """Test that models are registered with MCP."""
-        registered = get_registered_models()
+        registered = MCPAdminMixin._registered_models
         assert "article" in registered, "Article model should be registered"
         assert "author" in registered, "Author model should be registered"
-
-    def test_server_created(self):
-        """Test that MCP server is created."""
-        server = get_server()
-        assert server is not None, "MCP server should be created"
-        assert server.name == "django-admin-mcp"
 
     def test_tools_generated_for_author(self):
         """Test that correct tools are generated for Author model."""
