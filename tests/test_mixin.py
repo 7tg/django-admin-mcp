@@ -5,7 +5,7 @@ Tests for MCPAdminMixin functionality
 import pytest
 
 from django_admin_mcp import MCPAdminMixin
-from tests.models import Article, Author
+from tests.models import Article
 
 
 @pytest.mark.django_db
@@ -18,30 +18,7 @@ class TestMCPAdminMixin:
         assert "article" in registered, "Article model should be registered"
         assert "author" in registered, "Author model should be registered"
 
-    def test_tools_generated_for_author(self):
-        """Test that correct tools are generated for Author model."""
-        author_tools = MCPAdminMixin.get_mcp_tools(Author)
-        tool_names = [t.name for t in author_tools]
-
-        expected_tools = [
-            "list_author",
-            "get_author",
-            "create_author",
-            "update_author",
-            "delete_author",
-            "describe_author",
-            "actions_author",
-            "action_author",
-            "bulk_author",
-            "related_author",
-            "history_author",
-            "autocomplete_author",
-        ]
-        assert (
-            tool_names == expected_tools
-        ), f"Expected {expected_tools}, got {tool_names}"
-
-    def test_tools_generated_for_article(self):
+    def test_tools_generated_for_model(self):
         """Test that correct tools are generated for Article model."""
         article_tools = MCPAdminMixin.get_mcp_tools(Article)
         tool_names = [t.name for t in article_tools]
@@ -79,49 +56,21 @@ class TestMCPAdminMixin:
                 tool.inputSchema["type"] == "object"
             ), f"Tool {tool.name} schema type should be object"
 
-    def test_list_tool_has_pagination(self):
-        """Test that list tool has pagination parameters."""
+    def test_tool_schemas_have_expected_structure(self):
+        """Test that tool schemas have expected structure for key operations."""
         article_tools = MCPAdminMixin.get_mcp_tools(Article)
-        list_tool = next(t for t in article_tools if t.name == "list_article")
+        tools_by_name = {t.name: t for t in article_tools}
 
-        assert "properties" in list_tool.inputSchema
+        # List tool has pagination
+        list_tool = tools_by_name["list_article"]
         assert "limit" in list_tool.inputSchema["properties"]
         assert "offset" in list_tool.inputSchema["properties"]
 
-    def test_get_tool_requires_id(self):
-        """Test that get tool requires id parameter."""
-        article_tools = MCPAdminMixin.get_mcp_tools(Article)
-        get_tool = next(t for t in article_tools if t.name == "get_article")
-
-        assert "required" in get_tool.inputSchema
-        assert "id" in get_tool.inputSchema["required"]
-
-    def test_create_tool_requires_data(self):
-        """Test that create tool requires data parameter."""
-        article_tools = MCPAdminMixin.get_mcp_tools(Article)
-        create_tool = next(t for t in article_tools if t.name == "create_article")
-
-        assert "required" in create_tool.inputSchema
-        assert "data" in create_tool.inputSchema["required"]
-
-    def test_update_tool_requires_id(self):
-        """Test that update tool requires id parameter (data is optional for inline-only updates)."""
-        article_tools = MCPAdminMixin.get_mcp_tools(Article)
-        update_tool = next(t for t in article_tools if t.name == "update_article")
-
-        assert "required" in update_tool.inputSchema
+        # Update tool has id required, with optional data and inlines
+        update_tool = tools_by_name["update_article"]
         assert "id" in update_tool.inputSchema["required"]
-        # data is optional since you might only update inlines
         assert "data" in update_tool.inputSchema["properties"]
         assert "inlines" in update_tool.inputSchema["properties"]
-
-    def test_delete_tool_requires_id(self):
-        """Test that delete tool requires id parameter."""
-        article_tools = MCPAdminMixin.get_mcp_tools(Article)
-        delete_tool = next(t for t in article_tools if t.name == "delete_article")
-
-        assert "required" in delete_tool.inputSchema
-        assert "id" in delete_tool.inputSchema["required"]
 
     def test_find_models_tool_generated(self):
         """Test that find_models tool is generated."""

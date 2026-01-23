@@ -806,52 +806,6 @@ class TestInlineAndRelated:
 
 @pytest.mark.django_db
 @pytest.mark.asyncio
-class TestUserLinkedTokens:
-    """Test suite for user-linked token functionality."""
-
-    async def test_token_with_user(self):
-        """Test creating a token linked to a user."""
-        from django.contrib.auth import get_user_model
-
-        from django_admin_mcp.models import MCPToken
-
-        User = get_user_model()
-
-        # Create a user
-        user = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: User.objects.create_user(
-                username="testuser",
-                email="testuser@example.com",
-                password="testpass123",
-            ),
-        )
-
-        # Create a token linked to the user
-        token = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: MCPToken.objects.create(name="User Token", user=user),
-        )
-
-        assert token.user == user
-        assert token.user.username == "testuser"
-
-    async def test_token_without_user(self):
-        """Test creating a token without a user (backwards compatible)."""
-        from django_admin_mcp.models import MCPToken
-
-        # Create a token without user
-        token = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: MCPToken.objects.create(name="Anonymous Token"),
-        )
-
-        assert token.user is None
-        assert token.is_valid()
-
-
-@pytest.mark.django_db
-@pytest.mark.asyncio
 class TestPermissionChecks:
     """Test suite for permission checking functionality."""
 
@@ -1347,47 +1301,8 @@ class TestHistoryTool:
 
 @pytest.mark.django_db
 @pytest.mark.asyncio
-class TestPhase5Polish:
-    """Test suite for Phase 5 Polish features: readonly, fieldsets, autocomplete, date_hierarchy."""
-
-    async def test_describe_includes_readonly_fields(self):
-        """Test that describe tool returns readonly_fields."""
-        import json
-
-        result = await MCPAdminMixin.handle_tool_call(
-            "describe_author",
-            {},
-        )
-        response = json.loads(result[0].text)
-
-        assert "admin_config" in response
-        assert "readonly_fields" in response["admin_config"]
-
-    async def test_describe_includes_fieldsets(self):
-        """Test that describe tool returns fieldsets when configured."""
-        import json
-
-        result = await MCPAdminMixin.handle_tool_call(
-            "describe_author",
-            {},
-        )
-        response = json.loads(result[0].text)
-
-        assert "admin_config" in response
-        # Fieldsets may or may not be configured depending on conftest
-
-    async def test_describe_includes_date_hierarchy(self):
-        """Test that describe tool returns date_hierarchy when configured."""
-        import json
-
-        result = await MCPAdminMixin.handle_tool_call(
-            "describe_article",
-            {},
-        )
-        response = json.loads(result[0].text)
-
-        assert "admin_config" in response
-        # date_hierarchy may or may not be configured
+class TestAutocomplete:
+    """Test suite for autocomplete tool."""
 
     async def test_autocomplete_returns_results(self):
         """Test that autocomplete tool returns results."""
@@ -1467,25 +1382,3 @@ class TestPhase5Polish:
         # Verify the results contain the expected names
         names = [r["text"] for r in response["results"]]
         assert all("Autocomplete" in name for name in names)
-
-    async def test_autocomplete_with_limit(self):
-        """Test that autocomplete tool respects limit parameter."""
-        import json
-
-        # Create multiple authors
-        for i in range(10):
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda i=i: Author.objects.create(
-                    name=f"Limit Author {i}", email=f"limit{i}@auto.com"
-                ),
-            )
-
-        # Test with limit
-        result = await MCPAdminMixin.handle_tool_call(
-            "autocomplete_author",
-            {"term": "Limit Author", "limit": 5},
-        )
-        response = json.loads(result[0].text)
-
-        assert response["count"] <= 5

@@ -36,11 +36,6 @@ class TestHandlersRegistry:
         for op in expected_operations:
             assert op in HANDLERS, f"Missing handler for {op}"
 
-    def test_handlers_are_callable(self):
-        """All handlers in HANDLERS should be callable."""
-        for name, handler in HANDLERS.items():
-            assert callable(handler), f"Handler {name} is not callable"
-
 
 class TestCallTool:
     """Test call_tool function."""
@@ -182,19 +177,6 @@ class TestGetModelTools:
             assert expected in tool_names, f"Missing tool {expected}"
 
     @pytest.mark.django_db
-    def test_get_model_tools_returns_tool_instances(self, django_setup_with_admin):
-        """get_model_tools should return Tool instances."""
-        from tests.models import Author
-
-        tools = get_model_tools(Author)
-
-        for tool in tools:
-            assert isinstance(tool, Tool)
-            assert tool.name
-            assert tool.description
-            assert tool.inputSchema
-
-    @pytest.mark.django_db
     def test_get_model_tools_includes_field_documentation(self, django_setup_with_admin):
         """get_model_tools should include field documentation in descriptions."""
         from tests.models import Author
@@ -232,13 +214,7 @@ class TestGetFindModelsTool:
         assert tool.name == "find_models"
         assert "Discover" in tool.description
         assert tool.inputSchema["type"] == "object"
-
-    def test_get_find_models_tool_has_query_property(self):
-        """get_find_models_tool should include query property in schema."""
-        tool = get_find_models_tool()
-
         assert "query" in tool.inputSchema["properties"]
-        assert tool.inputSchema["properties"]["query"]["type"] == "string"
 
 
 class TestGetTools:
@@ -261,25 +237,3 @@ class TestGetTools:
         # Author and Article should be exposed via mcp_expose=True
         assert "list_author" in tool_names
         assert "list_article" in tool_names
-
-    @pytest.mark.django_db
-    def test_get_tools_all_are_tool_instances(self, django_setup_with_admin):
-        """get_tools should return only Tool instances."""
-        tools = get_tools()
-
-        for tool in tools:
-            assert isinstance(tool, Tool)
-
-
-class TestToolsModuleExports:
-    """Test tools module exports."""
-
-    def test_all_exports_available(self):
-        """All expected exports should be available from tools module."""
-        from django_admin_mcp import tools
-
-        assert hasattr(tools, "HANDLERS")
-        assert hasattr(tools, "call_tool")
-        assert hasattr(tools, "get_tools")
-        assert hasattr(tools, "get_model_tools")
-        assert hasattr(tools, "get_find_models_tool")

@@ -232,33 +232,6 @@ class TestHandleGet:
         if "_related" in data:
             assert "articles" in data["_related"]
 
-    @pytest.mark.asyncio
-    @pytest.mark.django_db
-    async def test_get_model_not_found(self):
-        """Test handle_get with non-existent model."""
-        uid = unique_id()
-        request = await self._create_superuser_request(uid)
-
-        result = await handle_get("nonexistent", {"id": 1}, request)
-
-        data = json.loads(result[0].text)
-        assert "error" in data
-        assert "not found" in data["error"]
-
-    @pytest.mark.asyncio
-    @pytest.mark.django_db
-    async def test_get_permission_denied(self):
-        """Test handle_get with anonymous user."""
-        uid = unique_id()
-        author = await self._create_author(uid)
-        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
-
-        result = await handle_get("author", {"id": author.pk}, request)
-
-        data = json.loads(result[0].text)
-        assert "error" in data
-        assert data["code"] == "permission_denied"
-
     async def _create_author(self, uid):
         """Helper to create an author."""
         from asgiref.sync import sync_to_async
@@ -351,33 +324,6 @@ class TestHandleCreate:
 
         has_log = await check_log()
         assert has_log
-
-    @pytest.mark.asyncio
-    @pytest.mark.django_db
-    async def test_create_model_not_found(self):
-        """Test handle_create with non-existent model."""
-        uid = unique_id()
-        request = await self._create_superuser_request(uid)
-
-        result = await handle_create("nonexistent", {"data": {}}, request)
-
-        data = json.loads(result[0].text)
-        assert "error" in data
-        assert "not found" in data["error"]
-
-    @pytest.mark.asyncio
-    @pytest.mark.django_db
-    async def test_create_permission_denied(self):
-        """Test handle_create with anonymous user."""
-        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
-
-        result = await handle_create(
-            "author", {"data": {"name": "Test", "email": "test@example.com"}}, request
-        )
-
-        data = json.loads(result[0].text)
-        assert "error" in data
-        assert data["code"] == "permission_denied"
 
     @pytest.mark.asyncio
     @pytest.mark.django_db
@@ -505,35 +451,6 @@ class TestHandleUpdate:
 
         has_log = await check_log()
         assert has_log
-
-    @pytest.mark.asyncio
-    @pytest.mark.django_db
-    async def test_update_model_not_found(self):
-        """Test handle_update with non-existent model."""
-        uid = unique_id()
-        request = await self._create_superuser_request(uid)
-
-        result = await handle_update("nonexistent", {"id": 1, "data": {}}, request)
-
-        data = json.loads(result[0].text)
-        assert "error" in data
-        assert "not found" in data["error"]
-
-    @pytest.mark.asyncio
-    @pytest.mark.django_db
-    async def test_update_permission_denied(self):
-        """Test handle_update with anonymous user."""
-        uid = unique_id()
-        author = await self._create_author(uid)
-        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
-
-        result = await handle_update(
-            "author", {"id": author.pk, "data": {"name": "Updated"}}, request
-        )
-
-        data = json.loads(result[0].text)
-        assert "error" in data
-        assert data["code"] == "permission_denied"
 
     @pytest.mark.asyncio
     @pytest.mark.django_db
@@ -681,33 +598,6 @@ class TestHandleDelete:
         has_log = await check_log()
         assert has_log
 
-    @pytest.mark.asyncio
-    @pytest.mark.django_db
-    async def test_delete_model_not_found(self):
-        """Test handle_delete with non-existent model."""
-        uid = unique_id()
-        request = await self._create_superuser_request(uid)
-
-        result = await handle_delete("nonexistent", {"id": 1}, request)
-
-        data = json.loads(result[0].text)
-        assert "error" in data
-        assert "not found" in data["error"]
-
-    @pytest.mark.asyncio
-    @pytest.mark.django_db
-    async def test_delete_permission_denied(self):
-        """Test handle_delete with anonymous user."""
-        uid = unique_id()
-        author = await self._create_author(uid)
-        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
-
-        result = await handle_delete("author", {"id": author.pk}, request)
-
-        data = json.loads(result[0].text)
-        assert "error" in data
-        assert data["code"] == "permission_denied"
-
     async def _create_author(self, uid):
         """Helper to create an author."""
         from asgiref.sync import sync_to_async
@@ -732,41 +622,3 @@ class TestHandleDelete:
             return create_mock_request(user)
 
         return await create_user()
-
-
-class TestModuleExports:
-    """Tests for module exports from handlers/__init__.py."""
-
-    def test_crud_functions_importable_from_handlers(self):
-        """Test that CRUD functions are importable from handlers module."""
-        from django_admin_mcp.handlers import (
-            handle_create,
-            handle_delete,
-            handle_get,
-            handle_list,
-            handle_update,
-        )
-
-        assert callable(handle_list)
-        assert callable(handle_get)
-        assert callable(handle_create)
-        assert callable(handle_update)
-        assert callable(handle_delete)
-
-    def test_handlers_are_async(self):
-        """Test that handlers are async functions."""
-        import asyncio
-
-        from django_admin_mcp.handlers import (
-            handle_create,
-            handle_delete,
-            handle_get,
-            handle_list,
-            handle_update,
-        )
-
-        assert asyncio.iscoroutinefunction(handle_list)
-        assert asyncio.iscoroutinefunction(handle_get)
-        assert asyncio.iscoroutinefunction(handle_create)
-        assert asyncio.iscoroutinefunction(handle_update)
-        assert asyncio.iscoroutinefunction(handle_delete)

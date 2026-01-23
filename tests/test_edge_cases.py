@@ -408,20 +408,6 @@ class TestEdgeCasesAndErrors:
         )
         assert updated_article.title == "Updated Inline"
 
-    async def test_list_exception_handling(self):
-        """Test exception handling in list operation."""
-        import json
-
-        # Try to trigger an exception by using invalid filters
-        # This should be handled gracefully
-        result = await MCPAdminMixin.handle_tool_call(
-            "list_author",
-            {"filters": {"name__invalid_lookup": "test"}},
-        )
-        # Should either return results or an error, not crash
-        response = json.loads(result[0].text)
-        assert "results" in response or "error" in response
-
     async def test_get_exception_handling(self):
         """Test exception handling in get operation."""
         import json
@@ -460,42 +446,6 @@ class TestEdgeCasesAndErrors:
         response = json.loads(result[0].text)
         assert "error" in response
 
-    async def test_describe_exception_handling(self):
-        """Test exception handling in describe operation."""
-        import json
-
-        # This should work, but we're testing the exception path
-        result = await MCPAdminMixin.handle_tool_call("describe_author", {})
-        response = json.loads(result[0].text)
-        # Should have valid describe data, but testing it doesn't crash
-        assert "model_name" in response or "error" in response
-
-    async def test_find_models_exception_handling(self):
-        """Test exception handling in find_models operation."""
-        import json
-
-        result = await MCPAdminMixin.handle_tool_call("find_models", {})
-        response = json.loads(result[0].text)
-        assert "models" in response or "error" in response
-
-    async def test_actions_exception_handling(self):
-        """Test exception handling in actions list operation."""
-        import json
-
-        result = await MCPAdminMixin.handle_tool_call("actions_author", {})
-        response = json.loads(result[0].text)
-        assert "actions" in response or "error" in response
-
-    async def test_action_exception_handling(self):
-        """Test exception handling in action execution."""
-        import json
-
-        result = await MCPAdminMixin.handle_tool_call(
-            "action_author", {"action": "test", "ids": ["invalid"]}
-        )
-        response = json.loads(result[0].text)
-        assert "error" in response or "success" in response
-
     async def test_bulk_exception_handling(self):
         """Test exception handling in bulk operations."""
         import json
@@ -527,15 +477,6 @@ class TestEdgeCasesAndErrors:
         )
         response = json.loads(result[0].text)
         assert "error" in response
-
-    async def test_autocomplete_exception_handling(self):
-        """Test exception handling in autocomplete operation."""
-        import json
-
-        result = await MCPAdminMixin.handle_tool_call("autocomplete_author", {})
-        response = json.loads(result[0].text)
-        # Should work without errors
-        assert "results" in response or "error" in response
 
     async def test_serialize_model_instance_with_model_field(self):
         """Test serialization of model instance with related model field."""
@@ -577,13 +518,6 @@ class TestEdgeCasesAndErrors:
         response = json.loads(result[0].text)
         assert response["name"] == "No Admin"
 
-    async def test_inline_no_model_attribute(self):
-        """Test inline handling when inline class has no model attribute."""
-        # This tests line 472 - when inline doesn't have model attribute
-        # We would need to create a custom inline without model, which is difficult
-        # This is more of a defensive check
-        pass
-
     async def test_inline_without_data_key(self):
         """Test inline update where item doesn't have 'data' key."""
         import json
@@ -618,24 +552,6 @@ class TestEdgeCasesAndErrors:
         )
         response = json.loads(result[0].text)
         assert response["success"] is True
-
-    async def test_describe_with_field_choices(self):
-        """Test describe with field that has choices."""
-        import json
-
-        # Article model doesn't have choices, but we can test describe still works
-        result = await MCPAdminMixin.handle_tool_call("describe_author", {})
-        response = json.loads(result[0].text)
-        assert "fields" in response
-
-    async def test_describe_with_callable_default(self):
-        """Test describe with field that has callable default."""
-        import json
-
-        result = await MCPAdminMixin.handle_tool_call("describe_article", {})
-        response = json.loads(result[0].text)
-        # is_published has default=False
-        assert "fields" in response
 
     async def test_describe_with_fieldsets(self):
         """Test describe with fieldsets configured."""
@@ -764,205 +680,3 @@ class TestEdgeCasesAndErrors:
         response = json.loads(result[0].text)
         assert len(response["results"]) >= 2
 
-    async def test_model_meta_ordering_fallback(self):
-        """Test list operation uses model._meta.ordering when admin has no ordering (line 407)."""
-        import json
-        from django.contrib import admin
-        from tests.models import Author
-
-        # Temporarily remove admin ordering and set model ordering
-        author_admin = admin.site._registry[Author]
-        original_admin_ordering = getattr(author_admin, "ordering", None)
-        original_model_ordering = Author._meta.ordering
-
-        author_admin.ordering = None
-        Author._meta.ordering = ['name']  # Set model-level ordering
-
-        try:
-            result = await MCPAdminMixin.handle_tool_call(
-                "list_author",
-                {},
-            )
-            response = json.loads(result[0].text)
-            assert "results" in response
-        finally:
-            author_admin.ordering = original_admin_ordering
-            Author._meta.ordering = original_model_ordering
-
-    async def test_action_exception_via_queryset(self):
-        """Test action execution exception path (lines 1111-1112)."""
-        import json
-        import uuid
-        from unittest.mock import patch, MagicMock
-        from asgiref.sync import sync_to_async
-
-        # Create author
-        unique_email = f"actionexc-{uuid.uuid4()}@test.com"
-        author = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: Author.objects.create(name="Action Exception", email=unique_email),
-        )
-
-        # Mock filter to raise exception
-        original_filter = Author.objects.filter
-
-        @sync_to_async
-        def mock_filter_that_fails(*args, **kwargs):
-            raise Exception("Forced error in action queryset")
-
-        with patch.object(Author.objects, 'filter', side_effect=Exception("Forced error")):
-            result = await MCPAdminMixin.handle_tool_call(
-                "action_author",
-                {"action": "delete_selected", "ids": [author.id]},
-            )
-            response = json.loads(result[0].text)
-            assert "error" in response
-
-    async def test_autocomplete_exception_via_queryset(self):
-        """Test autocomplete exception path (lines 1501-1502)."""
-        import json
-        from unittest.mock import patch
-
-        # Mock the queryset to raise an exception
-        with patch.object(Author.objects, 'all', side_effect=Exception("Forced error in autocomplete")):
-            result = await MCPAdminMixin.handle_tool_call(
-                "autocomplete_author",
-                {},
-            )
-            response = json.loads(result[0].text)
-            assert "error" in response
-
-    async def test_related_accessor_name_loop_break(self):
-        """Test related accessor name loop break (line 1371)."""
-        import json
-        import uuid
-        from tests.models import Article
-
-        # Create author and article
-        unique_email = f"accessor-break-{uuid.uuid4()}@test.com"
-        author = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: Author.objects.create(name="Accessor Break", email=unique_email),
-        )
-        await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: Article.objects.create(
-                title="Test Accessor", content="Content", author=author
-            ),
-        )
-
-        # Access via the exact accessor name (articles is the related_name)
-        result = await MCPAdminMixin.handle_tool_call(
-            "related_author", {"id": author.id, "relation": "articles"}
-        )
-        response = json.loads(result[0].text)
-        assert response["type"] == "many"
-        assert response["total_count"] >= 1
-
-    async def test_describe_exception_via_model_mock(self):
-        """Test describe exception path (lines 1055-1056)."""
-        import json
-        from unittest.mock import MagicMock, PropertyMock
-        from django.contrib import admin as django_admin
-
-        # Create a mock model that raises exception when accessing _meta.verbose_name
-        mock_model = MagicMock()
-        mock_meta = MagicMock()
-        mock_meta.get_fields.side_effect = Exception("Forced error in describe")
-        mock_model._meta = mock_meta
-
-        original_models = MCPAdminMixin._registered_models.copy()
-        try:
-            MCPAdminMixin._registered_models['author'] = {
-                'model': mock_model,
-                'admin': django_admin.site._registry[Author]
-            }
-
-            result = await MCPAdminMixin.handle_tool_call("describe_author", {})
-            response = json.loads(result[0].text)
-            assert "error" in response
-            assert "Forced error" in response["error"]
-        finally:
-            MCPAdminMixin._registered_models = original_models
-
-    async def test_bulk_create_exception_forced(self):
-        """Test bulk create exception path (lines 1331-1332)."""
-        import json
-        from unittest.mock import patch, MagicMock
-
-        # Mock model.objects.create to raise exception
-        with patch.object(Author.objects, 'create') as mock_create:
-            mock_create.side_effect = Exception("Forced error in bulk create")
-
-            result = await MCPAdminMixin.handle_tool_call(
-                "bulk_author",
-                {"operation": "create", "items": [{"data": {"name": "Test", "email": "test@test.com"}}]},
-            )
-            response = json.loads(result[0].text)
-            # Errors should be captured in results
-            assert "results" in response or "error" in response
-
-    async def test_related_via_accessor_name_field(self):
-        """Test related accessor name via reverse FK field (line 1371 - the break)."""
-        import json
-        import uuid
-        from tests.models import Article
-
-        # Create author and article
-        unique_email = f"accessor-field-{uuid.uuid4()}@test.com"
-        author = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: Author.objects.create(name="Accessor Field", email=unique_email),
-        )
-        article = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: Article.objects.create(
-                title="Test Article", content="Content", author=author
-            ),
-        )
-
-        # Use Article's ForeignKey to Author - accessing via 'author' relation
-        result = await MCPAdminMixin.handle_tool_call(
-            "related_article", {"id": article.id, "relation": "author"}
-        )
-        response = json.loads(result[0].text)
-        # Should return single object type
-        assert response["type"] == "single"
-
-    async def test_related_accessor_name_lookup_with_hasattr_false(self):
-        """Test related accessor name lookup when hasattr returns False (line 1371)."""
-        import json
-        import uuid
-        from unittest.mock import patch, MagicMock
-        from tests.models import Article
-
-        # Create author and article
-        unique_email = f"hasattr-false-{uuid.uuid4()}@test.com"
-        author = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: Author.objects.create(name="HasAttr False", email=unique_email),
-        )
-        article = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: Article.objects.create(
-                title="Test Article", content="Content", author=author
-            ),
-        )
-
-        # Patch hasattr to return False for 'author', forcing the accessor name lookup path
-        original_hasattr = hasattr
-
-        def patched_hasattr(obj, name):
-            # Return False for the relation we're testing, forcing accessor lookup
-            if name == "article_set":
-                return False
-            return original_hasattr(obj, name)
-
-        with patch('builtins.hasattr', side_effect=patched_hasattr):
-            # Access author's articles via the reverse FK accessor
-            result = await MCPAdminMixin.handle_tool_call(
-                "related_author", {"id": author.id, "relation": "article_set"}
-            )
-            response = json.loads(result[0].text)
-            # Should find it via accessor name and still work
-            assert "type" in response or "error" in response

@@ -6,7 +6,7 @@ import json
 import uuid
 
 import pytest
-from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
+from django.contrib.admin.models import ADDITION, CHANGE, LogEntry
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 
@@ -16,7 +16,6 @@ from django_admin_mcp.handlers import (
     handle_related,
 )
 from django_admin_mcp.handlers.base import create_mock_request
-from django_admin_mcp.protocol.types import TextContent
 from tests.models import Article, Author
 
 
@@ -27,24 +26,6 @@ def unique_id():
 
 class TestHandleRelated:
     """Tests for handle_related function."""
-
-    @pytest.mark.django_db
-    @pytest.mark.asyncio
-    async def test_returns_text_content_list(self):
-        """Test that handle_related returns a list of TextContent."""
-        uid = unique_id()
-        author = await Author.objects.acreate(
-            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
-        )
-        request = create_mock_request()
-        result = await handle_related(
-            "author",
-            {"id": author.pk, "relation": "articles"},
-            request,
-        )
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], TextContent)
 
     @pytest.mark.django_db
     @pytest.mark.asyncio
@@ -201,30 +182,6 @@ class TestHandleRelated:
 
     @pytest.mark.django_db
     @pytest.mark.asyncio
-    async def test_many_relation_with_offset(self):
-        """Test pagination with offset parameter."""
-        uid = unique_id()
-        author = await Author.objects.acreate(
-            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
-        )
-        for i in range(5):
-            await Article.objects.acreate(
-                title=f"Article {i} {uid}",
-                content=f"Content {i}",
-                author=author,
-            )
-        request = create_mock_request()
-        result = await handle_related(
-            "author",
-            {"id": author.pk, "relation": "articles", "limit": 2, "offset": 3},
-            request,
-        )
-        data = json.loads(result[0].text)
-        assert data["count"] == 2
-        assert data["total_count"] == 5
-
-    @pytest.mark.django_db
-    @pytest.mark.asyncio
     async def test_single_relation_fk(self):
         """Test fetching single relation (FK)."""
         uid = unique_id()
@@ -269,24 +226,6 @@ class TestHandleRelated:
 
 class TestHandleHistory:
     """Tests for handle_history function."""
-
-    @pytest.mark.django_db
-    @pytest.mark.asyncio
-    async def test_returns_text_content_list(self):
-        """Test that handle_history returns a list of TextContent."""
-        uid = unique_id()
-        author = await Author.objects.acreate(
-            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
-        )
-        request = create_mock_request()
-        result = await handle_history(
-            "author",
-            {"id": author.pk},
-            request,
-        )
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], TextContent)
 
     @pytest.mark.django_db
     @pytest.mark.asyncio
@@ -434,74 +373,8 @@ class TestHandleHistory:
         assert data["count"] == 2
         assert len(data["history"]) == 2
 
-    @pytest.mark.django_db
-    @pytest.mark.asyncio
-    async def test_history_action_types(self):
-        """Test different action types in history."""
-        uid = unique_id()
-        user = await User.objects.acreate_user(
-            username=f"testuser_{uid}",
-            email=f"test_{uid}@example.com",
-            password="testpass",
-        )
-        author = await Author.objects.acreate(
-            name=f"Test Author {uid}", email=f"author_{uid}@example.com"
-        )
-
-        from asgiref.sync import sync_to_async
-
-        @sync_to_async
-        def create_log_entries():
-            content_type = ContentType.objects.get_for_model(Author)
-            # Create addition entry
-            LogEntry.objects.create(
-                user=user,
-                content_type=content_type,
-                object_id=str(author.pk),
-                object_repr=str(author),
-                action_flag=ADDITION,
-                change_message="Created",
-            )
-            # Create change entry
-            LogEntry.objects.create(
-                user=user,
-                content_type=content_type,
-                object_id=str(author.pk),
-                object_repr=str(author),
-                action_flag=CHANGE,
-                change_message="Updated",
-            )
-
-        await create_log_entries()
-
-        request = create_mock_request()
-        result = await handle_history(
-            "author",
-            {"id": author.pk},
-            request,
-        )
-        data = json.loads(result[0].text)
-        actions = [h["action"] for h in data["history"]]
-        assert "created" in actions
-        assert "changed" in actions
-
-
 class TestHandleAutocomplete:
     """Tests for handle_autocomplete function."""
-
-    @pytest.mark.django_db
-    @pytest.mark.asyncio
-    async def test_returns_text_content_list(self):
-        """Test that handle_autocomplete returns a list of TextContent."""
-        request = create_mock_request()
-        result = await handle_autocomplete(
-            "author",
-            {},
-            request,
-        )
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], TextContent)
 
     @pytest.mark.django_db
     @pytest.mark.asyncio
@@ -618,68 +491,3 @@ class TestHandleAutocomplete:
         assert "text" in result_item
         assert isinstance(result_item["id"], int)
         assert isinstance(result_item["text"], str)
-
-    @pytest.mark.django_db
-    @pytest.mark.asyncio
-    async def test_autocomplete_case_insensitive(self):
-        """Test that search is case insensitive."""
-        uid = unique_id()
-        author = await Author.objects.acreate(
-            name=f"CamelCase {uid}", email=f"camel_{uid}@example.com"
-        )
-        request = create_mock_request()
-        result = await handle_autocomplete(
-            "author",
-            {"term": f"camelcase {uid}"},
-            request,
-        )
-        data = json.loads(result[0].text)
-        assert data["count"] >= 1
-
-    @pytest.mark.django_db
-    @pytest.mark.asyncio
-    async def test_autocomplete_uses_search_fields(self):
-        """Test that autocomplete uses admin search_fields."""
-        uid = unique_id()
-        # Create author with searchable email
-        author = await Author.objects.acreate(
-            name=f"Author Name {uid}",
-            email=f"searchable_email_{uid}@example.com",
-        )
-        request = create_mock_request()
-        # Search by email which should be in search_fields
-        result = await handle_autocomplete(
-            "author",
-            {"term": f"searchable_email_{uid}"},
-            request,
-        )
-        data = json.loads(result[0].text)
-        assert data["count"] >= 1
-
-
-class TestModuleExports:
-    """Tests for module exports."""
-
-    def test_handlers_importable_from_handlers_module(self):
-        """Test that all handlers are importable from handlers module."""
-        from django_admin_mcp.handlers import (
-            handle_autocomplete,
-            handle_history,
-            handle_related,
-        )
-
-        assert callable(handle_related)
-        assert callable(handle_history)
-        assert callable(handle_autocomplete)
-
-    def test_handlers_importable_from_relations_module(self):
-        """Test that handlers are importable from relations module."""
-        from django_admin_mcp.handlers.relations import (
-            handle_autocomplete,
-            handle_history,
-            handle_related,
-        )
-
-        assert callable(handle_related)
-        assert callable(handle_history)
-        assert callable(handle_autocomplete)

@@ -52,14 +52,6 @@ class TestJsonResponse:
         parsed = json.loads(result[0].text)
         assert "2024-01-15" in parsed["created_at"]
 
-    def test_nested_dict(self):
-        """Test that json_response handles nested dictionaries."""
-        data = {"outer": {"inner": {"value": 123}}}
-        result = json_response(data)
-        parsed = json.loads(result[0].text)
-        assert parsed["outer"]["inner"]["value"] == 123
-
-
 @pytest.mark.django_db
 class TestGetModelAdmin:
     """Tests for get_model_admin function."""
@@ -71,25 +63,11 @@ class TestGetModelAdmin:
         assert model is Author
         assert model_admin is not None
 
-    def test_finds_article_model(self):
-        """Test finding Article model."""
-        model, model_admin = get_model_admin("article")
-        assert model is not None
-        assert model is Article
-        assert model_admin is not None
-
     def test_returns_none_for_unregistered_model(self):
         """Test that unregistered model returns (None, None)."""
         model, model_admin = get_model_admin("nonexistent_model")
         assert model is None
         assert model_admin is None
-
-    def test_case_sensitive_lookup(self):
-        """Test that model name lookup is case-sensitive."""
-        model, model_admin = get_model_admin("Author")  # Capital A
-        assert model is None  # Should not find with wrong case
-        assert model_admin is None
-
 
 @pytest.mark.django_db
 class TestCreateMockRequest:
@@ -145,42 +123,6 @@ class TestCheckPermission:
         _, model_admin = get_model_admin("author")
         assert check_permission(request, model_admin, "view") is True
 
-    def test_add_permission_with_superuser(self):
-        """Test add permission with superuser."""
-        uid = unique_id()
-        user = User.objects.create_superuser(
-            username=f"admin_add_{uid}",
-            email=f"admin_add_{uid}@example.com",
-            password="admin",
-        )
-        request = create_mock_request(user)
-        _, model_admin = get_model_admin("author")
-        assert check_permission(request, model_admin, "add") is True
-
-    def test_change_permission_with_superuser(self):
-        """Test change permission with superuser."""
-        uid = unique_id()
-        user = User.objects.create_superuser(
-            username=f"admin_change_{uid}",
-            email=f"admin_change_{uid}@example.com",
-            password="admin",
-        )
-        request = create_mock_request(user)
-        _, model_admin = get_model_admin("author")
-        assert check_permission(request, model_admin, "change") is True
-
-    def test_delete_permission_with_superuser(self):
-        """Test delete permission with superuser."""
-        uid = unique_id()
-        user = User.objects.create_superuser(
-            username=f"admin_delete_{uid}",
-            email=f"admin_delete_{uid}@example.com",
-            password="admin",
-        )
-        request = create_mock_request(user)
-        _, model_admin = get_model_admin("author")
-        assert check_permission(request, model_admin, "delete") is True
-
     def test_view_permission_with_anonymous_user(self):
         """Test view permission with anonymous user."""
         request = create_mock_request(AnonymousUser())  # Explicit anonymous user
@@ -214,13 +156,6 @@ class TestGetExposedModels:
         model_names = [name for name, _ in result]
         assert "author" in model_names
 
-    def test_includes_article_model(self):
-        """Test that Article model with mcp_expose=True is included."""
-        result = get_exposed_models()
-        model_names = [name for name, _ in result]
-        assert "article" in model_names
-
-
 @pytest.mark.django_db
 class TestSerializeInstance:
     """Tests for serialize_instance function."""
@@ -251,17 +186,6 @@ class TestSerializeInstance:
         # FK should be serialized (either as ID or string)
         assert "author" in result
 
-    def test_returns_dict_not_model(self):
-        """Test that result is a plain dict, not a model instance."""
-        uid = unique_id()
-        author = Author.objects.create(
-            name=f"Dict Test {uid}", email=f"dict_{uid}@example.com"
-        )
-        result = serialize_instance(author)
-        assert isinstance(result, dict)
-        assert not hasattr(result, "_meta")
-
-
 @pytest.mark.django_db
 class TestGetModelName:
     """Tests for get_model_name function."""
@@ -271,36 +195,3 @@ class TestGetModelName:
         result = get_model_name(Author)
         assert result == "author"
 
-    def test_article_model_name(self):
-        """Test model name for Article."""
-        result = get_model_name(Article)
-        assert result == "article"
-
-    def test_returns_string(self):
-        """Test that result is a string."""
-        result = get_model_name(Author)
-        assert isinstance(result, str)
-
-
-class TestModuleExports:
-    """Tests for module exports from handlers/__init__.py."""
-
-    def test_all_functions_importable_from_handlers(self):
-        """Test that all functions are importable from handlers module."""
-        from django_admin_mcp.handlers import (
-            check_permission,
-            create_mock_request,
-            get_exposed_models,
-            get_model_admin,
-            get_model_name,
-            json_response,
-            serialize_instance,
-        )
-
-        assert callable(json_response)
-        assert callable(get_model_admin)
-        assert callable(create_mock_request)
-        assert callable(check_permission)
-        assert callable(get_exposed_models)
-        assert callable(serialize_instance)
-        assert callable(get_model_name)

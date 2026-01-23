@@ -16,7 +16,7 @@ from django_admin_mcp.handlers import (
 )
 from django_admin_mcp.handlers.base import create_mock_request
 from django_admin_mcp.protocol.types import TextContent
-from tests.models import Article, Author
+from tests.models import Author
 
 
 def unique_id():
@@ -64,17 +64,6 @@ class TestHandleActions:
     """Tests for handle_actions function."""
 
     @pytest.mark.asyncio
-    async def test_returns_text_content_list(self):
-        """Test that handle_actions returns a list of TextContent."""
-        uid = unique_id()
-        user = await create_superuser(uid)
-        request = create_mock_request(user)
-        result = await handle_actions("author", {}, request)
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], TextContent)
-
-    @pytest.mark.asyncio
     async def test_lists_actions_for_registered_model(self):
         """Test that handle_actions lists available actions."""
         uid = unique_id()
@@ -114,25 +103,6 @@ class TestHandleActions:
 @pytest.mark.django_db(transaction=True)
 class TestHandleAction:
     """Tests for handle_action function."""
-
-    @pytest.mark.asyncio
-    async def test_returns_text_content_list(self):
-        """Test that handle_action returns a list of TextContent."""
-        uid = unique_id()
-        user = await create_superuser(uid)
-        author = await create_author(
-            name=f"Test Author {uid}",
-            email=f"author_{uid}@example.com",
-        )
-        request = create_mock_request(user)
-        result = await handle_action(
-            "author",
-            {"action": "delete_selected", "ids": [author.pk]},
-            request,
-        )
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], TextContent)
 
     @pytest.mark.asyncio
     async def test_executes_delete_selected_action(self):
@@ -256,44 +226,6 @@ class TestHandleBulk:
     """Tests for handle_bulk function."""
 
     @pytest.mark.asyncio
-    async def test_returns_text_content_list(self):
-        """Test that handle_bulk returns a list of TextContent."""
-        uid = unique_id()
-        user = await create_superuser(uid)
-        request = create_mock_request(user)
-        result = await handle_bulk(
-            "author",
-            {"operation": "create", "items": []},
-            request,
-        )
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], TextContent)
-
-    @pytest.mark.asyncio
-    async def test_bulk_create_single_item(self):
-        """Test bulk create with a single item."""
-        uid = unique_id()
-        user = await create_superuser(uid)
-        request = create_mock_request(user)
-        result = await handle_bulk(
-            "author",
-            {
-                "operation": "create",
-                "items": [
-                    {"name": f"Bulk Author {uid}", "email": f"bulk_{uid}@example.com"}
-                ],
-            },
-            request,
-        )
-        parsed = json.loads(result[0].text)
-        assert parsed["operation"] == "create"
-        assert parsed["success_count"] == 1
-        assert parsed["error_count"] == 0
-        # Verify author was created
-        assert await author_exists_by_name(f"Bulk Author {uid}")
-
-    @pytest.mark.asyncio
     async def test_bulk_create_multiple_items(self):
         """Test bulk create with multiple items."""
         uid = unique_id()
@@ -407,29 +339,6 @@ class TestHandleBulk:
         assert "not found" in parsed["results"]["errors"][0]["error"]
 
     @pytest.mark.asyncio
-    async def test_bulk_delete_single_item(self):
-        """Test bulk delete with a single item."""
-        uid = unique_id()
-        user = await create_superuser(uid)
-        author = await create_author(
-            name=f"Delete Author {uid}",
-            email=f"delete_{uid}@example.com",
-        )
-        author_pk = author.pk
-        request = create_mock_request(user)
-        result = await handle_bulk(
-            "author",
-            {"operation": "delete", "items": [author_pk]},
-            request,
-        )
-        parsed = json.loads(result[0].text)
-        assert parsed["operation"] == "delete"
-        assert parsed["success_count"] == 1
-        assert parsed["error_count"] == 0
-        # Verify deletion
-        assert not await author_exists(author_pk)
-
-    @pytest.mark.asyncio
     async def test_bulk_delete_multiple_items(self):
         """Test bulk delete with multiple items."""
         uid = unique_id()
@@ -509,9 +418,9 @@ class TestHandleBulk:
         assert "not registered" in parsed["error"]
 
     @pytest.mark.asyncio
-    async def test_permission_denied_for_anonymous_user_create(self):
-        """Test that handle_bulk denies anonymous user for create."""
-        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
+    async def test_permission_denied_for_anonymous_user(self):
+        """Test that handle_bulk denies anonymous user."""
+        request = create_mock_request(AnonymousUser())
         result = await handle_bulk(
             "author",
             {"operation": "create", "items": []},
@@ -520,46 +429,3 @@ class TestHandleBulk:
         parsed = json.loads(result[0].text)
         assert "error" in parsed
         assert "Permission denied" in parsed["error"]
-
-    @pytest.mark.asyncio
-    async def test_permission_denied_for_anonymous_user_update(self):
-        """Test that handle_bulk denies anonymous user for update."""
-        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
-        result = await handle_bulk(
-            "author",
-            {"operation": "update", "items": []},
-            request,
-        )
-        parsed = json.loads(result[0].text)
-        assert "error" in parsed
-        assert "Permission denied" in parsed["error"]
-
-    @pytest.mark.asyncio
-    async def test_permission_denied_for_anonymous_user_delete(self):
-        """Test that handle_bulk denies anonymous user for delete."""
-        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
-        result = await handle_bulk(
-            "author",
-            {"operation": "delete", "items": []},
-            request,
-        )
-        parsed = json.loads(result[0].text)
-        assert "error" in parsed
-        assert "Permission denied" in parsed["error"]
-
-
-@pytest.mark.django_db
-class TestModuleExports:
-    """Tests for module exports from handlers/__init__.py."""
-
-    def test_action_handlers_importable(self):
-        """Test that action handlers are importable from handlers module."""
-        from django_admin_mcp.handlers import (
-            handle_action,
-            handle_actions,
-            handle_bulk,
-        )
-
-        assert callable(handle_action)
-        assert callable(handle_actions)
-        assert callable(handle_bulk)

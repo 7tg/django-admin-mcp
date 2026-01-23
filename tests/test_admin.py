@@ -25,8 +25,6 @@ class TestMCPTokenAdmin:
 
         # Should show first 8 and last 8 characters
         assert preview == f"{token.token[:8]}...{token.token[-8:]}"
-        assert "..." in preview
-        assert len(preview) == 19  # 8 + 3 + 8
 
     def test_token_preview_without_token(self):
         """Test token_preview method with empty token."""
@@ -111,42 +109,7 @@ class TestMCPTokenAdmin:
         assert "Active" in status
         assert "#28a745" in status  # Check for success color code
 
-    def test_admin_list_display(self):
-        """Test that list_display contains required fields."""
-        admin_instance = MCPTokenAdmin(MCPToken, admin.site)
-
-        assert "name" in admin_instance.list_display
-        assert "token_preview" in admin_instance.list_display
-        assert "is_active" in admin_instance.list_display
-        assert "status_display" in admin_instance.list_display
-        assert "created_at" in admin_instance.list_display
-        assert "expires_at" in admin_instance.list_display
-        assert "last_used_at" in admin_instance.list_display
-
-    def test_admin_readonly_fields(self):
-        """Test that readonly_fields contains required fields."""
-        admin_instance = MCPTokenAdmin(MCPToken, admin.site)
-
-        assert "token" in admin_instance.readonly_fields
-        assert "created_at" in admin_instance.readonly_fields
-        assert "last_used_at" in admin_instance.readonly_fields
-        assert "status_display" in admin_instance.readonly_fields
-
     def test_admin_registered(self):
         """Test that MCPTokenAdmin is registered with admin site."""
         assert MCPToken in admin.site._registry
         assert isinstance(admin.site._registry[MCPToken], MCPTokenAdmin)
-
-    def test_token_preview_short_description(self):
-        """Test that token_preview has a short_description attribute."""
-        admin_instance = MCPTokenAdmin(MCPToken, admin.site)
-
-        assert hasattr(admin_instance.token_preview, 'short_description')
-        assert admin_instance.token_preview.short_description == "Token"
-
-    def test_status_display_short_description(self):
-        """Test that status_display has a short_description attribute."""
-        admin_instance = MCPTokenAdmin(MCPToken, admin.site)
-
-        assert hasattr(admin_instance.status_display, 'short_description')
-        assert admin_instance.status_display.short_description == "Status"
