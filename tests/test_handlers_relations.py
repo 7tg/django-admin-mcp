@@ -6,6 +6,7 @@ import json
 import uuid
 
 import pytest
+from asgiref.sync import sync_to_async
 from django.contrib.admin.models import ADDITION, CHANGE, LogEntry
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
@@ -22,6 +23,43 @@ from tests.models import Article, Author
 def unique_id():
     """Generate a unique identifier for test data."""
     return uuid.uuid4().hex[:8]
+
+
+@sync_to_async
+def create_author(name, email):
+    """Create an author asynchronously."""
+    return Author.objects.create(name=name, email=email)
+
+
+@sync_to_async
+def create_article(title, content, author):
+    """Create an article asynchronously."""
+    return Article.objects.create(title=title, content=content, author=author)
+
+
+@sync_to_async
+def create_user(username, email, password):
+    """Create a user asynchronously."""
+    return User.objects.create_user(username=username, email=email, password=password)
+
+
+@sync_to_async
+def create_log_entry(user, content_type, object_id, object_repr, action_flag, change_message=""):
+    """Create a log entry asynchronously."""
+    return LogEntry.objects.create(
+        user=user,
+        content_type=content_type,
+        object_id=object_id,
+        object_repr=object_repr,
+        action_flag=action_flag,
+        change_message=change_message,
+    )
+
+
+@sync_to_async
+def get_content_type(model):
+    """Get content type for a model asynchronously."""
+    return ContentType.objects.get_for_model(model)
 
 
 class TestHandleRelated:
@@ -60,7 +98,7 @@ class TestHandleRelated:
     async def test_relation_required(self):
         """Test error when relation parameter is missing."""
         uid = unique_id()
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
         request = create_mock_request()
         result = await handle_related(
             "author",
@@ -90,7 +128,7 @@ class TestHandleRelated:
     async def test_invalid_relation(self):
         """Test error when relation doesn't exist on model."""
         uid = unique_id()
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
         request = create_mock_request()
         result = await handle_related(
             "author",
@@ -106,7 +144,7 @@ class TestHandleRelated:
     async def test_many_relation_empty(self):
         """Test fetching empty many relation (reverse FK)."""
         uid = unique_id()
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
         request = create_mock_request()
         result = await handle_related(
             "author",
@@ -125,17 +163,9 @@ class TestHandleRelated:
     async def test_many_relation_with_data(self):
         """Test fetching many relation with data."""
         uid = unique_id()
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
-        article1 = await Article.objects.acreate(
-            title=f"Article 1 {uid}",
-            content="Content 1",
-            author=author,
-        )
-        article2 = await Article.objects.acreate(
-            title=f"Article 2 {uid}",
-            content="Content 2",
-            author=author,
-        )
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
+        article1 = await create_article(f"Article 1 {uid}", "Content 1", author)
+        article2 = await create_article(f"Article 2 {uid}", "Content 2", author)
         request = create_mock_request()
         result = await handle_related(
             "author",
@@ -153,13 +183,9 @@ class TestHandleRelated:
     async def test_many_relation_with_limit(self):
         """Test pagination with limit parameter."""
         uid = unique_id()
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
         for i in range(5):
-            await Article.objects.acreate(
-                title=f"Article {i} {uid}",
-                content=f"Content {i}",
-                author=author,
-            )
+            await create_article(f"Article {i} {uid}", f"Content {i}", author)
         request = create_mock_request()
         result = await handle_related(
             "author",
@@ -175,12 +201,8 @@ class TestHandleRelated:
     async def test_single_relation_fk(self):
         """Test fetching single relation (FK)."""
         uid = unique_id()
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
-        article = await Article.objects.acreate(
-            title=f"Test Article {uid}",
-            content="Test content",
-            author=author,
-        )
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
+        article = await create_article(f"Test Article {uid}", "Test content", author)
         request = create_mock_request()
         result = await handle_related(
             "article",
@@ -198,7 +220,7 @@ class TestHandleRelated:
     async def test_simple_field_value(self):
         """Test fetching a simple field value (treated as value type)."""
         uid = unique_id()
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
         request = create_mock_request()
         result = await handle_related(
             "author",
@@ -260,7 +282,7 @@ class TestHandleHistory:
     async def test_empty_history(self):
         """Test fetching history for object with no log entries."""
         uid = unique_id()
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
         request = create_mock_request()
         result = await handle_history(
             "author",
@@ -278,29 +300,12 @@ class TestHandleHistory:
     async def test_history_with_entries(self):
         """Test fetching history with log entries."""
         uid = unique_id()
-        user = await User.objects.acreate_user(
-            username=f"testuser_{uid}",
-            email=f"test_{uid}@example.com",
-            password="testpass",
-        )
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"author_{uid}@example.com")
+        user = await create_user(f"testuser_{uid}", f"test_{uid}@example.com", "testpass")
+        author = await create_author(f"Test Author {uid}", f"author_{uid}@example.com")
 
         # Create log entries
-        from asgiref.sync import sync_to_async
-
-        @sync_to_async
-        def create_log_entry():
-            content_type = ContentType.objects.get_for_model(Author)
-            LogEntry.objects.create(
-                user=user,
-                content_type=content_type,
-                object_id=str(author.pk),
-                object_repr=str(author),
-                action_flag=ADDITION,
-                change_message="Created via test",
-            )
-
-        await create_log_entry()
+        content_type = await get_content_type(Author)
+        await create_log_entry(user, content_type, str(author.pk), str(author), ADDITION, "Created via test")
 
         request = create_mock_request()
         result = await handle_history(
@@ -319,29 +324,12 @@ class TestHandleHistory:
     async def test_history_limit(self):
         """Test limit parameter for history entries."""
         uid = unique_id()
-        user = await User.objects.acreate_user(
-            username=f"testuser_{uid}",
-            email=f"test_{uid}@example.com",
-            password="testpass",
-        )
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"author_{uid}@example.com")
+        user = await create_user(f"testuser_{uid}", f"test_{uid}@example.com", "testpass")
+        author = await create_author(f"Test Author {uid}", f"author_{uid}@example.com")
 
-        from asgiref.sync import sync_to_async
-
-        @sync_to_async
-        def create_log_entries():
-            content_type = ContentType.objects.get_for_model(Author)
-            for i in range(5):
-                LogEntry.objects.create(
-                    user=user,
-                    content_type=content_type,
-                    object_id=str(author.pk),
-                    object_repr=str(author),
-                    action_flag=CHANGE,
-                    change_message=f"Change {i}",
-                )
-
-        await create_log_entries()
+        content_type = await get_content_type(Author)
+        for i in range(5):
+            await create_log_entry(user, content_type, str(author.pk), str(author), CHANGE, f"Change {i}")
 
         request = create_mock_request()
         result = await handle_history(
@@ -392,8 +380,8 @@ class TestHandleAutocomplete:
     async def test_autocomplete_no_term(self):
         """Test autocomplete without search term returns all."""
         uid = unique_id()
-        author1 = await Author.objects.acreate(name=f"Alice {uid}", email=f"alice_{uid}@example.com")
-        author2 = await Author.objects.acreate(name=f"Bob {uid}", email=f"bob_{uid}@example.com")
+        author1 = await create_author(f"Alice {uid}", f"alice_{uid}@example.com")
+        author2 = await create_author(f"Bob {uid}", f"bob_{uid}@example.com")
         request = create_mock_request()
         result = await handle_autocomplete(
             "author",
@@ -410,8 +398,8 @@ class TestHandleAutocomplete:
     async def test_autocomplete_with_term(self):
         """Test autocomplete with search term filters results."""
         uid = unique_id()
-        author1 = await Author.objects.acreate(name=f"Alice {uid}", email=f"alice_{uid}@example.com")
-        author2 = await Author.objects.acreate(name=f"Bob {uid}", email=f"bob_{uid}@example.com")
+        author1 = await create_author(f"Alice {uid}", f"alice_{uid}@example.com")
+        author2 = await create_author(f"Bob {uid}", f"bob_{uid}@example.com")
         request = create_mock_request()
         result = await handle_autocomplete(
             "author",
@@ -429,10 +417,7 @@ class TestHandleAutocomplete:
         """Test limit parameter."""
         uid = unique_id()
         for i in range(5):
-            await Author.objects.acreate(
-                name=f"TestAuthor{i} {uid}",
-                email=f"testauthor{i}_{uid}@example.com",
-            )
+            await create_author(f"TestAuthor{i} {uid}", f"testauthor{i}_{uid}@example.com")
         request = create_mock_request()
         result = await handle_autocomplete(
             "author",
@@ -448,7 +433,7 @@ class TestHandleAutocomplete:
     async def test_autocomplete_result_format(self):
         """Test that results have correct format with id and text."""
         uid = unique_id()
-        author = await Author.objects.acreate(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
         request = create_mock_request()
         result = await handle_autocomplete(
             "author",
