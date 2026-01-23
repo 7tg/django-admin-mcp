@@ -7,6 +7,7 @@ Tests metadata operation handlers:
 """
 
 import json
+
 import pytest
 
 from django_admin_mcp.handlers import (
@@ -41,6 +42,7 @@ class TestModelMatchesQuery:
     def test_no_match(self):
         """Test query that doesn't match."""
         assert _model_matches_query("xyz", "author", "Author") is False
+
 
 class TestGetFieldMetadata:
     """Tests for _get_field_metadata helper function."""

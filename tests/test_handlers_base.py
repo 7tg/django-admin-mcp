@@ -52,6 +52,7 @@ class TestJsonResponse:
         parsed = json.loads(result[0].text)
         assert "2024-01-15" in parsed["created_at"]
 
+
 @pytest.mark.django_db
 class TestGetModelAdmin:
     """Tests for get_model_admin function."""
@@ -68,6 +69,7 @@ class TestGetModelAdmin:
         model, model_admin = get_model_admin("nonexistent_model")
         assert model is None
         assert model_admin is None
+
 
 @pytest.mark.django_db
 class TestCreateMockRequest:
@@ -156,6 +158,7 @@ class TestGetExposedModels:
         model_names = [name for name, _ in result]
         assert "author" in model_names
 
+
 @pytest.mark.django_db
 class TestSerializeInstance:
     """Tests for serialize_instance function."""
@@ -163,9 +166,7 @@ class TestSerializeInstance:
     def test_serializes_simple_model(self):
         """Test serializing a simple model instance."""
         uid = unique_id()
-        author = Author.objects.create(
-            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
-        )
+        author = Author.objects.create(name=f"Test Author {uid}", email=f"test_{uid}@example.com")
         result = serialize_instance(author)
         assert isinstance(result, dict)
         assert result["name"] == f"Test Author {uid}"
@@ -174,17 +175,14 @@ class TestSerializeInstance:
     def test_serializes_model_with_foreign_key(self):
         """Test serializing model with FK relationship."""
         uid = unique_id()
-        author = Author.objects.create(
-            name=f"FK Author {uid}", email=f"fk_{uid}@example.com", bio="Test bio"
-        )
-        article = Article.objects.create(
-            title="Test Article", content="Test content", author=author
-        )
+        author = Author.objects.create(name=f"FK Author {uid}", email=f"fk_{uid}@example.com", bio="Test bio")
+        article = Article.objects.create(title="Test Article", content="Test content", author=author)
         result = serialize_instance(article)
         assert isinstance(result, dict)
         assert result["title"] == "Test Article"
         # FK should be serialized (either as ID or string)
         assert "author" in result
+
 
 @pytest.mark.django_db
 class TestGetModelName:
@@ -194,4 +192,3 @@ class TestGetModelName:
         """Test that get_model_name returns lowercase model name."""
         result = get_model_name(Author)
         assert result == "author"
-

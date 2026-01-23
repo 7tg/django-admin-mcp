@@ -37,18 +37,14 @@ class MCPToken(models.Model):
         related_name="mcp_tokens",
         help_text="Optional user this token belongs to (for permission checking)",
     )
-    is_active = models.BooleanField(
-        default=True, help_text="Whether this token is currently active"
-    )
+    is_active = models.BooleanField(default=True, help_text="Whether this token is currently active")
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text="Token expiration date (leave empty for indefinite tokens)",
     )
-    last_used_at = models.DateTimeField(
-        null=True, blank=True, help_text="Last time this token was used"
-    )
+    last_used_at = models.DateTimeField(null=True, blank=True, help_text="Last time this token was used")
 
     class Meta:
         verbose_name = "MCP Token"
@@ -64,14 +60,6 @@ class MCPToken(models.Model):
     def __str__(self):
         return f"{self.name} ({self.token[:8]}...)"
 
-    def _should_set_default_expiry(self):
-        """Check if default expiry should be set for new token."""
-        return (
-            self.pk is None
-            and not self._expires_at_explicit
-            and self.expires_at is None
-        )
-
     def save(self, *args, **kwargs):
         """Generate token and set default expiry on first save."""
         if not self.token:
@@ -82,6 +70,10 @@ class MCPToken(models.Model):
             self.expires_at = timezone.now() + timedelta(days=90)
 
         super().save(*args, **kwargs)
+
+    def _should_set_default_expiry(self):
+        """Check if default expiry should be set for new token."""
+        return self.pk is None and not self._expires_at_explicit and self.expires_at is None
 
     def mark_used(self):
         """Mark token as recently used."""

@@ -13,7 +13,7 @@ from django.db import models
 from django.http import HttpRequest
 
 from ..protocol.types import TextContent
-from .base import get_exposed_models, get_model_admin, get_model_name, json_response
+from .base import get_model_admin, json_response
 
 
 def _get_field_metadata(field) -> dict[str, Any]:
@@ -51,14 +51,9 @@ def _get_field_metadata(field) -> dict[str, Any]:
         metadata["help_text"] = str(field.help_text)
 
     if hasattr(field, "choices") and field.choices:
-        metadata["choices"] = [
-            {"value": choice[0], "label": str(choice[1])} for choice in field.choices
-        ]
+        metadata["choices"] = [{"value": choice[0], "label": str(choice[1])} for choice in field.choices]
 
-    if (
-        hasattr(field, "default")
-        and field.default is not models.fields.NOT_PROVIDED
-    ):
+    if hasattr(field, "default") and field.default is not models.fields.NOT_PROVIDED:
         # Handle callable defaults
         default_val = field.default
         if callable(default_val):
@@ -90,7 +85,7 @@ def _get_field_metadata(field) -> dict[str, Any]:
     return metadata
 
 
-def _model_matches_query(query: str, model_name: str, verbose_name: str) -> bool:
+def _model_matches_query(query: str | None, model_name: str, verbose_name: str) -> bool:
     """
     Check if a model matches the search query.
 
@@ -152,19 +147,11 @@ async def handle_describe(
         # Collect admin configuration
         admin_config = {}
         if model_admin:
-            admin_config["list_display"] = list(
-                getattr(model_admin, "list_display", [])
-            )
-            admin_config["list_filter"] = list(
-                getattr(model_admin, "list_filter", [])
-            )
-            admin_config["search_fields"] = list(
-                getattr(model_admin, "search_fields", [])
-            )
+            admin_config["list_display"] = list(getattr(model_admin, "list_display", []))
+            admin_config["list_filter"] = list(getattr(model_admin, "list_filter", []))
+            admin_config["search_fields"] = list(getattr(model_admin, "search_fields", []))
             admin_config["ordering"] = list(getattr(model_admin, "ordering", []))
-            admin_config["readonly_fields"] = list(
-                getattr(model_admin, "readonly_fields", [])
-            )
+            admin_config["readonly_fields"] = list(getattr(model_admin, "readonly_fields", []))
 
             # Get fieldsets if defined
             fieldsets = getattr(model_admin, "fieldsets", None)
@@ -240,7 +227,7 @@ async def handle_find_models(
 
         models_info = []
         for model, model_admin in site._registry.items():
-            model_name_lower = model._meta.model_name
+            model_name_lower = model._meta.model_name or ""
             verbose_name = str(model._meta.verbose_name)
             verbose_name_plural = str(model._meta.verbose_name_plural)
 

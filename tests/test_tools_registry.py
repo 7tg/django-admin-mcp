@@ -5,10 +5,11 @@ Tests tool registration, routing, and schema generation.
 """
 
 import json
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
 from django.test import RequestFactory
 
+from django_admin_mcp.protocol.types import TextContent, Tool
 from django_admin_mcp.tools import (
     HANDLERS,
     call_tool,
@@ -17,10 +18,9 @@ from django_admin_mcp.tools import (
     get_tools,
 )
 from django_admin_mcp.tools.registry import (
-    _get_field_info,
     _format_fields_doc,
+    _get_field_info,
 )
-from django_admin_mcp.protocol.types import Tool, TextContent
 
 
 class TestHandlersRegistry:
@@ -29,9 +29,18 @@ class TestHandlersRegistry:
     def test_handlers_contains_all_operations(self):
         """HANDLERS should contain all expected operation handlers."""
         expected_operations = [
-            "list", "get", "create", "update", "delete",
-            "describe", "actions", "action", "bulk",
-            "related", "history", "autocomplete",
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete",
+            "describe",
+            "actions",
+            "action",
+            "bulk",
+            "related",
+            "history",
+            "autocomplete",
         ]
         for op in expected_operations:
             assert op in HANDLERS, f"Missing handler for {op}"
@@ -169,9 +178,18 @@ class TestGetModelTools:
 
         tool_names = [t.name for t in tools]
         expected_tools = [
-            "list_author", "get_author", "create_author", "update_author",
-            "delete_author", "describe_author", "actions_author", "action_author",
-            "bulk_author", "related_author", "history_author", "autocomplete_author",
+            "list_author",
+            "get_author",
+            "create_author",
+            "update_author",
+            "delete_author",
+            "describe_author",
+            "actions_author",
+            "action_author",
+            "bulk_author",
+            "related_author",
+            "history_author",
+            "autocomplete_author",
         ]
         for expected in expected_tools:
             assert expected in tool_names, f"Missing tool {expected}"

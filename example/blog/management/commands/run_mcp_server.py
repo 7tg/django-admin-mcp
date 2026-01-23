@@ -1,6 +1,8 @@
 """Management command to run the MCP server."""
 import asyncio
+
 from django.core.management.base import BaseCommand
+
 from django_admin_mcp import run_mcp_server
 
 

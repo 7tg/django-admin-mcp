@@ -9,17 +9,14 @@ import json
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django.db import models
 from django.http import HttpRequest
 
+from ..protocol.types import TextContent
 from .base import (
     async_check_permission,
-    create_mock_request,
     get_model_admin,
     json_response,
-    serialize_instance,
 )
-from ..protocol.types import TextContent
 
 
 def _get_action_info(action) -> dict[str, Any]:
@@ -34,9 +31,7 @@ def _get_action_info(action) -> dict[str, Any]:
     """
     if callable(action):
         name = getattr(action, "__name__", str(action))
-        description = getattr(
-            action, "short_description", name.replace("_", " ").title()
-        )
+        description = getattr(action, "short_description", name.replace("_", " ").title())
         return {"name": name, "description": str(description)}
     return {"name": str(action), "description": str(action)}
 
@@ -52,10 +47,12 @@ def _permission_error(operation: str, model_name: str) -> list[TextContent]:
     Returns:
         List containing a TextContent with error JSON.
     """
-    return json_response({
-        "error": f"Permission denied: cannot {operation} {model_name}",
-        "code": "permission_denied",
-    })
+    return json_response(
+        {
+            "error": f"Permission denied: cannot {operation} {model_name}",
+            "code": "permission_denied",
+        }
+    )
 
 
 def _log_action(user, obj, action_flag: int, change_message: str = ""):
@@ -139,11 +136,13 @@ async def handle_actions(
                         }
                     )
 
-        return json_response({
-            "model": model_name,
-            "count": len(actions_info),
-            "actions": actions_info,
-        })
+        return json_response(
+            {
+                "model": model_name,
+                "count": len(actions_info),
+                "actions": actions_info,
+            }
+        )
     except Exception as e:
         return json_response({"error": str(e)})
 
@@ -208,10 +207,7 @@ async def handle_action(
             if model_admin:
                 admin_actions = getattr(model_admin, "actions", []) or []
                 for action in admin_actions:
-                    if (
-                        callable(action)
-                        and getattr(action, "__name__", "") == action_name
-                    ):
+                    if callable(action) and getattr(action, "__name__", "") == action_name:
                         # Execute the action
                         result = action(model_admin, request, queryset)
                         return {
@@ -261,9 +257,7 @@ async def handle_bulk(
             return json_response({"error": "operation parameter is required"})
 
         if operation not in ["create", "update", "delete"]:
-            return json_response({
-                "error": "operation must be 'create', 'update', or 'delete'"
-            })
+            return json_response({"error": "operation must be 'create', 'update', or 'delete'"})
 
         # Check permission for the bulk operation
         permission_map = {
@@ -272,12 +266,10 @@ async def handle_bulk(
             "delete": "delete",
         }
         required_permission = permission_map.get(operation)
-        if required_permission and not await async_check_permission(
-            request, model_admin, required_permission
-        ):
+        if required_permission and not await async_check_permission(request, model_admin, required_permission):
             return _permission_error(required_permission, model_name)
 
-        user = request.user if hasattr(request, 'user') else None
+        user = request.user if hasattr(request, "user") else None
         # Don't use AnonymousUser for logging
         if user and not user.is_authenticated:
             user = None
@@ -298,9 +290,7 @@ async def handle_bulk(
                             action_flag=ADDITION,
                             change_message="Bulk created via MCP",
                         )
-                        results["success"].append(
-                            {"index": i, "id": obj.pk, "created": True}
-                        )
+                        results["success"].append({"index": i, "id": obj.pk, "created": True})
                     except Exception as e:
                         results["errors"].append({"index": i, "error": str(e)})
 
@@ -310,9 +300,7 @@ async def handle_bulk(
                         obj_id = item.get("id")
                         data = item.get("data", {})
                         if not obj_id:
-                            results["errors"].append(
-                                {"index": i, "error": "id is required for update"}
-                            )
+                            results["errors"].append({"index": i, "error": "id is required for update"})
                             continue
 
                         obj = model.objects.get(pk=obj_id)
@@ -325,9 +313,7 @@ async def handle_bulk(
                             action_flag=CHANGE,
                             change_message=f"Bulk updated via MCP: {json.dumps(data, default=str)}",
                         )
-                        results["success"].append(
-                            {"index": i, "id": obj_id, "updated": True}
-                        )
+                        results["success"].append({"index": i, "id": obj_id, "updated": True})
                     except model.DoesNotExist:
                         results["errors"].append(
                             {
@@ -350,9 +336,7 @@ async def handle_bulk(
                             change_message="Bulk deleted via MCP",
                         )
                         obj.delete()
-                        results["success"].append(
-                            {"index": i, "id": obj_id, "deleted": True}
-                        )
+                        results["success"].append({"index": i, "id": obj_id, "deleted": True})
                     except model.DoesNotExist:
                         results["errors"].append(
                             {

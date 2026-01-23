@@ -15,7 +15,6 @@ from django_admin_mcp.handlers import (
     handle_bulk,
 )
 from django_admin_mcp.handlers.base import create_mock_request
-from django_admin_mcp.protocol.types import TextContent
 from tests.models import Author
 
 
@@ -288,9 +287,7 @@ class TestHandleBulk:
             "author",
             {
                 "operation": "update",
-                "items": [
-                    {"id": author.pk, "data": {"name": f"Updated Name {uid}"}}
-                ],
+                "items": [{"id": author.pk, "data": {"name": f"Updated Name {uid}"}}],
             },
             request,
         )

@@ -50,11 +50,7 @@ class TestMCPTokenAdmin:
     def test_status_display_expired(self):
         """Test status_display for expired token."""
         past_date = timezone.now() - timedelta(days=1)
-        token = MCPToken.objects.create(
-            name="Expired Token",
-            is_active=True,
-            expires_at=past_date
-        )
+        token = MCPToken.objects.create(name="Expired Token", is_active=True, expires_at=past_date)
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         status = admin_instance.status_display(token)
@@ -64,11 +60,7 @@ class TestMCPTokenAdmin:
 
     def test_status_display_active_indefinite(self):
         """Test status_display for active indefinite token."""
-        token = MCPToken.objects.create(
-            name="Indefinite Token",
-            is_active=True,
-            expires_at=None
-        )
+        token = MCPToken.objects.create(name="Indefinite Token", is_active=True, expires_at=None)
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         status = admin_instance.status_display(token)
@@ -80,11 +72,7 @@ class TestMCPTokenAdmin:
         """Test status_display for token expiring within 7 days."""
         # Token expires in 5 days
         future_date = timezone.now() + timedelta(days=5)
-        token = MCPToken.objects.create(
-            name="Expires Soon Token",
-            is_active=True,
-            expires_at=future_date
-        )
+        token = MCPToken.objects.create(name="Expires Soon Token", is_active=True, expires_at=future_date)
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         status = admin_instance.status_display(token)
@@ -97,11 +85,7 @@ class TestMCPTokenAdmin:
         """Test status_display for active token with future expiry."""
         # Token expires in 30 days (more than 7 days)
         future_date = timezone.now() + timedelta(days=30)
-        token = MCPToken.objects.create(
-            name="Active Token",
-            is_active=True,
-            expires_at=future_date
-        )
+        token = MCPToken.objects.create(name="Active Token", is_active=True, expires_at=future_date)
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         status = admin_instance.status_display(token)

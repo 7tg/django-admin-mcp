@@ -57,9 +57,7 @@ class MCPHTTPView(View):
         # Authenticate request
         token = await authenticate_token(request)
         if not token:
-            return JsonResponse(
-                {"error": "Invalid or missing authentication token"}, status=401
-            )
+            return JsonResponse({"error": "Invalid or missing authentication token"}, status=401)
 
         # Parse request body
         try:
@@ -133,9 +131,7 @@ async def mcp_endpoint(request):
     # Authenticate request
     token = await authenticate_token(request)
     if not token:
-        return JsonResponse(
-            {"error": "Invalid or missing authentication token"}, status=401
-        )
+        return JsonResponse({"error": "Invalid or missing authentication token"}, status=401)
 
     # Parse request body
     try:
@@ -155,7 +151,7 @@ async def mcp_endpoint(request):
 
 
 # Mark as CSRF exempt
-mcp_endpoint.csrf_exempt = True
+mcp_endpoint.csrf_exempt = True  # type: ignore[attr-defined]
 
 
 async def handle_list_tools_request(request):

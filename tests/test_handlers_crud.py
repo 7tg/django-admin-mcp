@@ -317,9 +317,7 @@ class TestHandleCreate:
             from django.contrib.contenttypes.models import ContentType
 
             ct = ContentType.objects.get_for_model(Author)
-            log = LogEntry.objects.filter(
-                content_type=ct, object_id=str(obj_id), action_flag=ADDITION
-            ).first()
+            log = LogEntry.objects.filter(content_type=ct, object_id=str(obj_id), action_flag=ADDITION).first()
             return log is not None
 
         has_log = await check_log()
@@ -444,9 +442,7 @@ class TestHandleUpdate:
             from django.contrib.contenttypes.models import ContentType
 
             ct = ContentType.objects.get_for_model(Author)
-            log = LogEntry.objects.filter(
-                content_type=ct, object_id=str(author.pk), action_flag=CHANGE
-            ).first()
+            log = LogEntry.objects.filter(content_type=ct, object_id=str(author.pk), action_flag=CHANGE).first()
             return log is not None
 
         has_log = await check_log()
@@ -466,9 +462,7 @@ class TestHandleUpdate:
             {
                 "id": author.pk,
                 "data": {"name": f"Updated Author {uid}"},
-                "inlines": {
-                    "article": [{"id": article.pk, "data": {"title": f"Updated Article {uid}"}}]
-                },
+                "inlines": {"article": [{"id": article.pk, "data": {"title": f"Updated Article {uid}"}}]},
             },
             request,
         )
@@ -590,9 +584,7 @@ class TestHandleDelete:
             from django.contrib.contenttypes.models import ContentType
 
             ct = ContentType.objects.get_for_model(Author)
-            log = LogEntry.objects.filter(
-                content_type=ct, object_id=str(author_pk), action_flag=DELETION
-            ).first()
+            log = LogEntry.objects.filter(content_type=ct, object_id=str(author_pk), action_flag=DELETION).first()
             return log is not None
 
         has_log = await check_log()

@@ -5,7 +5,7 @@ This mixin enables MCP (Model Context Protocol) functionality for Django admin c
 When added to a ModelAdmin class, it exposes the model's CRUD operations through MCP tools.
 """
 
-from typing import Any, Dict, List, Type
+from typing import Any
 
 from django.db import models
 
@@ -36,7 +36,7 @@ class MCPAdminMixin:
     """
 
     # Class-level registry to track registered models
-    _registered_models: Dict[str, Dict[str, Any]] = {}
+    _registered_models: dict[str, dict[str, Any]] = {}
 
     @classmethod
     def register_model_tools(cls, model_admin_instance):
@@ -54,9 +54,7 @@ class MCPAdminMixin:
         }
 
     @classmethod
-    async def handle_tool_call(
-        cls, name: str, arguments: Dict[str, Any], user=None
-    ) -> List[TextContent]:
+    async def handle_tool_call(cls, name: str, arguments: dict[str, Any], user=None) -> list[TextContent]:
         """
         Central handler for all tool calls.
 
@@ -75,7 +73,7 @@ class MCPAdminMixin:
         return await call_tool(name, arguments, request)
 
     @classmethod
-    def get_mcp_tools(cls, model: Type[models.Model]) -> List[Tool]:
+    def get_mcp_tools(cls, model: type[models.Model]) -> list[Tool]:
         """
         Get the list of MCP tools for a model.
 

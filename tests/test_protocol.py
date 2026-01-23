@@ -3,11 +3,11 @@ Tests for django_admin_mcp.protocol module.
 """
 
 from django_admin_mcp.protocol import (
+    ImageContent,
     JsonRpcError,
     JsonRpcRequest,
     JsonRpcResponse,
     TextContent,
-    ImageContent,
     Tool,
     ToolResult,
 )
@@ -104,9 +104,7 @@ class TestToolResult:
 
     def test_tool_result_with_image_content(self):
         """Test ToolResult with image content."""
-        result = ToolResult(
-            content=[ImageContent(data="base64data", mimeType="image/png")]
-        )
+        result = ToolResult(content=[ImageContent(data="base64data", mimeType="image/png")])
         assert result.content[0].type == "image"
         assert result.content[0].data == "base64data"
 
@@ -144,9 +142,7 @@ class TestJsonRpcRequest:
 
     def test_create_request_with_params(self):
         """Test creating JsonRpcRequest with params."""
-        request = JsonRpcRequest(
-            id="request-123", method="call_tool", params={"name": "test", "args": {}}
-        )
+        request = JsonRpcRequest(id="request-123", method="call_tool", params={"name": "test", "args": {}})
         assert request.id == "request-123"
         assert request.params == {"name": "test", "args": {}}
 
@@ -193,9 +189,7 @@ class TestJsonRpcResponse:
 
     def test_response_with_nested_error(self):
         """Test JsonRpcResponse with error serializes correctly."""
-        response = JsonRpcResponse(
-            id=1, error=JsonRpcError(code=-32601, message="Method not found")
-        )
+        response = JsonRpcResponse(id=1, error=JsonRpcError(code=-32601, message="Method not found"))
         data = response.model_dump()
         assert data["error"]["code"] == -32601
         assert data["error"]["message"] == "Method not found"

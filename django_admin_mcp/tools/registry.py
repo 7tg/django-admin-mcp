@@ -5,30 +5,30 @@ This module provides tool registration, schema generation, and routing
 for MCP tool calls.
 """
 
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from django.db import models
 from django.http import HttpRequest
 
 from ..handlers import (
-    handle_list,
-    handle_get,
+    get_exposed_models,
+    handle_action,
+    handle_actions,
+    handle_autocomplete,
+    handle_bulk,
     handle_create,
-    handle_update,
     handle_delete,
     handle_describe,
     handle_find_models,
-    handle_actions,
-    handle_action,
-    handle_bulk,
-    handle_related,
+    handle_get,
     handle_history,
-    handle_autocomplete,
-    get_exposed_models,
+    handle_list,
+    handle_related,
+    handle_update,
     json_response,
 )
 from ..protocol.types import TextContent, Tool
-
 
 # Type alias for handler functions
 HandlerFunc = Callable[
@@ -53,9 +53,7 @@ HANDLERS: dict[str, HandlerFunc] = {
 }
 
 
-async def call_tool(
-    name: str, arguments: dict[str, Any], request: HttpRequest
-) -> list[TextContent]:
+async def call_tool(name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
     """
     Route tool call to appropriate handler.
 
@@ -107,20 +105,19 @@ def _get_field_info(model: type[models.Model]) -> list[dict[str, Any]]:
             has_default = getattr(field, "has_default", lambda: False)()
             required = not null_allowed and not blank_allowed and not has_default
 
-            fields.append({
-                "name": field.name,
-                "type": field.get_internal_type(),
-                "required": required,
-            })
+            fields.append(
+                {
+                    "name": field.name,
+                    "type": field.get_internal_type(),
+                    "required": required,
+                }
+            )
     return fields
 
 
 def _format_fields_doc(fields: list[dict[str, Any]]) -> str:
     """Format field info list as documentation string."""
-    return "\n".join([
-        f"  - {f['name']} ({f['type']}){' [required]' if f['required'] else ''}"
-        for f in fields
-    ])
+    return "\n".join([f"  - {f['name']} ({f['type']}){' [required]' if f['required'] else ''}" for f in fields])
 
 
 def get_model_tools(model: type[models.Model]) -> list[Tool]:
@@ -180,8 +177,7 @@ def get_model_tools(model: type[models.Model]) -> list[Tool]:
                         "type": "array",
                         "items": {"type": "string"},
                         "description": (
-                            "Fields to order by. Prefix with '-' for descending "
-                            "(e.g., ['-created_at', 'title'])"
+                            "Fields to order by. Prefix with '-' for descending (e.g., ['-created_at', 'title'])"
                         ),
                     },
                 },
@@ -189,9 +185,7 @@ def get_model_tools(model: type[models.Model]) -> list[Tool]:
         ),
         Tool(
             name=f"get_{model_name}",
-            description=(
-                f"Get a specific {verbose_name} by ID with optional inline and related data."
-            ),
+            description=(f"Get a specific {verbose_name} by ID with optional inline and related data."),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -229,10 +223,7 @@ def get_model_tools(model: type[models.Model]) -> list[Tool]:
         ),
         Tool(
             name=f"update_{model_name}",
-            description=(
-                f"Update an existing {verbose_name} with optional inline updates.\n\n"
-                f"Fields:\n{fields_doc}"
-            ),
+            description=(f"Update an existing {verbose_name} with optional inline updates.\n\nFields:\n{fields_doc}"),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -423,8 +414,7 @@ def get_find_models_tool() -> Tool:
     return Tool(
         name="find_models",
         description=(
-            "Discover available Django models registered with MCP. "
-            "Use this to find which models have tools available."
+            "Discover available Django models registered with MCP. Use this to find which models have tools available."
         ),
         inputSchema={
             "type": "object",
@@ -451,7 +441,7 @@ def get_tools() -> list[Tool]:
     """
     tools = [get_find_models_tool()]
 
-    for model_name, model_admin in get_exposed_models():
+    for _model_name, model_admin in get_exposed_models():
         model = model_admin.model
         tools.extend(get_model_tools(model))
 

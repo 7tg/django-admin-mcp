@@ -5,12 +5,10 @@ This module provides async handlers for fetching related objects,
 viewing change history, and providing autocomplete suggestions.
 """
 
-import json
 from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.db.models import Q
-from django.forms.models import model_to_dict
 from django.http import HttpRequest
 
 from ..protocol.types import TextContent
@@ -90,10 +88,7 @@ async def handle_related(
                 "type": "many",
                 "count": len(related_objects),
                 "total_count": total_count,
-                "results": [
-                    serialize_instance(r)
-                    for r in related_objects
-                ],
+                "results": [serialize_instance(r) for r in related_objects],
             }
         elif hasattr(related_attr, "_meta"):
             # Single relation (FK, OneToOne)

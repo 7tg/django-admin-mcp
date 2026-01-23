@@ -1,7 +1,9 @@
 """Blog admin configuration with MCP integration."""
 from django.contrib import admin
+
 from django_admin_mcp import MCPAdminMixin
-from .models import Author, Article
+
+from .models import Article, Author
 
 
 @admin.register(Author)

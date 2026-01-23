@@ -67,10 +67,15 @@ dev = [
     "pytest-django>=4.5",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "django-stubs>=5.0.0",
+    "pre-commit>=3.7.0",
 ]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -85,6 +90,45 @@ markers = [
 ]
 asyncio_mode = "auto"
 
-[tool.isort]
-profile = "black"
+# Ruff configuration (replaces black, isort, flake8)
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+exclude = ["migrations", ".venv", "build", "dist", "example"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "DJ",     # flake8-django
+]
+ignore = ["E203"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F841"]  # Allow unused variables in tests (test fixtures)
+
+[tool.ruff.lint.isort]
+known-first-party = ["django_admin_mcp"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# Mypy configuration
+[tool.mypy]
+python_version = "3.10"
+plugins = ["mypy_django_plugin.main"]
+strict = false
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = ["migrations", "tests", "example"]
+
+[tool.django-stubs]
+django_settings_module = "tests.settings"
 

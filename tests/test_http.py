@@ -86,9 +86,7 @@ class TestHTTPInterface:
     async def test_mcp_endpoint_with_inactive_token(self):
         """Test MCP endpoint rejects inactive tokens."""
         # Create an inactive token
-        token = await sync_to_async(MCPToken.objects.create)(
-            name="Inactive Token", is_active=False
-        )
+        token = await sync_to_async(MCPToken.objects.create)(name="Inactive Token", is_active=False)
 
         client = AsyncClient()
         response = await client.post(
@@ -182,9 +180,7 @@ class TestMCPToken:
     async def test_expired_token_rejected(self):
         """Test that expired tokens are rejected in authentication."""
         past_date = timezone.now() - timedelta(days=1)
-        token = await sync_to_async(MCPToken.objects.create)(
-            name="Expired Token", expires_at=past_date
-        )
+        token = await sync_to_async(MCPToken.objects.create)(name="Expired Token", expires_at=past_date)
 
         client = AsyncClient()
         response = await client.post(
@@ -254,23 +250,18 @@ class TestEmptyToolResult:
     @pytest.mark.asyncio
     async def test_empty_tool_result(self):
         """Test mcp_endpoint when call_tool returns empty result."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock, patch
 
         # Create a valid token
         token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
 
-        with patch(
-            "django_admin_mcp.views.call_tool",
-            new_callable=AsyncMock
-        ) as mock_handle:
+        with patch("django_admin_mcp.views.call_tool", new_callable=AsyncMock) as mock_handle:
             mock_handle.return_value = []  # Empty result
 
             client = AsyncClient()
             response = await client.post(
                 "/api/mcp/",
-                data=json.dumps(
-                    {"method": "tools/call", "name": "test_tool", "arguments": {}}
-                ),
+                data=json.dumps({"method": "tools/call", "name": "test_tool", "arguments": {}}),
                 content_type="application/json",
                 headers={"Authorization": f"Bearer {token.token}"},
             )
@@ -363,9 +354,7 @@ class TestFunctionBasedViewEdgeCases:
         client = AsyncClient()
         response = await client.post(
             "/api/mcp/",
-            data=json.dumps(
-                {"method": "tools/call", "name": "find_models", "arguments": {}}
-            ),
+            data=json.dumps({"method": "tools/call", "name": "find_models", "arguments": {}}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.token}"},
         )

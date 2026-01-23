@@ -13,13 +13,13 @@ from django.db import models
 from django.db.models import Q
 from django.http import HttpRequest
 
+from ..protocol.types import TextContent
 from .base import (
     async_check_permission,
     get_model_admin,
     json_response,
     serialize_instance,
 )
-from ..protocol.types import TextContent
 
 
 def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q:
@@ -54,9 +54,7 @@ def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q
     return q
 
 
-def _build_search_query(
-    model: type[models.Model], search_fields: list[str], search_term: str
-) -> Q:
+def _build_search_query(model: type[models.Model], search_fields: list[str], search_term: str) -> Q:
     """
     Build a Q object for searching across multiple fields.
 
@@ -108,7 +106,7 @@ def _get_inline_data(obj: models.Model, admin: Any) -> dict[str, list[dict[str, 
     Returns:
         Dictionary mapping inline model names to list of serialized instances.
     """
-    inlines_data = {}
+    inlines_data: dict[str, list] = {}
 
     if not admin:
         return inlines_data
@@ -124,7 +122,7 @@ def _get_inline_data(obj: models.Model, admin: Any) -> dict[str, list[dict[str, 
         # Find the FK field that points to our parent model
         fk_field = None
         for field in inline_model._meta.get_fields():
-            if hasattr(field, "related_model") and field.related_model == type(obj):
+            if hasattr(field, "related_model") and field.related_model is type(obj):
                 if fk_name is None or field.name == fk_name:
                     fk_field = field
                     break
@@ -141,9 +139,7 @@ def _get_inline_data(obj: models.Model, admin: Any) -> dict[str, list[dict[str, 
     return inlines_data
 
 
-def _update_inlines(
-    obj: models.Model, admin: Any, inlines_data: dict[str, list]
-) -> dict[str, Any]:
+def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]) -> dict[str, Any]:
     """
     Update inline related objects for a model instance.
 
@@ -155,7 +151,7 @@ def _update_inlines(
     Returns:
         Results dictionary with created, updated, deleted, and errors lists.
     """
-    results = {"created": [], "updated": [], "deleted": [], "errors": []}
+    results: dict[str, list] = {"created": [], "updated": [], "deleted": [], "errors": []}
 
     if not admin or not inlines_data:
         return results
@@ -174,7 +170,7 @@ def _update_inlines(
         # Find the FK field
         fk_field = None
         for field in inline_model._meta.get_fields():
-            if hasattr(field, "related_model") and field.related_model == type(obj):
+            if hasattr(field, "related_model") and field.related_model is type(obj):
                 fk_field = field
                 break
 
@@ -204,15 +200,9 @@ def _update_inlines(
                     # Create new inline
                     item_data[fk_field.name] = obj
                     new_obj = inline_model.objects.create(
-                        **{
-                            k: v
-                            for k, v in item_data.items()
-                            if k not in ["id", "_delete"]
-                        }
+                        **{k: v for k, v in item_data.items() if k not in ["id", "_delete"]}
                     )
-                    results["created"].append(
-                        {"model": inline_model_name, "id": new_obj.pk}
-                    )
+                    results["created"].append({"model": inline_model_name, "id": new_obj.pk})
             except Exception as e:
                 results["errors"].append(
                     {
@@ -253,9 +243,7 @@ def _log_action(user: Any, obj: models.Model, action_flag: int, change_message: 
     )
 
 
-async def handle_list(
-    model_name: str, arguments: dict[str, Any], request: HttpRequest
-) -> list[TextContent]:
+async def handle_list(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
     """
     List model instances with filtering, search, ordering.
 
@@ -279,10 +267,12 @@ async def handle_list(
 
     # Check view permission
     if not await async_check_permission(request, model_admin, "view"):
-        return json_response({
-            "error": f"Permission denied: cannot view {model_name}",
-            "code": "permission_denied",
-        })
+        return json_response(
+            {
+                "error": f"Permission denied: cannot view {model_name}",
+                "code": "permission_denied",
+            }
+        )
 
     try:
         limit = arguments.get("limit", 100)
@@ -350,9 +340,7 @@ async def handle_list(
         return json_response({"error": str(e)})
 
 
-async def handle_get(
-    model_name: str, arguments: dict[str, Any], request: HttpRequest
-) -> list[TextContent]:
+async def handle_get(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
     """
     Get single model instance by id.
 
@@ -374,10 +362,12 @@ async def handle_get(
 
     # Check view permission
     if not await async_check_permission(request, model_admin, "view"):
-        return json_response({
-            "error": f"Permission denied: cannot view {model_name}",
-            "code": "permission_denied",
-        })
+        return json_response(
+            {
+                "error": f"Permission denied: cannot view {model_name}",
+                "code": "permission_denied",
+            }
+        )
 
     try:
         obj_id = arguments.get("id")
@@ -419,15 +409,13 @@ async def handle_get(
         obj_dict = await get_object()
 
         return [TextContent(text=json.dumps(obj_dict, indent=2, default=str))]
-    except model.DoesNotExist:
+    except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
     except Exception as e:
         return json_response({"error": str(e)})
 
 
-async def handle_create(
-    model_name: str, arguments: dict[str, Any], request: HttpRequest
-) -> list[TextContent]:
+async def handle_create(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
     """
     Create new model instance.
 
@@ -447,10 +435,12 @@ async def handle_create(
 
     # Check add permission
     if not await async_check_permission(request, model_admin, "add"):
-        return json_response({
-            "error": f"Permission denied: cannot add {model_name}",
-            "code": "permission_denied",
-        })
+        return json_response(
+            {
+                "error": f"Permission denied: cannot add {model_name}",
+                "code": "permission_denied",
+            }
+        )
 
     try:
         data = arguments.get("data", {})
@@ -489,9 +479,7 @@ async def handle_create(
         return json_response({"error": str(e)})
 
 
-async def handle_update(
-    model_name: str, arguments: dict[str, Any], request: HttpRequest
-) -> list[TextContent]:
+async def handle_update(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
     """
     Update model instance.
 
@@ -513,10 +501,12 @@ async def handle_update(
 
     # Check change permission
     if not await async_check_permission(request, model_admin, "change"):
-        return json_response({
-            "error": f"Permission denied: cannot change {model_name}",
-            "code": "permission_denied",
-        })
+        return json_response(
+            {
+                "error": f"Permission denied: cannot change {model_name}",
+                "code": "permission_denied",
+            }
+        )
 
     try:
         obj_id = arguments.get("id")
@@ -537,10 +527,12 @@ async def handle_update(
             readonly_fields = set(getattr(model_admin, "readonly_fields", []))
             readonly_attempted = set(data.keys()) & readonly_fields
             if readonly_attempted:
-                return json_response({
-                    "error": f"Cannot update readonly fields: {', '.join(readonly_attempted)}",
-                    "readonly_fields": list(readonly_attempted),
-                })
+                return json_response(
+                    {
+                        "error": f"Cannot update readonly fields: {', '.join(readonly_attempted)}",
+                        "readonly_fields": list(readonly_attempted),
+                    }
+                )
 
         user = getattr(request, "user", None)
         if user and not user.is_authenticated:
@@ -571,9 +563,7 @@ async def handle_update(
                 user=user,
                 obj=obj,
                 action_flag=CHANGE,
-                change_message=(
-                    " | ".join(change_message) if change_message else "Updated via MCP"
-                ),
+                change_message=(" | ".join(change_message) if change_message else "Updated via MCP"),
             )
 
             return serialize_instance(obj, model_admin), inlines_result
@@ -585,15 +575,13 @@ async def handle_update(
             response["inlines"] = inlines_result
 
         return [TextContent(text=json.dumps(response, indent=2, default=str))]
-    except model.DoesNotExist:
+    except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
     except Exception as e:
         return json_response({"error": str(e)})
 
 
-async def handle_delete(
-    model_name: str, arguments: dict[str, Any], request: HttpRequest
-) -> list[TextContent]:
+async def handle_delete(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
     """
     Delete model instance.
 
@@ -613,10 +601,12 @@ async def handle_delete(
 
     # Check delete permission
     if not await async_check_permission(request, model_admin, "delete"):
-        return json_response({
-            "error": f"Permission denied: cannot delete {model_name}",
-            "code": "permission_denied",
-        })
+        return json_response(
+            {
+                "error": f"Permission denied: cannot delete {model_name}",
+                "code": "permission_denied",
+            }
+        )
 
     try:
         obj_id = arguments.get("id")
@@ -648,11 +638,13 @@ async def handle_delete(
 
         await delete_object()
 
-        return json_response({
-            "success": True,
-            "message": f"{model_name} deleted successfully",
-        })
-    except model.DoesNotExist:
+        return json_response(
+            {
+                "success": True,
+                "message": f"{model_name} deleted successfully",
+            }
+        )
+    except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
     except Exception as e:
         return json_response({"error": str(e)})

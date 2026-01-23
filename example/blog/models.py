@@ -8,12 +8,12 @@ class Author(models.Model):
     email = models.EmailField(unique=True)
     bio = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         verbose_name = 'Author'
         verbose_name_plural = 'Authors'
         ordering = ['name']
-    
+
     def __str__(self):
         return self.name
 
@@ -27,11 +27,11 @@ class Article(models.Model):
     is_published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         verbose_name = 'Article'
         verbose_name_plural = 'Articles'
         ordering = ['-created_at']
-    
+
     def __str__(self):
         return self.title

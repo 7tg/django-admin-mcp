@@ -38,14 +38,14 @@ class MCPTokenAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="Token")
     def token_preview(self, obj):
         """Show a preview of the token."""
         if obj.token:
             return f"{obj.token[:8]}...{obj.token[-8:]}"
         return "-"
 
-    token_preview.short_description = "Token"
-
+    @admin.display(description="Status")
     def status_display(self, obj):
         """Display token status with color coding."""
         if not obj.is_active:
@@ -53,9 +53,7 @@ class MCPTokenAdmin(admin.ModelAdmin):
         elif obj.is_expired():
             return mark_safe('<span style="color: #dc3545;">Expired</span>')
         elif obj.expires_at is None:
-            return mark_safe(
-                '<span style="color: #28a745;">Active (Indefinite)</span>'
-            )
+            return mark_safe('<span style="color: #28a745;">Active (Indefinite)</span>')
         else:
             days_until_expiry = (obj.expires_at - timezone.now()).days
             if days_until_expiry <= 7:
@@ -65,5 +63,3 @@ class MCPTokenAdmin(admin.ModelAdmin):
                 )
             else:
                 return mark_safe('<span style="color: #28a745;">Active</span>')
-
-    status_display.short_description = "Status"

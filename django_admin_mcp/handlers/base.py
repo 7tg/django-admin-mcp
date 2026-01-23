@@ -113,9 +113,7 @@ def check_permission(request: HttpRequest, model_admin: Any, action: str) -> boo
     return True
 
 
-async def async_check_permission(
-    request: HttpRequest, model_admin: Any, action: str
-) -> bool:
+async def async_check_permission(request: HttpRequest, model_admin: Any, action: str) -> bool:
     """
     Check Django admin permission for action (async version).
 
@@ -144,11 +142,12 @@ def get_exposed_models() -> list[tuple[str, Any]]:
     Returns:
         List of (model_name, model_admin) tuples for exposed models.
     """
-    exposed = []
+    exposed: list[tuple[str, Any]] = []
     for model, model_admin in site._registry.items():
         if getattr(model_admin, "mcp_expose", False):
             model_name = model._meta.model_name
-            exposed.append((model_name, model_admin))
+            if model_name is not None:
+                exposed.append((model_name, model_admin))
     return exposed
 
 
@@ -191,4 +190,5 @@ def get_model_name(model: type[models.Model]) -> str:
     Returns:
         The lowercase model name from model._meta.model_name.
     """
-    return model._meta.model_name
+    # model_name is always a string for concrete models
+    return model._meta.model_name or ""

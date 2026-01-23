@@ -37,24 +37,16 @@ class TestMCPAdminMixin:
             "history_article",
             "autocomplete_article",
         ]
-        assert (
-            tool_names == expected_tools
-        ), f"Expected {expected_tools}, got {tool_names}"
+        assert tool_names == expected_tools, f"Expected {expected_tools}, got {tool_names}"
 
     def test_tool_schemas_valid(self):
         """Test that tool schemas are valid."""
         article_tools = MCPAdminMixin.get_mcp_tools(Article)
 
         for tool in article_tools:
-            assert (
-                tool.inputSchema is not None
-            ), f"Tool {tool.name} should have an input schema"
-            assert (
-                "type" in tool.inputSchema
-            ), f"Tool {tool.name} schema should have a type"
-            assert (
-                tool.inputSchema["type"] == "object"
-            ), f"Tool {tool.name} schema type should be object"
+            assert tool.inputSchema is not None, f"Tool {tool.name} should have an input schema"
+            assert "type" in tool.inputSchema, f"Tool {tool.name} schema should have a type"
+            assert tool.inputSchema["type"] == "object", f"Tool {tool.name} schema type should be object"
 
     def test_tool_schemas_have_expected_structure(self):
         """Test that tool schemas have expected structure for key operations."""

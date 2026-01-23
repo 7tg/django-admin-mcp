@@ -24,9 +24,7 @@ class Article(models.Model):
 
     title = models.CharField(max_length=200)
     content = models.TextField()
-    author = models.ForeignKey(
-        Author, on_delete=models.CASCADE, related_name="articles"
-    )
+    author = models.ForeignKey(Author, on_delete=models.CASCADE, related_name="articles")
     published_date = models.DateTimeField(null=True, blank=True)
     is_published = models.BooleanField(default=False)
 
