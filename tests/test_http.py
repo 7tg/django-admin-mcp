@@ -440,7 +440,7 @@ class TestEmptyToolResult:
 
     @pytest.mark.asyncio
     async def test_cbv_empty_tool_result(self):
-        """Test MCPHTTPView when handle_tool_call returns empty result (line 129)."""
+        """Test MCPHTTPView when call_tool returns empty result (line 118)."""
         from django_admin_mcp.views import MCPHTTPView
         from django.test import RequestFactory
         from unittest.mock import patch, AsyncMock
@@ -459,7 +459,7 @@ class TestEmptyToolResult:
         )
 
         with patch(
-            "django_admin_mcp.mixin.MCPAdminMixin.handle_tool_call",
+            "django_admin_mcp.views.call_tool",
             new_callable=AsyncMock
         ) as mock_handle:
             mock_handle.return_value = []  # Empty result
@@ -474,14 +474,14 @@ class TestEmptyToolResult:
 
     @pytest.mark.asyncio
     async def test_fbv_empty_tool_result(self):
-        """Test mcp_endpoint when handle_tool_call returns empty result (line 222)."""
+        """Test mcp_endpoint when call_tool returns empty result (line 200)."""
         from unittest.mock import patch, AsyncMock
 
         # Create a valid token
         token = await sync_to_async(MCPToken.objects.create)(name="Test Token")
 
         with patch(
-            "django_admin_mcp.views.MCPAdminMixin.handle_tool_call",
+            "django_admin_mcp.views.call_tool",
             new_callable=AsyncMock
         ) as mock_handle:
             mock_handle.return_value = []  # Empty result

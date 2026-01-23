@@ -7,14 +7,14 @@ Provides HTTP interface for MCP protocol with token-based authentication.
 import json
 
 from asgiref.sync import sync_to_async
-from django.http import JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from django_admin_mcp.mixin import MCPAdminMixin
 from django_admin_mcp.models import MCPToken
+from django_admin_mcp.tools import call_tool, get_tools
 
 
 @sync_to_async
@@ -79,19 +79,7 @@ class MCPHTTPView(View):
 
     async def handle_list_tools(self, request):
         """Handle tools/list request."""
-        tools = []
-
-        # Always include the find_models tool
-        tools.append(MCPAdminMixin.get_find_models_tool())
-
-        # Only include model-specific tools if explicitly exposed
-        for model_name, model_info in MCPAdminMixin._registered_models.items():
-            model = model_info["model"]
-            admin = model_info["admin"]
-
-            # Check if tools should be exposed
-            if getattr(admin, "mcp_expose", False):
-                tools.extend(MCPAdminMixin.get_mcp_tools(model))
+        tools = get_tools()
 
         # Serialize tools to dict format
         tools_data = []
@@ -114,11 +102,12 @@ class MCPHTTPView(View):
         if not tool_name:
             return JsonResponse({"error": "Missing tool name"}, status=400)
 
-        # Get user from token for permission checking
-        user = token.user if token else None
+        # Create request with user for permission checking
+        tool_request = HttpRequest()
+        tool_request.user = token.user if token else None
 
-        # Call the tool with user context
-        result = await MCPAdminMixin.handle_tool_call(tool_name, arguments, user=user)
+        # Call the tool with request context
+        result = await call_tool(tool_name, arguments, tool_request)
 
         # Extract text from result
         if result and len(result) > 0:
@@ -171,19 +160,7 @@ mcp_endpoint.csrf_exempt = True
 
 async def handle_list_tools_request(request):
     """Handle tools/list request."""
-    tools = []
-
-    # Always include the find_models tool
-    tools.append(MCPAdminMixin.get_find_models_tool())
-
-    # Only include model-specific tools if explicitly exposed
-    for model_name, model_info in MCPAdminMixin._registered_models.items():
-        model = model_info["model"]
-        admin = model_info["admin"]
-
-        # Check if tools should be exposed
-        if getattr(admin, "mcp_expose", False):
-            tools.extend(MCPAdminMixin.get_mcp_tools(model))
+    tools = get_tools()
 
     # Serialize tools to dict format
     tools_data = []
@@ -207,11 +184,12 @@ async def handle_call_tool_request(request, data, token=None):
     if not tool_name:
         return JsonResponse({"error": "Missing tool name"}, status=400)
 
-    # Get user from token for permission checking
-    user = token.user if token else None
+    # Create request with user for permission checking
+    tool_request = HttpRequest()
+    tool_request.user = token.user if token else None
 
-    # Call the tool with user context
-    result = await MCPAdminMixin.handle_tool_call(tool_name, arguments, user=user)
+    # Call the tool with request context
+    result = await call_tool(tool_name, arguments, tool_request)
 
     # Extract text from result
     if result and len(result) > 0:
