@@ -36,7 +36,7 @@ class MCPTokenAdmin(admin.ModelAdmin):
             {
                 "fields": ("user", "groups", "permissions"),
                 "description": "Assign a user, groups, or specific permissions to control access. "
-                "If none are set, token has full access (backward compatibility).",
+                "Tokens with no permissions have no access (principle of least privilege).",
             },
         ),
         (

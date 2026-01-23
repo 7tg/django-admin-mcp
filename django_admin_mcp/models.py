@@ -114,10 +114,6 @@ class MCPToken(models.Model):
         Returns:
             bool: True if token has permission, False otherwise
         """
-        # If no user, groups, or permissions set, grant all access (backward compatibility)
-        if not self.user and not self.groups.exists() and not self.permissions.exists():
-            return True
-
         # Parse permission if it's a string
         if isinstance(perm, str):
             if "." in perm:
@@ -144,6 +140,7 @@ class MCPToken(models.Model):
         if self.user:
             return self.user.has_perm(f"{app_label}.{codename}")
 
+        # Default: deny access (principle of least privilege)
         return False
 
     def has_perms(self, perm_list):

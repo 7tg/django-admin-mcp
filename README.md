@@ -68,7 +68,7 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 ### 2. Create an API token
 
-Go to Django admin at `/admin/django_admin_mcp/mcptoken/` and create a token. Tokens are tied to users and inherit their permissions.
+Go to Django admin at `/admin/django_admin_mcp/mcptoken/` and create a token. Tokens can optionally be tied to users, groups, or have direct permissions assigned.
 
 ### 3. Configure Claude Code
 
@@ -260,7 +260,8 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 ### Token Authentication
 
 - Tokens are created in Django admin
-- Each token is tied to a Django user
+- Tokens can be associated with a user, groups, or have direct permissions
+- Tokens without any permissions have no access (principle of least privilege)
 - Token expiry is configurable (default: 90 days)
 - Revoke tokens by deleting them in admin
 
