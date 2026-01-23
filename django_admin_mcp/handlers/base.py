@@ -31,10 +31,10 @@ def json_response(data: dict) -> list[TextContent]:
 
 def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | None]:
     """
-    Find ModelAdmin by model name from Django admin site.
+    Find ModelAdmin by model name.
 
-    Searches through admin.site._registry for a model whose
-    model_name (lowercase) matches the given name.
+    First checks MCPAdminMixin._registered_models (for runtime registrations),
+    then falls back to admin.site._registry (for @admin.register() decorated classes).
 
     Args:
         model_name: The lowercase model name to search for.
@@ -42,9 +42,19 @@ def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | N
     Returns:
         Tuple of (Model, ModelAdmin) if found, or (None, None) if not found.
     """
+    # First check MCPAdminMixin's registry (populated at runtime when admins are instantiated)
+    # Use late import to avoid circular dependency
+    from ..mixin import MCPAdminMixin
+
+    if model_name in MCPAdminMixin._registered_models:
+        info = MCPAdminMixin._registered_models[model_name]
+        return info["model"], info.get("admin")
+
+    # Fall back to Django admin site registry
     for model, model_admin in site._registry.items():
         if model._meta.model_name == model_name:
             return model, model_admin
+
     return None, None
 
 
@@ -80,6 +90,12 @@ def check_permission(request: HttpRequest, model_admin: Any, action: str) -> boo
     """
     if model_admin is None:
         return True  # No admin = no permission restrictions
+
+    # If user is not authenticated (AnonymousUser or None), permissions are not enforced
+    # This maintains backwards compatibility for API tokens without users
+    user = getattr(request, "user", None)
+    if user is None or not getattr(user, "is_authenticated", False):
+        return True
 
     permission_methods = {
         "view": "has_view_permission",
