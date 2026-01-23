@@ -1,0 +1,685 @@
+"""
+Tests for django_admin_mcp.handlers.relations module.
+"""
+
+import json
+import uuid
+
+import pytest
+from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
+from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
+
+from django_admin_mcp.handlers import (
+    handle_autocomplete,
+    handle_history,
+    handle_related,
+)
+from django_admin_mcp.handlers.base import create_mock_request
+from django_admin_mcp.protocol.types import TextContent
+from tests.models import Article, Author
+
+
+def unique_id():
+    """Generate a unique identifier for test data."""
+    return uuid.uuid4().hex[:8]
+
+
+class TestHandleRelated:
+    """Tests for handle_related function."""
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_returns_text_content_list(self):
+        """Test that handle_related returns a list of TextContent."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"id": author.pk, "relation": "articles"},
+            request,
+        )
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_model_not_found(self):
+        """Test error when model is not found."""
+        request = create_mock_request()
+        result = await handle_related(
+            "nonexistent_model",
+            {"id": 1, "relation": "something"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "not found" in data["error"]
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_id_required(self):
+        """Test error when id parameter is missing."""
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"relation": "articles"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "id parameter is required" in data["error"]
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_relation_required(self):
+        """Test error when relation parameter is missing."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"id": author.pk},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "relation parameter is required" in data["error"]
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_object_not_found(self):
+        """Test error when object with given id doesn't exist."""
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"id": 99999, "relation": "articles"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "not found" in data["error"]
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_invalid_relation(self):
+        """Test error when relation doesn't exist on model."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"id": author.pk, "relation": "nonexistent_relation"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "not found" in data["error"]
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_many_relation_empty(self):
+        """Test fetching empty many relation (reverse FK)."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"id": author.pk, "relation": "articles"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["relation"] == "articles"
+        assert data["type"] == "many"
+        assert data["count"] == 0
+        assert data["total_count"] == 0
+        assert data["results"] == []
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_many_relation_with_data(self):
+        """Test fetching many relation with data."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        article1 = await Article.objects.acreate(
+            title=f"Article 1 {uid}",
+            content="Content 1",
+            author=author,
+        )
+        article2 = await Article.objects.acreate(
+            title=f"Article 2 {uid}",
+            content="Content 2",
+            author=author,
+        )
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"id": author.pk, "relation": "articles"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["type"] == "many"
+        assert data["count"] == 2
+        assert data["total_count"] == 2
+        assert len(data["results"]) == 2
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_many_relation_with_limit(self):
+        """Test pagination with limit parameter."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        for i in range(5):
+            await Article.objects.acreate(
+                title=f"Article {i} {uid}",
+                content=f"Content {i}",
+                author=author,
+            )
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"id": author.pk, "relation": "articles", "limit": 2},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["count"] == 2
+        assert data["total_count"] == 5
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_many_relation_with_offset(self):
+        """Test pagination with offset parameter."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        for i in range(5):
+            await Article.objects.acreate(
+                title=f"Article {i} {uid}",
+                content=f"Content {i}",
+                author=author,
+            )
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"id": author.pk, "relation": "articles", "limit": 2, "offset": 3},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["count"] == 2
+        assert data["total_count"] == 5
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_single_relation_fk(self):
+        """Test fetching single relation (FK)."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        article = await Article.objects.acreate(
+            title=f"Test Article {uid}",
+            content="Test content",
+            author=author,
+        )
+        request = create_mock_request()
+        result = await handle_related(
+            "article",
+            {"id": article.pk, "relation": "author"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["relation"] == "author"
+        assert data["type"] == "single"
+        assert "result" in data
+        assert data["result"]["name"] == f"Test Author {uid}"
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_simple_field_value(self):
+        """Test fetching a simple field value (treated as value type)."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_related(
+            "author",
+            {"id": author.pk, "relation": "name"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["type"] == "value"
+        assert f"Test Author {uid}" in data["value"]
+
+
+class TestHandleHistory:
+    """Tests for handle_history function."""
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_returns_text_content_list(self):
+        """Test that handle_history returns a list of TextContent."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_history(
+            "author",
+            {"id": author.pk},
+            request,
+        )
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_model_not_found(self):
+        """Test error when model is not found."""
+        request = create_mock_request()
+        result = await handle_history(
+            "nonexistent_model",
+            {"id": 1},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "not found" in data["error"]
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_id_required(self):
+        """Test error when id parameter is missing."""
+        request = create_mock_request()
+        result = await handle_history(
+            "author",
+            {},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "id parameter is required" in data["error"]
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_object_not_found(self):
+        """Test error when object with given id doesn't exist."""
+        request = create_mock_request()
+        result = await handle_history(
+            "author",
+            {"id": 99999},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "not found" in data["error"]
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_empty_history(self):
+        """Test fetching history for object with no log entries."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_history(
+            "author",
+            {"id": author.pk},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["model"] == "author"
+        assert data["object_id"] == author.pk
+        assert data["count"] == 0
+        assert data["history"] == []
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_history_with_entries(self):
+        """Test fetching history with log entries."""
+        uid = unique_id()
+        user = await User.objects.acreate_user(
+            username=f"testuser_{uid}",
+            email=f"test_{uid}@example.com",
+            password="testpass",
+        )
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"author_{uid}@example.com"
+        )
+
+        # Create log entries
+        from asgiref.sync import sync_to_async
+
+        @sync_to_async
+        def create_log_entry():
+            content_type = ContentType.objects.get_for_model(Author)
+            LogEntry.objects.create(
+                user=user,
+                content_type=content_type,
+                object_id=str(author.pk),
+                object_repr=str(author),
+                action_flag=ADDITION,
+                change_message="Created via test",
+            )
+
+        await create_log_entry()
+
+        request = create_mock_request()
+        result = await handle_history(
+            "author",
+            {"id": author.pk},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["count"] == 1
+        assert len(data["history"]) == 1
+        assert data["history"][0]["action"] == "created"
+        assert data["history"][0]["user"] == f"testuser_{uid}"
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_history_limit(self):
+        """Test limit parameter for history entries."""
+        uid = unique_id()
+        user = await User.objects.acreate_user(
+            username=f"testuser_{uid}",
+            email=f"test_{uid}@example.com",
+            password="testpass",
+        )
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"author_{uid}@example.com"
+        )
+
+        from asgiref.sync import sync_to_async
+
+        @sync_to_async
+        def create_log_entries():
+            content_type = ContentType.objects.get_for_model(Author)
+            for i in range(5):
+                LogEntry.objects.create(
+                    user=user,
+                    content_type=content_type,
+                    object_id=str(author.pk),
+                    object_repr=str(author),
+                    action_flag=CHANGE,
+                    change_message=f"Change {i}",
+                )
+
+        await create_log_entries()
+
+        request = create_mock_request()
+        result = await handle_history(
+            "author",
+            {"id": author.pk, "limit": 2},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["count"] == 2
+        assert len(data["history"]) == 2
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_history_action_types(self):
+        """Test different action types in history."""
+        uid = unique_id()
+        user = await User.objects.acreate_user(
+            username=f"testuser_{uid}",
+            email=f"test_{uid}@example.com",
+            password="testpass",
+        )
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"author_{uid}@example.com"
+        )
+
+        from asgiref.sync import sync_to_async
+
+        @sync_to_async
+        def create_log_entries():
+            content_type = ContentType.objects.get_for_model(Author)
+            # Create addition entry
+            LogEntry.objects.create(
+                user=user,
+                content_type=content_type,
+                object_id=str(author.pk),
+                object_repr=str(author),
+                action_flag=ADDITION,
+                change_message="Created",
+            )
+            # Create change entry
+            LogEntry.objects.create(
+                user=user,
+                content_type=content_type,
+                object_id=str(author.pk),
+                object_repr=str(author),
+                action_flag=CHANGE,
+                change_message="Updated",
+            )
+
+        await create_log_entries()
+
+        request = create_mock_request()
+        result = await handle_history(
+            "author",
+            {"id": author.pk},
+            request,
+        )
+        data = json.loads(result[0].text)
+        actions = [h["action"] for h in data["history"]]
+        assert "created" in actions
+        assert "changed" in actions
+
+
+class TestHandleAutocomplete:
+    """Tests for handle_autocomplete function."""
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_returns_text_content_list(self):
+        """Test that handle_autocomplete returns a list of TextContent."""
+        request = create_mock_request()
+        result = await handle_autocomplete(
+            "author",
+            {},
+            request,
+        )
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_model_not_found(self):
+        """Test error when model is not found."""
+        request = create_mock_request()
+        result = await handle_autocomplete(
+            "nonexistent_model",
+            {},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "not found" in data["error"]
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_empty_results(self):
+        """Test autocomplete with no matching results."""
+        request = create_mock_request()
+        result = await handle_autocomplete(
+            "author",
+            {"term": "nonexistent_xyz_term"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["model"] == "author"
+        assert data["term"] == "nonexistent_xyz_term"
+        assert data["count"] == 0
+        assert data["results"] == []
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_autocomplete_no_term(self):
+        """Test autocomplete without search term returns all."""
+        uid = unique_id()
+        author1 = await Author.objects.acreate(
+            name=f"Alice {uid}", email=f"alice_{uid}@example.com"
+        )
+        author2 = await Author.objects.acreate(
+            name=f"Bob {uid}", email=f"bob_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_autocomplete(
+            "author",
+            {},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["term"] == ""
+        # Should return results (may include other test data)
+        assert data["count"] >= 2
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_autocomplete_with_term(self):
+        """Test autocomplete with search term filters results."""
+        uid = unique_id()
+        author1 = await Author.objects.acreate(
+            name=f"Alice {uid}", email=f"alice_{uid}@example.com"
+        )
+        author2 = await Author.objects.acreate(
+            name=f"Bob {uid}", email=f"bob_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_autocomplete(
+            "author",
+            {"term": f"Alice {uid}"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["term"] == f"Alice {uid}"
+        assert data["count"] == 1
+        assert data["results"][0]["text"] == f"Alice {uid}"
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_autocomplete_limit(self):
+        """Test limit parameter."""
+        uid = unique_id()
+        for i in range(5):
+            await Author.objects.acreate(
+                name=f"TestAuthor{i} {uid}",
+                email=f"testauthor{i}_{uid}@example.com",
+            )
+        request = create_mock_request()
+        result = await handle_autocomplete(
+            "author",
+            {"term": uid, "limit": 2},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["count"] == 2
+        assert len(data["results"]) == 2
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_autocomplete_result_format(self):
+        """Test that results have correct format with id and text."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"Test Author {uid}", email=f"test_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_autocomplete(
+            "author",
+            {"term": uid},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["count"] >= 1
+        result_item = data["results"][0]
+        assert "id" in result_item
+        assert "text" in result_item
+        assert isinstance(result_item["id"], int)
+        assert isinstance(result_item["text"], str)
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_autocomplete_case_insensitive(self):
+        """Test that search is case insensitive."""
+        uid = unique_id()
+        author = await Author.objects.acreate(
+            name=f"CamelCase {uid}", email=f"camel_{uid}@example.com"
+        )
+        request = create_mock_request()
+        result = await handle_autocomplete(
+            "author",
+            {"term": f"camelcase {uid}"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["count"] >= 1
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
+    async def test_autocomplete_uses_search_fields(self):
+        """Test that autocomplete uses admin search_fields."""
+        uid = unique_id()
+        # Create author with searchable email
+        author = await Author.objects.acreate(
+            name=f"Author Name {uid}",
+            email=f"searchable_email_{uid}@example.com",
+        )
+        request = create_mock_request()
+        # Search by email which should be in search_fields
+        result = await handle_autocomplete(
+            "author",
+            {"term": f"searchable_email_{uid}"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["count"] >= 1
+
+
+class TestModuleExports:
+    """Tests for module exports."""
+
+    def test_handlers_importable_from_handlers_module(self):
+        """Test that all handlers are importable from handlers module."""
+        from django_admin_mcp.handlers import (
+            handle_autocomplete,
+            handle_history,
+            handle_related,
+        )
+
+        assert callable(handle_related)
+        assert callable(handle_history)
+        assert callable(handle_autocomplete)
+
+    def test_handlers_importable_from_relations_module(self):
+        """Test that handlers are importable from relations module."""
+        from django_admin_mcp.handlers.relations import (
+            handle_autocomplete,
+            handle_history,
+            handle_related,
+        )
+
+        assert callable(handle_related)
+        assert callable(handle_history)
+        assert callable(handle_autocomplete)
