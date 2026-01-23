@@ -17,15 +17,15 @@ User = get_user_model()
 class TestTokenPermissions:
     """Test suite for token permission checking."""
 
-    def test_token_with_no_permissions_has_full_access(self):
-        """Test that tokens without user/groups/permissions have full access (backward compatibility)."""
+    def test_token_with_no_permissions_has_no_access(self):
+        """Test that tokens without user/groups/permissions have no access (principle of least privilege)."""
         token = MCPToken.objects.create(name="Test Token")
 
-        # Should have all permissions when no restrictions are set
-        assert token.has_perm("tests.view_article")
-        assert token.has_perm("tests.add_article")
-        assert token.has_perm("tests.change_article")
-        assert token.has_perm("tests.delete_article")
+        # Should have no permissions when no restrictions are set
+        assert not token.has_perm("tests.view_article")
+        assert not token.has_perm("tests.add_article")
+        assert not token.has_perm("tests.change_article")
+        assert not token.has_perm("tests.delete_article")
 
     def test_token_with_user_inherits_permissions(self):
         """Test that token with user inherits user's permissions."""
