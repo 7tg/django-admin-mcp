@@ -5,12 +5,19 @@ Tests for HTTP interface and token authentication
 import json
 from datetime import timedelta
 
+import django
 import pytest
 from asgiref.sync import sync_to_async
 from django.test import AsyncClient, Client
 from django.utils import timezone
 
 from django_admin_mcp.models import MCPToken
+
+# AsyncClient headers= parameter requires Django 4.2+
+DJANGO_42_PLUS = django.VERSION >= (4, 2)
+skip_if_django_lt_42 = pytest.mark.skipif(
+    not DJANGO_42_PLUS, reason="AsyncClient headers= parameter requires Django 4.2+"
+)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -41,6 +48,7 @@ class TestHTTPInterface:
         data = json.loads(response.content)
         assert "error" in data
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_mcp_endpoint_with_invalid_token(self):
         """Test MCP endpoint rejects requests with invalid token."""
@@ -56,6 +64,7 @@ class TestHTTPInterface:
         data = json.loads(response.content)
         assert "error" in data
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_mcp_endpoint_with_valid_token_list_tools(self):
         """Test MCP endpoint with valid token lists tools."""
@@ -82,6 +91,7 @@ class TestHTTPInterface:
         assert "list_author" in tool_names
         assert "list_article" in tool_names
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_mcp_endpoint_with_inactive_token(self):
         """Test MCP endpoint rejects inactive tokens."""
@@ -100,6 +110,7 @@ class TestHTTPInterface:
         data = json.loads(response.content)
         assert "error" in data
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_token_last_used_updated(self):
         """Test that token last_used_at is updated on use."""
@@ -176,6 +187,7 @@ class TestMCPToken:
         assert token.is_expired()
         assert not token.is_valid()
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_expired_token_rejected(self):
         """Test that expired tokens are rejected in authentication."""
@@ -199,6 +211,7 @@ class TestMCPToken:
 class TestMCPExpose:
     """Test suite for mcp_expose opt-in behavior."""
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_tools_not_exposed_without_mcp_expose(self):
         """Test that tools are not exposed when mcp_expose is False."""
@@ -247,6 +260,7 @@ class TestMCPExpose:
 class TestEmptyToolResult:
     """Test suite for empty tool result edge cases."""
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_empty_tool_result(self):
         """Test mcp_endpoint when call_tool returns empty result."""
@@ -288,6 +302,7 @@ class TestFunctionBasedViewEdgeCases:
         assert "error" in data
         assert "Method not allowed" in data["error"]
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_mcp_endpoint_invalid_json(self):
         """Test mcp_endpoint handles invalid JSON."""
@@ -307,6 +322,7 @@ class TestFunctionBasedViewEdgeCases:
         assert "error" in data
         assert "JSON" in data["error"]
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_mcp_endpoint_unknown_method(self):
         """Test mcp_endpoint handles unknown methods."""
@@ -326,6 +342,7 @@ class TestFunctionBasedViewEdgeCases:
         assert "error" in data
         assert "Unknown method" in data["error"]
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_handle_call_tool_request_missing_tool_name(self):
         """Test handle_call_tool_request with missing tool name."""
@@ -345,6 +362,7 @@ class TestFunctionBasedViewEdgeCases:
         assert "error" in data
         assert "Missing tool name" in data["error"]
 
+    @skip_if_django_lt_42
     @pytest.mark.asyncio
     async def test_handle_call_tool_request_success(self):
         """Test handle_call_tool_request with valid tool call."""
