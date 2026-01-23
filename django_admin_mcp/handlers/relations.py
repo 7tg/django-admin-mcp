@@ -64,7 +64,7 @@ async def handle_related(
     def get_related():
         try:
             obj = model.objects.get(pk=obj_id)
-        except model.DoesNotExist:
+        except (model.DoesNotExist, ValueError, TypeError):
             return {"error": f"{model_name} not found"}
 
         # Check if the relation exists
@@ -164,7 +164,7 @@ async def handle_history(
         # Verify the object exists
         try:
             obj = model.objects.get(pk=obj_id)
-        except model.DoesNotExist:
+        except (model.DoesNotExist, ValueError, TypeError):
             return {"error": f"{model_name} not found"}
 
         # Get content type for this model
@@ -294,5 +294,8 @@ async def handle_autocomplete(
             "results": autocomplete_results,
         }
 
-    result = await search_autocomplete()
-    return json_response(result)
+    try:
+        result = await search_autocomplete()
+        return json_response(result)
+    except Exception as e:
+        return json_response({"error": str(e)})

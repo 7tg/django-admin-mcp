@@ -6,7 +6,7 @@ import json
 import uuid
 
 import pytest
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AnonymousUser, User
 
 from django_admin_mcp.handlers import (
     create_mock_request,
@@ -122,7 +122,7 @@ class TestHandleList:
     @pytest.mark.django_db
     async def test_list_permission_denied(self):
         """Test handle_list with anonymous user."""
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
 
         result = await handle_list("author", {}, request)
 
@@ -251,7 +251,7 @@ class TestHandleGet:
         """Test handle_get with anonymous user."""
         uid = unique_id()
         author = await self._create_author(uid)
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
 
         result = await handle_get("author", {"id": author.pk}, request)
 
@@ -369,7 +369,7 @@ class TestHandleCreate:
     @pytest.mark.django_db
     async def test_create_permission_denied(self):
         """Test handle_create with anonymous user."""
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
 
         result = await handle_create(
             "author", {"data": {"name": "Test", "email": "test@example.com"}}, request
@@ -525,7 +525,7 @@ class TestHandleUpdate:
         """Test handle_update with anonymous user."""
         uid = unique_id()
         author = await self._create_author(uid)
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
 
         result = await handle_update(
             "author", {"id": author.pk, "data": {"name": "Updated"}}, request
@@ -700,7 +700,7 @@ class TestHandleDelete:
         """Test handle_delete with anonymous user."""
         uid = unique_id()
         author = await self._create_author(uid)
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
 
         result = await handle_delete("author", {"id": author.pk}, request)
 

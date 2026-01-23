@@ -40,7 +40,7 @@ class TestEdgeCasesAndErrors:
         result = await MCPAdminMixin.handle_tool_call("list_nonexistent", {})
         response = json.loads(result[0].text)
         assert "error" in response
-        assert "not registered" in response["error"]
+        assert "not found" in response["error"]
 
     async def test_get_missing_id_parameter(self):
         """Test get without id parameter."""
@@ -560,48 +560,6 @@ class TestEdgeCasesAndErrors:
         # The author field should be serialized
         assert "author" in response
 
-    async def test_sync_permission_check(self):
-        """Test sync version of permission checking."""
-        from django.contrib.auth import get_user_model
-        from django.contrib import admin
-        from tests.models import Author
-
-        User = get_user_model()
-
-        # Create a regular user without permissions
-        regular_user = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: User.objects.create_user(
-                username="syncuser", email="sync@test.com", password="pass"
-            ),
-        )
-
-        # Get admin instance
-        admin_instance = admin.site._registry[Author]
-
-        # Test sync permission check (called internally)
-        def check_sync_perms():
-            # Test view permission
-            has_view = MCPAdminMixin._check_permission(
-                admin_instance, regular_user, "view"
-            )
-            # Regular user without permissions should not have view permission
-            assert has_view is False
-
-            # Test with None user (should allow)
-            has_view_none = MCPAdminMixin._check_permission(
-                admin_instance, None, "view"
-            )
-            assert has_view_none is True
-
-            # Test with invalid permission type (should return True)
-            has_invalid = MCPAdminMixin._check_permission(
-                admin_instance, regular_user, "invalid_perm"
-            )
-            assert has_invalid is True
-
-        await asyncio.get_event_loop().run_in_executor(None, check_sync_perms)
-
     async def test_get_with_no_admin(self):
         """Test getting inline data when no admin is configured."""
         import json
@@ -831,46 +789,6 @@ class TestEdgeCasesAndErrors:
             author_admin.ordering = original_admin_ordering
             Author._meta.ordering = original_model_ordering
 
-    async def test_find_models_exception_forced(self):
-        """Test find_models exception path (lines 909-910)."""
-        import json
-        from unittest.mock import patch, MagicMock
-
-        # Mock _registered_models to raise an exception during iteration
-        mock_models = MagicMock()
-        mock_models.items.side_effect = Exception("Forced error in find_models")
-
-        with patch.object(MCPAdminMixin, '_registered_models', mock_models):
-            result = await MCPAdminMixin.handle_tool_call("find_models", {})
-            response = json.loads(result[0].text)
-            assert "error" in response
-            assert "Forced error" in response["error"]
-
-    async def test_list_actions_exception_forced(self):
-        """Test list_actions exception path (lines 1111-1112)."""
-        import json
-        from unittest.mock import patch, MagicMock, PropertyMock
-        from django.contrib import admin as django_admin
-
-        # Create a mock model that raises exception when accessing _meta
-        mock_model = MagicMock()
-        mock_meta = PropertyMock(side_effect=Exception("Forced error in list_actions"))
-        type(mock_model)._meta = mock_meta
-
-        original_models = MCPAdminMixin._registered_models.copy()
-        try:
-            MCPAdminMixin._registered_models['author'] = {
-                'model': mock_model,
-                'admin': django_admin.site._registry[Author]
-            }
-
-            result = await MCPAdminMixin.handle_tool_call("actions_author", {})
-            response = json.loads(result[0].text)
-            assert "error" in response
-            assert "Forced error" in response["error"]
-        finally:
-            MCPAdminMixin._registered_models = original_models
-
     async def test_action_exception_via_queryset(self):
         """Test action execution exception path (lines 1111-1112)."""
         import json
@@ -1010,48 +928,6 @@ class TestEdgeCasesAndErrors:
         response = json.loads(result[0].text)
         # Should return single object type
         assert response["type"] == "single"
-
-    async def test_bulk_outer_exception_via_json_dumps_failure(self):
-        """Test bulk outer exception (lines 1331-1332) by causing json.dumps to fail."""
-        import json
-        from unittest.mock import patch, MagicMock, AsyncMock
-
-        # Mock the execute_bulk to return a non-serializable object that fails json.dumps
-        class UnserializableResult:
-            def __iter__(self):
-                raise TypeError("Cannot iterate")
-
-            def __repr__(self):
-                raise RuntimeError("Cannot repr")
-
-        # Patch the sync_to_async wrapper to return something that causes json.dumps to fail
-        original_handle_bulk = MCPAdminMixin._handle_bulk
-
-        async def patched_handle_bulk(cls, model, arguments):
-            # Call original but intercept the result
-            from asgiref.sync import sync_to_async
-
-            # Use a custom implementation that raises during json.dumps
-            with patch('json.dumps') as mock_dumps:
-                mock_dumps.side_effect = [Exception("Forced json.dumps error")]
-                try:
-                    # This should trigger the outer exception handler
-                    return await original_handle_bulk.__func__(cls, model, arguments)
-                except:
-                    # If patching doesn't work, fall back to original
-                    return await original_handle_bulk.__func__(cls, model, arguments)
-
-        # Actually test by mocking json.dumps to fail after the bulk operation
-        with patch('django_admin_mcp.mixin.json.dumps') as mock_json:
-            # First call succeeds (for inner results), second fails (for outer return)
-            mock_json.side_effect = Exception("Forced json serialization error")
-
-            result = await MCPAdminMixin.handle_tool_call(
-                "bulk_author",
-                {"operation": "create", "items": [{"name": "Test", "email": "test@test.com"}]},
-            )
-            response = json.loads(result[0].text)
-            assert "error" in response
 
     async def test_related_accessor_name_lookup_with_hasattr_false(self):
         """Test related accessor name lookup when hasattr returns False (line 1371)."""

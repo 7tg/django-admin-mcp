@@ -63,22 +63,21 @@ def create_mock_request(user=None) -> HttpRequest:
     Create a mock request object for permission checking.
 
     Args:
-        user: Django User instance or None (defaults to AnonymousUser).
+        user: Django User instance or None.
 
     Returns:
-        HttpRequest with user set.
+        HttpRequest with user set (None if not provided).
     """
-    from django.contrib.auth.models import AnonymousUser
     from django.test import RequestFactory
 
     request = RequestFactory().get("/")
-    request.user = user if user else AnonymousUser()
+    request.user = user  # Keep as None if not provided (skips permission checks)
     return request
 
 
 def check_permission(request: HttpRequest, model_admin: Any, action: str) -> bool:
     """
-    Check Django admin permission for action.
+    Check Django admin permission for action (synchronous version).
 
     Args:
         request: HttpRequest with user set.
@@ -91,10 +90,9 @@ def check_permission(request: HttpRequest, model_admin: Any, action: str) -> boo
     if model_admin is None:
         return True  # No admin = no permission restrictions
 
-    # If user is not authenticated (AnonymousUser or None), permissions are not enforced
-    # This maintains backwards compatibility for API tokens without users
+    # If no user is set on request, skip permission checks (backwards compat)
     user = getattr(request, "user", None)
-    if user is None or not getattr(user, "is_authenticated", False):
+    if user is None:
         return True
 
     permission_methods = {
@@ -113,6 +111,27 @@ def check_permission(request: HttpRequest, model_admin: Any, action: str) -> boo
         return permission_method(request)
 
     return True
+
+
+async def async_check_permission(
+    request: HttpRequest, model_admin: Any, action: str
+) -> bool:
+    """
+    Check Django admin permission for action (async version).
+
+    Wraps the synchronous permission check to be safe in async context.
+
+    Args:
+        request: HttpRequest with user set.
+        model_admin: The ModelAdmin instance to check permissions against.
+        action: One of 'view', 'add', 'change', 'delete'.
+
+    Returns:
+        True if permission granted, False otherwise.
+    """
+    from asgiref.sync import sync_to_async
+
+    return await sync_to_async(check_permission)(request, model_admin, action)
 
 
 def get_exposed_models() -> list[tuple[str, Any]]:

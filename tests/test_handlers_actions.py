@@ -7,7 +7,7 @@ import uuid
 
 import pytest
 from asgiref.sync import sync_to_async
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AnonymousUser, User
 
 from django_admin_mcp.handlers import (
     handle_action,
@@ -104,7 +104,7 @@ class TestHandleActions:
     @pytest.mark.asyncio
     async def test_permission_denied_for_anonymous_user(self):
         """Test that handle_actions denies anonymous user."""
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
         result = await handle_actions("author", {}, request)
         parsed = json.loads(result[0].text)
         assert "error" in parsed
@@ -240,7 +240,7 @@ class TestHandleAction:
     @pytest.mark.asyncio
     async def test_permission_denied_for_anonymous_user(self):
         """Test that handle_action denies anonymous user."""
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
         result = await handle_action(
             "author",
             {"action": "delete_selected", "ids": [1]},
@@ -511,7 +511,7 @@ class TestHandleBulk:
     @pytest.mark.asyncio
     async def test_permission_denied_for_anonymous_user_create(self):
         """Test that handle_bulk denies anonymous user for create."""
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
         result = await handle_bulk(
             "author",
             {"operation": "create", "items": []},
@@ -524,7 +524,7 @@ class TestHandleBulk:
     @pytest.mark.asyncio
     async def test_permission_denied_for_anonymous_user_update(self):
         """Test that handle_bulk denies anonymous user for update."""
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
         result = await handle_bulk(
             "author",
             {"operation": "update", "items": []},
@@ -537,7 +537,7 @@ class TestHandleBulk:
     @pytest.mark.asyncio
     async def test_permission_denied_for_anonymous_user_delete(self):
         """Test that handle_bulk denies anonymous user for delete."""
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user for permission testing
         result = await handle_bulk(
             "author",
             {"operation": "delete", "items": []},

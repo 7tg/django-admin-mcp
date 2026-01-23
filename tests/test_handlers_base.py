@@ -100,10 +100,10 @@ class TestCreateMockRequest:
         request = create_mock_request()
         assert isinstance(request, HttpRequest)
 
-    def test_default_user_is_anonymous(self):
-        """Test that default user is AnonymousUser."""
+    def test_default_user_is_none(self):
+        """Test that default user is None (for backwards compat with no-auth API)."""
         request = create_mock_request()
-        assert isinstance(request.user, AnonymousUser)
+        assert request.user is None
 
     def test_accepts_user_parameter(self):
         """Test that user parameter is properly set."""
@@ -183,7 +183,7 @@ class TestCheckPermission:
 
     def test_view_permission_with_anonymous_user(self):
         """Test view permission with anonymous user."""
-        request = create_mock_request()  # Anonymous user
+        request = create_mock_request(AnonymousUser())  # Explicit anonymous user
         _, model_admin = get_model_admin("author")
         # Anonymous user should not have view permission
         result = check_permission(request, model_admin, "view")

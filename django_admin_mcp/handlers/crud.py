@@ -14,7 +14,7 @@ from django.db.models import Q
 from django.http import HttpRequest
 
 from .base import (
-    check_permission,
+    async_check_permission,
     get_model_admin,
     json_response,
     serialize_instance,
@@ -278,7 +278,7 @@ async def handle_list(
         return json_response({"error": f"Model '{model_name}' not found"})
 
     # Check view permission
-    if not check_permission(request, model_admin, "view"):
+    if not await async_check_permission(request, model_admin, "view"):
         return json_response({
             "error": f"Permission denied: cannot view {model_name}",
             "code": "permission_denied",
@@ -373,7 +373,7 @@ async def handle_get(
         return json_response({"error": f"Model '{model_name}' not found"})
 
     # Check view permission
-    if not check_permission(request, model_admin, "view"):
+    if not await async_check_permission(request, model_admin, "view"):
         return json_response({
             "error": f"Permission denied: cannot view {model_name}",
             "code": "permission_denied",
@@ -446,7 +446,7 @@ async def handle_create(
         return json_response({"error": f"Model '{model_name}' not found"})
 
     # Check add permission
-    if not check_permission(request, model_admin, "add"):
+    if not await async_check_permission(request, model_admin, "add"):
         return json_response({
             "error": f"Permission denied: cannot add {model_name}",
             "code": "permission_denied",
@@ -512,7 +512,7 @@ async def handle_update(
         return json_response({"error": f"Model '{model_name}' not found"})
 
     # Check change permission
-    if not check_permission(request, model_admin, "change"):
+    if not await async_check_permission(request, model_admin, "change"):
         return json_response({
             "error": f"Permission denied: cannot change {model_name}",
             "code": "permission_denied",
@@ -612,7 +612,7 @@ async def handle_delete(
         return json_response({"error": f"Model '{model_name}' not found"})
 
     # Check delete permission
-    if not check_permission(request, model_admin, "delete"):
+    if not await async_check_permission(request, model_admin, "delete"):
         return json_response({
             "error": f"Permission denied: cannot delete {model_name}",
             "code": "permission_denied",

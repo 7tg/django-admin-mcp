@@ -13,7 +13,7 @@ from django.db import models
 from django.http import HttpRequest
 
 from .base import (
-    check_permission,
+    async_check_permission,
     create_mock_request,
     get_model_admin,
     json_response,
@@ -113,7 +113,7 @@ async def handle_actions(
             return json_response({"error": f"Model {model_name} not registered"})
 
         # Check view permission
-        if not check_permission(request, model_admin, "view"):
+        if not await async_check_permission(request, model_admin, "view"):
             return _permission_error("view", model_name)
 
         actions_info = []
@@ -173,7 +173,7 @@ async def handle_action(
             return json_response({"error": f"Model {model_name} not registered"})
 
         # Check change permission (actions typically modify data)
-        if not check_permission(request, model_admin, "change"):
+        if not await async_check_permission(request, model_admin, "change"):
             return _permission_error("change", model_name)
 
         action_name = arguments.get("action")
@@ -272,7 +272,7 @@ async def handle_bulk(
             "delete": "delete",
         }
         required_permission = permission_map.get(operation)
-        if required_permission and not check_permission(
+        if required_permission and not await async_check_permission(
             request, model_admin, required_permission
         ):
             return _permission_error(required_permission, model_name)

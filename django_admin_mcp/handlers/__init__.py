@@ -6,6 +6,7 @@ for processing MCP tool requests.
 """
 
 from django_admin_mcp.handlers.base import (
+    async_check_permission,
     check_permission,
     create_mock_request,
     get_exposed_models,
@@ -38,6 +39,7 @@ from django_admin_mcp.handlers.relations import (
 
 __all__ = [
     # Base utilities
+    "async_check_permission",
     "check_permission",
     "create_mock_request",
     "get_exposed_models",
