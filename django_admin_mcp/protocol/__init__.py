@@ -17,6 +17,8 @@ from django_admin_mcp.protocol.types import (
     TextContent,
     Tool,
     ToolResult,
+    ToolsCallRequest,
+    ToolsListRequest,
 )
 
 __all__ = [
@@ -33,4 +35,7 @@ __all__ = [
     # Tool types
     "Tool",
     "ToolResult",
+    # MCP request types
+    "ToolsCallRequest",
+    "ToolsListRequest",
 ]
