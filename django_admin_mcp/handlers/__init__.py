@@ -26,6 +26,15 @@ from django_admin_mcp.handlers.crud import (
     handle_list,
     handle_update,
 )
+from django_admin_mcp.handlers.meta import (
+    handle_describe,
+    handle_find_models,
+)
+from django_admin_mcp.handlers.relations import (
+    handle_autocomplete,
+    handle_history,
+    handle_related,
+)
 
 __all__ = [
     # Base utilities
@@ -46,4 +55,11 @@ __all__ = [
     "handle_get",
     "handle_list",
     "handle_update",
+    # Meta handlers
+    "handle_describe",
+    "handle_find_models",
+    # Relations handlers
+    "handle_autocomplete",
+    "handle_history",
+    "handle_related",
 ]
