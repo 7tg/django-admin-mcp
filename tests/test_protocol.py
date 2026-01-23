@@ -2,6 +2,8 @@
 Tests for django_admin_mcp.protocol module.
 """
 
+import pytest
+
 from django_admin_mcp.protocol import (
     ImageContent,
     JsonRpcError,
@@ -214,12 +216,10 @@ class TestMCPRequests:
         from django_admin_mcp.protocol import ToolsListRequest
 
         # Invalid method should fail
-        try:
+        with pytest.raises(ValidationError) as exc_info:
             ToolsListRequest(method="invalid/method")
-            assert False, "Should have raised ValidationError"
-        except ValidationError as e:
-            assert len(e.errors()) > 0
-            assert "method" in str(e)
+        assert len(exc_info.value.errors()) > 0
+        assert "method" in str(exc_info.value)
 
     def test_tools_call_request(self):
         """Test ToolsCallRequest validation."""
@@ -248,14 +248,12 @@ class TestMCPRequests:
         from django_admin_mcp.protocol import ToolsCallRequest
 
         # Missing name should fail
-        try:
+        with pytest.raises(ValidationError) as exc_info:
             ToolsCallRequest(method="tools/call")
-            assert False, "Should have raised ValidationError"
-        except ValidationError as e:
-            assert len(e.errors()) > 0
-            # Check that 'name' field is mentioned in the error
-            error_fields = [err["loc"][0] for err in e.errors()]
-            assert "name" in error_fields
+        assert len(exc_info.value.errors()) > 0
+        # Check that 'name' field is mentioned in the error
+        error_fields = [err["loc"][0] for err in exc_info.value.errors()]
+        assert "name" in error_fields
 
     def test_tools_call_request_serialization(self):
         """Test ToolsCallRequest serializes correctly."""
