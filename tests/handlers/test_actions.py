@@ -405,11 +405,15 @@ class TestHandleBulk:
         @sync_to_async
         def check_log_entry():
             ct = ContentType.objects.get_for_model(Author)
-            log = LogEntry.objects.filter(
-                user=user,
-                content_type=ct,
-                object_id=str(author.pk),
-            ).order_by("-action_time").first()
+            log = (
+                LogEntry.objects.filter(
+                    user=user,
+                    content_type=ct,
+                    object_id=str(author.pk),
+                )
+                .order_by("-action_time")
+                .first()
+            )
             # Log may or may not exist depending on validation success
             # But if it does, it should not exceed limits
             if log:
