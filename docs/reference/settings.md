@@ -160,7 +160,7 @@ Token behavior is configured per-token in Django admin:
 |-------|------|---------|-------------|
 | `name` | CharField | Required | Descriptive identifier |
 | `token` | CharField | Auto-generated | 64-character token string |
-| `user` | ForeignKey | Optional | Associated user for audit |
+| `user` | ForeignKey | Required | Associated user for audit |
 | `is_active` | Boolean | `True` | Enable/disable token |
 | `expires_at` | DateTime | 90 days | Expiration date |
 | `groups` | M2M | Empty | Groups for permissions |

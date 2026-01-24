@@ -82,7 +82,7 @@ Tokens are configured in Django admin. Each token has:
 |-------|-------------|---------|
 | `name` | Descriptive name for the token | Required |
 | `token` | Auto-generated unique token | Auto-generated |
-| `user` | Associated Django user (for audit) | Optional |
+| `user` | Associated Django user (for audit) | Required |
 | `is_active` | Enable/disable the token | `True` |
 | `expires_at` | Token expiration date | 90 days from creation |
 | `groups` | Django groups for permissions | Empty |
