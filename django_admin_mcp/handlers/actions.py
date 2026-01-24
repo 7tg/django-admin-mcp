@@ -20,6 +20,7 @@ from django_admin_mcp.handlers.base import (
     json_response,
     normalize_fk_fields,
 )
+from django_admin_mcp.handlers.errors import handle_generic_error
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -147,7 +148,7 @@ async def handle_actions(
             }
         )
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"list actions for {model_name}"))
 
 
 async def handle_action(
@@ -226,7 +227,7 @@ async def handle_action(
         result = await execute_action()
         return json_response(result)
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"execute action {arguments.get('action')} on {model_name}"))
 
 
 async def handle_bulk(
@@ -316,7 +317,8 @@ async def handle_bulk(
                         )
                         results["success"].append({"index": i, "id": obj.pk, "created": True})
                     except Exception as e:
-                        results["errors"].append({"index": i, "error": str(e)})
+                        error_data = handle_generic_error(e, f"bulk create {model_name}")
+                        results["errors"].append({"index": i, **error_data})
 
             elif operation == "update":
                 # Create TypeAdapter once for efficiency
@@ -373,10 +375,12 @@ async def handle_bulk(
                             {
                                 "index": i,
                                 "error": f"Object with id {obj_id} not found",
+                                "code": "not_found",
                             }
                         )
                     except Exception as e:
-                        results["errors"].append({"index": i, "error": str(e)})
+                        error_data = handle_generic_error(e, f"bulk update {model_name}")
+                        results["errors"].append({"index": i, **error_data})
 
             elif operation == "delete":
                 ids = items if isinstance(items, list) else []
@@ -396,10 +400,12 @@ async def handle_bulk(
                             {
                                 "index": i,
                                 "error": f"Object with id {obj_id} not found",
+                                "code": "not_found",
                             }
                         )
                     except Exception as e:
-                        results["errors"].append({"index": i, "error": str(e)})
+                        error_data = handle_generic_error(e, f"bulk delete {model_name}")
+                        results["errors"].append({"index": i, **error_data})
 
             return {
                 "operation": operation,
@@ -412,4 +418,4 @@ async def handle_bulk(
         result = await execute_bulk()
         return json_response(result)
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"bulk {arguments.get('operation')} on {model_name}"))

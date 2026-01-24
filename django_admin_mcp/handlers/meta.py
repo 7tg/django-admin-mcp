@@ -17,6 +17,7 @@ from django_admin_mcp.handlers.base import (
     get_model_admin,
     json_response,
 )
+from django_admin_mcp.handlers.errors import handle_generic_error
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -207,7 +208,7 @@ async def handle_describe(
 
         return json_response(result)
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"describe {model_name}"))
 
 
 async def handle_find_models(
@@ -289,4 +290,4 @@ async def handle_find_models(
             }
         )
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, "find models"))

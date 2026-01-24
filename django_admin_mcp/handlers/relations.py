@@ -17,6 +17,7 @@ from django_admin_mcp.handlers.base import (
     json_response,
     serialize_instance,
 )
+from django_admin_mcp.handlers.errors import handle_generic_error
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -326,4 +327,4 @@ async def handle_autocomplete(
         result = await search_autocomplete()
         return json_response(result)
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"autocomplete {model_name}"))

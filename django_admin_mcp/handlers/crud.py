@@ -25,6 +25,7 @@ from django_admin_mcp.handlers.base import (
     normalize_fk_fields,
     serialize_instance,
 )
+from django_admin_mcp.handlers.errors import handle_generic_error
 from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
 
 
@@ -308,11 +309,12 @@ def _update_inlines(
                             }
                         )
             except Exception as e:
+                error_data = handle_generic_error(e, f"inline {operation} on {inline_model_name}")
                 results["errors"].append(
                     {
                         "model": inline_model_name,
                         "id": item.get("id"),
-                        "error": str(e),
+                        **error_data,
                     }
                 )
 
@@ -436,7 +438,7 @@ async def handle_list(model_name: str, arguments: dict[str, Any], request: HttpR
 
         return [TextContent(text=response.model_dump_json(indent=2))]
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"list {model_name}"))
 
 
 async def handle_get(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
@@ -511,9 +513,9 @@ async def handle_get(model_name: str, arguments: dict[str, Any], request: HttpRe
         adapter = TypeAdapter(dict[str, Any])
         return [TextContent(text=adapter.dump_json(obj_dict, indent=2).decode("utf-8"))]
     except model.DoesNotExist:  # type: ignore[attr-defined]
-        return json_response({"error": f"{model_name} not found"})
+        return json_response({"error": f"{model_name} not found", "code": "not_found"})
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"get {model_name}"))
 
 
 async def handle_create(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
@@ -606,7 +608,7 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
 
         return [TextContent(text=response.model_dump_json(indent=2))]
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"create {model_name}"))
 
 
 async def handle_update(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
@@ -741,9 +743,9 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
 
         return [TextContent(text=response.model_dump_json(indent=2))]
     except model.DoesNotExist:  # type: ignore[attr-defined]
-        return json_response({"error": f"{model_name} not found"})
+        return json_response({"error": f"{model_name} not found", "code": "not_found"})
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"update {model_name}"))
 
 
 async def handle_delete(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
@@ -811,6 +813,6 @@ async def handle_delete(model_name: str, arguments: dict[str, Any], request: Htt
             }
         )
     except model.DoesNotExist:  # type: ignore[attr-defined]
-        return json_response({"error": f"{model_name} not found"})
+        return json_response({"error": f"{model_name} not found", "code": "not_found"})
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response(handle_generic_error(e, f"delete {model_name}"))
