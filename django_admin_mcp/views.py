@@ -15,7 +15,23 @@ from django.views.decorators.http import require_http_methods
 from pydantic import ValidationError
 
 from django_admin_mcp.models import MCPToken
-from django_admin_mcp.protocol import ToolsCallRequest, ToolsListRequest
+from django_admin_mcp.protocol import (
+    InitializeResponse,
+    InitializeResult,
+    JsonRpcError,
+    JsonRpcResponse,
+    NotificationsInitializedResponse,
+    ServerCapabilities,
+    ServerInfo,
+    TextContent,
+    Tool,
+    ToolsCallRequest,
+    ToolsCallResponse,
+    ToolsCallResult,
+    ToolsListRequest,
+    ToolsListResponse,
+    ToolsListResult,
+)
 from django_admin_mcp.tools import call_tool, get_tools
 
 
@@ -169,20 +185,38 @@ async def mcp_endpoint(request):
     # Get method from request to determine which model to use
     method = data.get("method")
 
-    if method == "tools/list":
+    if method == "initialize":
+        # Handle MCP initialization
+        response = InitializeResponse(
+            id=data.get("id"),
+            result=InitializeResult(
+                protocolVersion="2025-11-25",
+                serverInfo=ServerInfo(name="django-admin-mcp", version="0.2.0"),
+                capabilities=ServerCapabilities(),
+            ),
+        )
+        return JsonResponse(response.model_dump())
+    elif method == "notifications/initialized":
+        # Client acknowledgement - just return success
+        response = NotificationsInitializedResponse(id=data.get("id"))
+        return JsonResponse(response.model_dump())
+    elif method == "tools/list":
         # Validate with ToolsListRequest
         try:
             _ = ToolsListRequest.model_validate(data)
         except ValidationError as e:
             return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
-        return await handle_list_tools_request(request)
+        return await handle_list_tools_request(request, data.get("id"))
     elif method == "tools/call":
-        # Validate with ToolsCallRequest
+        # Extract params from JSON-RPC structure
+        params = data.get("params", {})
+        # Build a flat structure for validation
+        call_data = {"method": method, "name": params.get("name"), "arguments": params.get("arguments", {})}
         try:
-            request_obj = ToolsCallRequest.model_validate(data)
+            request_obj = ToolsCallRequest.model_validate(call_data)
         except ValidationError as e:
             return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
-        return await handle_call_tool_request(request, request_obj, token=token)
+        return await handle_call_tool_request(request, request_obj, token=token, request_id=data.get("id"))
     else:
         return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
 
@@ -191,25 +225,21 @@ async def mcp_endpoint(request):
 mcp_endpoint.csrf_exempt = True  # type: ignore[attr-defined]
 
 
-async def handle_list_tools_request(request):
+async def handle_list_tools_request(request, request_id=None):
     """Handle tools/list request."""
     tools = get_tools()
 
-    # Serialize tools to dict format
-    tools_data = []
-    for tool in tools:
-        tools_data.append(
-            {
-                "name": tool.name,
-                "description": tool.description,
-                "inputSchema": tool.inputSchema,
-            }
-        )
+    # Convert to Pydantic Tool models
+    tool_models = [Tool(name=tool.name, description=tool.description, inputSchema=tool.inputSchema) for tool in tools]
 
-    return JsonResponse({"tools": tools_data})
+    response = ToolsListResponse(
+        id=request_id,
+        result=ToolsListResult(tools=tool_models),
+    )
+    return JsonResponse(response.model_dump())
 
 
-async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token=None):
+async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token=None, request_id=None):
     """Handle tools/call request."""
     tool_name = request_obj.name
     arguments = request_obj.arguments
@@ -225,6 +255,14 @@ async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token
     if result and len(result) > 0:
         content = result[0]
         response_data = json.loads(content.text)
-        return JsonResponse(response_data)
+        response = ToolsCallResponse(
+            id=request_id,
+            result=ToolsCallResult(content=[TextContent(text=json.dumps(response_data))]),
+        )
+        return JsonResponse(response.model_dump())
     else:
-        return JsonResponse({"error": "No result from tool"}, status=500)
+        error_response = JsonRpcResponse(
+            id=request_id,
+            error=JsonRpcError(code=-32000, message="No result from tool"),
+        )
+        return JsonResponse(error_response.model_dump(), status=500)

@@ -79,10 +79,11 @@ class TestHTTPInterface:
 
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert "tools" in data
+        assert "result" in data
+        assert "tools" in data["result"]
 
         # Check that tools are exposed
-        tool_names = [tool["name"] for tool in data["tools"]]
+        tool_names = [tool["name"] for tool in data["result"]["tools"]]
         # Should always have find_models tool
         assert "find_models" in tool_names
         # Should have model-specific tools since mcp_expose=True

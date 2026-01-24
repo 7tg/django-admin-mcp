@@ -19,7 +19,7 @@ class JsonRpcRequest(BaseModel):
     """JSON-RPC 2.0 request message."""
 
     jsonrpc: Literal["2.0"] = "2.0"
-    id: str | int
+    id: str | int | None = None
     method: str
     params: dict[str, Any] | None = None
 
@@ -27,7 +27,14 @@ class JsonRpcRequest(BaseModel):
 class JsonRpcResponse(BaseModel):
     """JSON-RPC 2.0 response message."""
 
+    model_config = {"extra": "forbid"}
+
     jsonrpc: Literal["2.0"] = "2.0"
-    id: str | int
+    id: str | int | None = None
     result: Any | None = None
     error: JsonRpcError | None = None
+
+    def model_dump(self, **kwargs):
+        """Override to exclude None values by default."""
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(**kwargs)

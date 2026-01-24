@@ -73,14 +73,18 @@ class TestPydanticValidation:
         client = AsyncClient()
         response = await client.post(
             "/api/mcp/",
-            data=json.dumps({"method": "tools/call", "name": "find_models", "arguments": {"query": "article"}}),
+            data=json.dumps(
+                {"method": "tools/call", "params": {"name": "find_models", "arguments": {"query": "article"}}}
+            ),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert "models" in data
+        # Response is now JSON-RPC wrapped
+        assert "result" in data
+        assert "content" in data["result"]
 
     @skip_if_django_lt_42
     @pytest.mark.asyncio
@@ -91,14 +95,16 @@ class TestPydanticValidation:
         client = AsyncClient()
         response = await client.post(
             "/api/mcp/",
-            data=json.dumps({"method": "tools/call", "name": "find_models"}),
+            data=json.dumps({"method": "tools/call", "params": {"name": "find_models"}}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert "models" in data
+        # Response is now JSON-RPC wrapped
+        assert "result" in data
+        assert "content" in data["result"]
 
     @skip_if_django_lt_42
     @pytest.mark.asyncio
@@ -116,4 +122,5 @@ class TestPydanticValidation:
 
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert "tools" in data
+        assert "result" in data
+        assert "tools" in data["result"]

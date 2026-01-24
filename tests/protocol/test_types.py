@@ -182,15 +182,16 @@ class TestJsonRpcResponse:
         assert response.error.code == -32600
 
     def test_response_serialization(self):
-        """Test JsonRpcResponse serializes correctly."""
+        """Test JsonRpcResponse serializes correctly (excludes None values)."""
         response = JsonRpcResponse(id=1, result=["tool1", "tool2"])
         data = response.model_dump()
         assert data == {
             "jsonrpc": "2.0",
             "id": 1,
             "result": ["tool1", "tool2"],
-            "error": None,
         }
+        # Verify error is excluded when None
+        assert "error" not in data
 
     def test_response_with_nested_error(self):
         """Test JsonRpcResponse with error serializes correctly."""

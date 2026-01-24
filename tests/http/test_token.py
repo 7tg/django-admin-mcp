@@ -132,7 +132,7 @@ class TestMCPExpose:
             data = json.loads(response.content)
 
             # Tools for Author should NOT be in the list (but find_models should be)
-            tool_names = [tool["name"] for tool in data["tools"]]
+            tool_names = [tool["name"] for tool in data["result"]["tools"]]
             assert "find_models" in tool_names  # This tool is always available
             assert "list_author" not in tool_names
         finally:

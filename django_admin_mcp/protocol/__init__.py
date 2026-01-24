@@ -12,13 +12,31 @@ from django_admin_mcp.protocol.jsonrpc import (
     JsonRpcResponse,
 )
 from django_admin_mcp.protocol.types import (
+    # Initialize types
+    ClientInfo,
+    # Content types
     Content,
     ImageContent,
+    InitializeParams,
+    InitializeResponse,
+    InitializeResult,
+    # Notification types
+    NotificationsInitializedResponse,
+    ServerCapabilities,
+    ServerInfo,
     TextContent,
+    # Tool types
     Tool,
     ToolResult,
+    # Tools call types
+    ToolsCallParams,
     ToolsCallRequest,
+    ToolsCallResponse,
+    ToolsCallResult,
+    # Tools list types
     ToolsListRequest,
+    ToolsListResponse,
+    ToolsListResult,
 )
 
 __all__ = [
@@ -35,7 +53,22 @@ __all__ = [
     # Tool types
     "Tool",
     "ToolResult",
-    # MCP request types
-    "ToolsCallRequest",
+    # Initialize types
+    "ClientInfo",
+    "InitializeParams",
+    "InitializeResponse",
+    "InitializeResult",
+    "ServerCapabilities",
+    "ServerInfo",
+    # Notification types
+    "NotificationsInitializedResponse",
+    # Tools list types
     "ToolsListRequest",
+    "ToolsListResponse",
+    "ToolsListResult",
+    # Tools call types
+    "ToolsCallParams",
+    "ToolsCallRequest",
+    "ToolsCallResponse",
+    "ToolsCallResult",
 ]

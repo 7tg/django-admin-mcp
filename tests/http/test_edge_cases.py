@@ -37,15 +37,16 @@ class TestEmptyToolResult:
             client = AsyncClient()
             response = await client.post(
                 "/api/mcp/",
-                data=json.dumps({"method": "tools/call", "name": "test_tool", "arguments": {}}),
+                data=json.dumps({"method": "tools/call", "params": {"name": "test_tool", "arguments": {}}}),
                 content_type="application/json",
                 headers={"Authorization": f"Bearer {token.plaintext_token}"},
             )
 
             assert response.status_code == 500
             data = json.loads(response.content)
+            # Response is now JSON-RPC wrapped
             assert "error" in data
-            assert "No result" in data["error"]
+            assert "No result" in data["error"]["message"]
 
 
 @pytest.mark.django_db(transaction=True)
@@ -114,7 +115,12 @@ class TestFunctionBasedViewEdgeCases:
         client = AsyncClient()
         response = await client.post(
             "/api/mcp/",
-            data=json.dumps({"method": "tools/call", "arguments": {}}),
+            data=json.dumps(
+                {
+                    "method": "tools/call",
+                    "params": {"arguments": {}},  # Missing "name"
+                }
+            ),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
@@ -136,12 +142,13 @@ class TestFunctionBasedViewEdgeCases:
         client = AsyncClient()
         response = await client.post(
             "/api/mcp/",
-            data=json.dumps({"method": "tools/call", "name": "find_models", "arguments": {}}),
+            data=json.dumps({"method": "tools/call", "params": {"name": "find_models", "arguments": {}}}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 200
         data = json.loads(response.content)
-        # Should return model data
-        assert "models" in data
+        # Response is now JSON-RPC wrapped
+        assert "result" in data
+        assert "content" in data["result"]
