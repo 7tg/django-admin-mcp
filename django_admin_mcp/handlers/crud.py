@@ -309,7 +309,14 @@ def _update_inlines(
                             }
                         )
             except Exception as e:
-                error_data = handle_generic_error(e, f"inline {operation} on {inline_model_name}")
+                # Determine operation from context
+                if delete and item_id:
+                    op = "delete"
+                elif item_id:
+                    op = "update"
+                else:
+                    op = "create"
+                error_data = handle_generic_error(e, f"inline {op} on {inline_model_name}")
                 results["errors"].append(
                     {
                         "model": inline_model_name,
