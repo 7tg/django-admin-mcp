@@ -73,7 +73,7 @@ class MCPHTTPView(View):
         if method == "tools/list":
             # Validate with ToolsListRequest
             try:
-                request_obj = ToolsListRequest.model_validate(data)
+                _ = ToolsListRequest.model_validate(data)
             except ValidationError as e:
                 return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
             return await self.handle_list_tools(request)
@@ -154,7 +154,7 @@ async def mcp_endpoint(request):
     if method == "tools/list":
         # Validate with ToolsListRequest
         try:
-            request_obj = ToolsListRequest.model_validate(data)
+            _ = ToolsListRequest.model_validate(data)
         except ValidationError as e:
             return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
         return await handle_list_tools_request(request)
