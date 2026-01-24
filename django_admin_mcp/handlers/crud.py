@@ -5,7 +5,6 @@ This module provides async handler functions for Create, Read, Update,
 Delete operations extracted from the mixin module.
 """
 
-import json
 from typing import Any
 
 from asgiref.sync import sync_to_async
@@ -14,6 +13,7 @@ from django.db.models import Q
 from django.forms import ModelForm
 from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
+from pydantic import TypeAdapter
 
 from django_admin_mcp.handlers.base import (
     async_check_permission,
@@ -25,7 +25,27 @@ from django_admin_mcp.handlers.base import (
     normalize_fk_fields,
     serialize_instance,
 )
-from django_admin_mcp.protocol.types import TextContent
+from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
+
+
+def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500) -> str:
+    """
+    Serialize data for Django admin log message with size limit.
+
+    Args:
+        data: Dictionary to serialize for logging.
+        max_length: Maximum length of the serialized string (default 500).
+
+    Returns:
+        Serialized JSON string, truncated if necessary with ellipsis.
+    """
+    adapter = TypeAdapter(dict[str, Any])
+    data_json = adapter.dump_json(data).decode("utf-8")
+
+    if len(data_json) > max_length:
+        return data_json[: max_length - 3] + "..."
+
+    return data_json
 
 
 def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q:
@@ -408,19 +428,13 @@ async def handle_list(model_name: str, arguments: dict[str, Any], request: HttpR
 
         total_count, results = await get_objects()
 
-        return [
-            TextContent(
-                text=json.dumps(
-                    {
-                        "count": len(results),
-                        "total_count": total_count,
-                        "results": results,
-                    },
-                    indent=2,
-                    default=str,
-                ),
-            )
-        ]
+        response = ListResponse(
+            count=len(results),
+            total_count=total_count,
+            results=results,
+        )
+
+        return [TextContent(text=response.model_dump_json(indent=2))]
     except Exception as e:
         return json_response({"error": str(e)})
 
@@ -493,7 +507,9 @@ async def handle_get(model_name: str, arguments: dict[str, Any], request: HttpRe
 
         obj_dict = await get_object()
 
-        return [TextContent(text=json.dumps(obj_dict, indent=2, default=str))]
+        # Use Pydantic's JSON encoder for proper serialization
+        adapter = TypeAdapter(dict[str, Any])
+        return [TextContent(text=adapter.dump_json(obj_dict, indent=2).decode("utf-8"))]
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
     except Exception as e:
@@ -559,12 +575,13 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
             # Save the form to create the object
             obj = form.save()
 
-            # Log the action
+            # Log the action - use Pydantic for serialization (truncated for log size)
+            data_json = _serialize_data_for_log(data)
             _log_action(
                 user=user,
                 obj=obj,
                 action_flag=ADDITION,
-                change_message=f"Created via MCP: {json.dumps(data, default=str)}",
+                change_message=f"Created via MCP: {data_json}",
             )
 
             return obj.pk, serialize_instance(obj, model_admin)
@@ -581,15 +598,13 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
                 }
             )
 
-        return [
-            TextContent(
-                text=json.dumps(
-                    {"success": True, "id": result_id, "object": result_data},
-                    indent=2,
-                    default=str,
-                ),
-            )
-        ]
+        response = CreateResponse(
+            success=True,
+            id=result_id,
+            object=result_data,
+        )
+
+        return [TextContent(text=response.model_dump_json(indent=2))]
     except Exception as e:
         return json_response({"error": str(e)})
 
@@ -690,10 +705,11 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
             if inlines_data and model_admin:
                 inlines_result = _update_inlines(obj, model_admin, inlines_data, request)
 
-            # Log the action
+            # Log the action - use Pydantic for serialization (truncated for log size)
             change_message = []
             if data:
-                change_message.append(f"Changed via MCP: {json.dumps(data, default=str)}")
+                data_json = _serialize_data_for_log(data)
+                change_message.append(f"Changed via MCP: {data_json}")
             if inlines_data:
                 change_message.append(f"Updated inlines: {list(inlines_data.keys())}")
             _log_action(
@@ -717,11 +733,13 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
                 }
             )
 
-        response = {"success": True, "object": obj_dict}
-        if inlines_result and any(inlines_result.values()):
-            response["inlines"] = inlines_result
+        response = UpdateResponse(
+            success=True,
+            object=obj_dict,
+            inlines=inlines_result if inlines_result and any(inlines_result.values()) else None,
+        )
 
-        return [TextContent(text=json.dumps(response, indent=2, default=str))]
+        return [TextContent(text=response.model_dump_json(indent=2))]
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
     except Exception as e:
