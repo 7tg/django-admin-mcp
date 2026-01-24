@@ -40,9 +40,7 @@ def authenticate_token(request):
         # 1. Caching active tokens
         # 2. Using a separate lookup table with indexed hash prefixes
         # 3. Limiting query to recently used tokens first
-        tokens = MCPToken.objects.select_related("user").filter(
-            is_active=True, token_hash__isnull=False
-        )
+        tokens = MCPToken.objects.select_related("user").filter(is_active=True, token_hash__isnull=False)
 
         for token in tokens:
             if token.verify_token(token_value):
@@ -55,9 +53,7 @@ def authenticate_token(request):
 
         # Fallback: check legacy tokens (for backward compatibility during migration)
         try:
-            legacy_token = MCPToken.objects.select_related("user").get(
-                token=token_value, is_active=True
-            )
+            legacy_token = MCPToken.objects.select_related("user").get(token=token_value, is_active=True)
             if legacy_token.is_valid():
                 legacy_token.mark_used()
                 return legacy_token

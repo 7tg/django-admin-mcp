@@ -45,7 +45,7 @@ class MCPToken(models.Model):
         blank=True,
         help_text="SHA-256 hash of the authentication token",
     )
-    salt = models.CharField(
+    salt = models.CharField(  # noqa: DJ001 - null=True needed for migration compatibility
         max_length=32,
         editable=False,
         null=True,
@@ -172,7 +172,7 @@ class MCPToken(models.Model):
 
     def get_plaintext_token(self) -> str | None:
         """
-        Get the plaintext token. Only available immediately after creation.
+        Get the plaintext token. Only available immediately after creation or regeneration.
 
         Returns:
             The plaintext token if available, None otherwise.
@@ -185,6 +185,33 @@ class MCPToken(models.Model):
         # Clear the token after first retrieval for security
         self._plaintext_token = None
         return token
+
+    def regenerate_token(self) -> str:
+        """
+        Regenerate the token with a new value.
+
+        Returns:
+            The new plaintext token (only available once).
+
+        Note:
+            This invalidates the old token immediately.
+        """
+        # Generate a new token
+        plaintext_token = secrets.token_urlsafe(48)
+
+        # Generate a new salt
+        self.salt = secrets.token_urlsafe(16)
+
+        # Hash the token with the new salt
+        self.token_hash = self._hash_token(plaintext_token, self.salt)
+
+        # Clear legacy token field
+        self.token = None
+
+        # Save the changes
+        self.save(update_fields=["token_hash", "salt", "token"])
+
+        return plaintext_token
 
     def mark_used(self):
         """Mark token as recently used."""

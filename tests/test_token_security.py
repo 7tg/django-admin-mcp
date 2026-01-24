@@ -102,8 +102,6 @@ class TestTokenSecurity:
 
     def test_hash_function_deterministic(self):
         """Test that hash function produces consistent results."""
-        from django_admin_mcp.models import MCPToken
-
         token_str = "test_token_12345"
         salt = "test_salt"
 
@@ -134,11 +132,47 @@ class TestTokenSecurity:
     def test_token_string_representation_uses_hash(self):
         """Test that string representation uses hash, not plaintext."""
         token = MCPTokenFactory()
+        plaintext = token.plaintext_token  # Capture before it's consumed
 
         str_repr = str(token)
 
         # Should contain part of hash
         assert token.token_hash[:8] in str_repr
         # Should not contain plaintext token
-        if token.plaintext_token:
-            assert token.plaintext_token not in str_repr
+        assert plaintext not in str_repr
+
+    def test_regenerate_token(self):
+        """Test that regenerate_token creates a new token."""
+        token = MCPTokenFactory()
+        old_plaintext = token.plaintext_token
+        old_hash = token.token_hash
+        old_salt = token.salt
+
+        # Regenerate
+        new_plaintext = token.regenerate_token()
+
+        # New token should be different
+        assert new_plaintext != old_plaintext
+        assert token.token_hash != old_hash
+        assert token.salt != old_salt
+
+        # New token should verify
+        assert token.verify_token(new_plaintext) is True
+
+        # Old token should no longer verify
+        assert token.verify_token(old_plaintext) is False
+
+    def test_regenerate_token_persists_to_database(self):
+        """Test that regenerated token is saved to database."""
+        token = MCPTokenFactory()
+        old_hash = token.token_hash
+
+        # Regenerate
+        new_plaintext = token.regenerate_token()
+
+        # Reload from database
+        token.refresh_from_db()
+
+        # Hash should be updated in database
+        assert token.token_hash != old_hash
+        assert token.verify_token(new_plaintext) is True

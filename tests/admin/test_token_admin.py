@@ -3,6 +3,7 @@ Tests for django_admin_mcp admin configuration
 """
 
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from django.contrib import admin
@@ -101,3 +102,33 @@ class TestMCPTokenAdmin:
         """Test that MCPTokenAdmin is registered with admin site."""
         assert MCPToken in admin.site._registry
         assert isinstance(admin.site._registry[MCPToken], MCPTokenAdmin)
+
+    def test_regenerate_token_button_with_saved_token(self):
+        """Test regenerate_token_button shows button for saved token."""
+        token = MCPTokenFactory()
+        admin_instance = MCPTokenAdmin(MCPToken, admin.site)
+
+        # Mock reverse since admin URLs may not be set up in test context
+        with patch("django_admin_mcp.admin.reverse") as mock_reverse:
+            mock_reverse.return_value = f"/admin/django_admin_mcp/mcptoken/{token.pk}/regenerate/"
+            button_html = admin_instance.regenerate_token_button(token)
+
+        assert "Regenerate Token" in button_html
+        assert "/regenerate/" in button_html
+        assert "confirm(" in button_html  # JavaScript confirmation
+
+    def test_regenerate_token_button_without_pk(self):
+        """Test regenerate_token_button shows dash for unsaved token."""
+        user = UserFactory()
+        token = MCPToken(name="Unsaved", user=user)
+        admin_instance = MCPTokenAdmin(MCPToken, admin.site)
+
+        button_html = admin_instance.regenerate_token_button(token)
+
+        assert button_html == "-"
+
+    def test_readonly_fields_include_regenerate_button(self):
+        """Test that regenerate_token_button is in readonly_fields."""
+        admin_instance = MCPTokenAdmin(MCPToken, admin.site)
+
+        assert "regenerate_token_button" in admin_instance.readonly_fields
