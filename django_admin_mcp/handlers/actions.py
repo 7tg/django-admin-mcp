@@ -319,6 +319,9 @@ async def handle_bulk(
                         results["errors"].append({"index": i, "error": str(e)})
 
             elif operation == "update":
+                # Create TypeAdapter once for efficiency
+                data_adapter = TypeAdapter(dict[str, Any])
+
                 for i, item in enumerate(items):
                     try:
                         obj_id = item.get("id")
@@ -352,8 +355,7 @@ async def handle_bulk(
 
                         obj = form.save()
                         # Serialize data using Pydantic TypeAdapter
-                        adapter = TypeAdapter(dict[str, Any])
-                        serialized_data = adapter.dump_json(data, fallback=str).decode()
+                        serialized_data = data_adapter.dump_json(data, fallback=str).decode()
                         _log_action(
                             user=user,
                             obj=obj,
