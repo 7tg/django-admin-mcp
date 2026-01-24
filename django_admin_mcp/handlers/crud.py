@@ -17,6 +17,7 @@ from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
     async_check_permission,
+    check_inline_permission,
     format_form_errors,
     get_admin_form_class,
     get_model_admin,
@@ -144,17 +145,24 @@ def _get_inline_data(obj: models.Model, admin: Any) -> dict[str, list[dict[str, 
     return inlines_data
 
 
-def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]) -> dict[str, Any]:
+def _update_inlines(
+    obj: models.Model,
+    admin: Any,
+    inlines_data: dict[str, list],
+    request: HttpRequest,
+) -> dict[str, Any]:
     """
     Update inline related objects for a model instance with form validation.
 
     Uses the inline's form class for validation when available, otherwise
-    falls back to auto-generated ModelForm.
+    falls back to auto-generated ModelForm. Checks permissions on the inline
+    model for each operation (add, change, delete).
 
     Args:
         obj: The parent model instance.
         admin: The ModelAdmin instance with inline definitions.
         inlines_data: Dictionary of inline updates per model.
+        request: HttpRequest with user for permission checking.
 
     Returns:
         Results dictionary with created, updated, deleted, and errors lists.
@@ -200,10 +208,34 @@ def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]
                 delete = item.get("_delete", False)
 
                 if delete and item_id:
+                    # Check delete permission on inline model
+                    if not check_inline_permission(inline_class, admin, request, obj, "delete"):
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": item_id,
+                                "error": f"Permission denied: cannot delete {inline_model_name}",
+                                "code": "permission_denied",
+                            }
+                        )
+                        continue
+
                     # Delete existing inline
                     inline_model.objects.filter(pk=item_id).delete()
                     results["deleted"].append({"model": inline_model_name, "id": item_id})
                 elif item_id:
+                    # Check change permission on inline model
+                    if not check_inline_permission(inline_class, admin, request, obj, "change"):
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": item_id,
+                                "error": f"Permission denied: cannot change {inline_model_name}",
+                                "code": "permission_denied",
+                            }
+                        )
+                        continue
+
                     # Update existing inline with form validation
                     inline_obj = inline_model.objects.get(pk=item_id)
 
@@ -226,6 +258,18 @@ def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]
                             }
                         )
                 else:
+                    # Check add permission on inline model
+                    if not check_inline_permission(inline_class, admin, request, obj, "add"):
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": None,
+                                "error": f"Permission denied: cannot add {inline_model_name}",
+                                "code": "permission_denied",
+                            }
+                        )
+                        continue
+
                     # Create new inline with form validation
                     create_data = {k: v for k, v in item_data.items() if k not in ["id", "_delete"]}
                     create_data[fk_field.name] = obj.pk  # Set FK to parent
@@ -644,7 +688,7 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
             # Handle inlines if provided
             inlines_result = {}
             if inlines_data and model_admin:
-                inlines_result = _update_inlines(obj, model_admin, inlines_data)
+                inlines_result = _update_inlines(obj, model_admin, inlines_data, request)
 
             # Log the action
             change_message = []

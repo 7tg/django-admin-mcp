@@ -311,3 +311,58 @@ def format_form_errors(form_errors: dict) -> dict:
         "error_count": sum(len(e["messages"]) for e in errors_list),
         "fields_with_errors": list(form_errors.keys()),
     }
+
+
+def check_inline_permission(
+    inline_class: type,
+    parent_admin: Any,
+    request: HttpRequest,
+    parent_obj: models.Model,
+    action: str,
+) -> bool:
+    """
+    Check permission for inline operations (synchronous version).
+
+    Instantiates the inline class and calls its permission methods.
+    Inline permission methods take the parent object as context.
+
+    Args:
+        inline_class: The inline class from parent_admin.inlines.
+        parent_admin: The parent ModelAdmin instance.
+        request: HttpRequest with user set.
+        parent_obj: The parent model instance being edited.
+        action: One of 'add', 'change', 'delete'.
+
+    Returns:
+        True if permission granted, False otherwise.
+    """
+    if inline_class is None or parent_admin is None:
+        return True
+
+    # If no user is set on request, skip permission checks (backwards compat)
+    user = getattr(request, "user", None)
+    if user is None:
+        return True
+
+    permission_methods = {
+        "add": "has_add_permission",
+        "change": "has_change_permission",
+        "delete": "has_delete_permission",
+    }
+
+    method_name = permission_methods.get(action)
+    if not method_name:
+        return True
+
+    try:
+        # Instantiate the inline class with parent model and admin site
+        inline_instance = inline_class(parent_admin.model, site)
+        permission_method = getattr(inline_instance, method_name, None)
+        if permission_method and callable(permission_method):
+            # Inline permission methods take (request, obj) where obj is parent
+            return permission_method(request, parent_obj)
+    except Exception:
+        # If instantiation or permission check fails, deny access for safety
+        return False
+
+    return True
