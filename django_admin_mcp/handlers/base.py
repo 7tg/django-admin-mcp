@@ -9,7 +9,8 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.contrib.admin.sites import site
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, OperationalError, models
 from django.forms import ModelForm
 from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
@@ -371,3 +372,55 @@ def check_inline_permission(
         return False
 
     return True
+
+
+def handle_database_error(error: Exception) -> dict[str, Any]:
+    """
+    Handle database-specific exceptions and return appropriate error response.
+
+    Provides graceful handling for database errors without exposing internal details.
+
+    Args:
+        error: The exception raised during database operation.
+
+    Returns:
+        Dictionary with error message and code suitable for JSON response.
+    """
+    if isinstance(error, IntegrityError):
+        error_str = str(error).lower()
+        if "unique" in error_str or "duplicate" in error_str:
+            return {
+                "error": "A record with these values already exists",
+                "code": "duplicate_entry",
+            }
+        elif "foreign key" in error_str or "constraint" in error_str:
+            return {
+                "error": "Referenced record does not exist",
+                "code": "invalid_reference",
+            }
+        return {
+            "error": "Database constraint violated",
+            "code": "constraint_error",
+        }
+    elif isinstance(error, OperationalError):
+        return {
+            "error": "Database temporarily unavailable",
+            "code": "database_unavailable",
+        }
+    elif isinstance(error, ValidationError):
+        # Django's ValidationError can have message_dict or messages
+        if hasattr(error, "message_dict"):
+            return {
+                "error": "Validation failed",
+                "code": "validation_error",
+                "validation_errors": error.message_dict,
+            }
+        return {
+            "error": "Validation failed",
+            "code": "validation_error",
+            "messages": error.messages if hasattr(error, "messages") else [str(error)],
+        }
+    # For other exceptions, return a generic error (handled by caller)
+    return {
+        "error": str(error),
+    }

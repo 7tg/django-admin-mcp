@@ -8,7 +8,8 @@ Delete operations extracted from the mixin module.
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, OperationalError, models
 from django.db.models import Q
 from django.forms import ModelForm
 from django.forms.models import model_to_dict, modelform_factory
@@ -21,6 +22,7 @@ from django_admin_mcp.handlers.base import (
     format_form_errors,
     get_admin_form_class,
     get_model_admin,
+    handle_database_error,
     json_response,
     normalize_fk_fields,
     serialize_instance,
@@ -241,8 +243,18 @@ def _update_inlines(
                         continue
 
                     # Delete existing inline
-                    inline_model.objects.filter(pk=item_id).delete()
-                    results["deleted"].append({"model": inline_model_name, "id": item_id})
+                    try:
+                        inline_model.objects.filter(pk=item_id).delete()
+                        results["deleted"].append({"model": inline_model_name, "id": item_id})
+                    except (IntegrityError, OperationalError, ValidationError) as e:
+                        error_data = handle_database_error(e)
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": item_id,
+                                **error_data,
+                            }
+                        )
                 elif item_id:
                     # Check change permission on inline model
                     if not check_inline_permission(inline_class, admin, request, obj, "change"):
@@ -266,8 +278,18 @@ def _update_inlines(
 
                     form = inline_form_class(data=merged_data, instance=inline_obj)
                     if form.is_valid():
-                        form.save()
-                        results["updated"].append({"model": inline_model_name, "id": item_id})
+                        try:
+                            form.save()
+                            results["updated"].append({"model": inline_model_name, "id": item_id})
+                        except (IntegrityError, OperationalError, ValidationError) as e:
+                            error_data = handle_database_error(e)
+                            results["errors"].append(
+                                {
+                                    "model": inline_model_name,
+                                    "id": item_id,
+                                    **error_data,
+                                }
+                            )
                     else:
                         results["errors"].append(
                             {
@@ -296,8 +318,18 @@ def _update_inlines(
 
                     form = inline_form_class(data=create_data)
                     if form.is_valid():
-                        new_obj = form.save()
-                        results["created"].append({"model": inline_model_name, "id": new_obj.pk})
+                        try:
+                            new_obj = form.save()
+                            results["created"].append({"model": inline_model_name, "id": new_obj.pk})
+                        except (IntegrityError, OperationalError, ValidationError) as e:
+                            error_data = handle_database_error(e)
+                            results["errors"].append(
+                                {
+                                    "model": inline_model_name,
+                                    "id": None,
+                                    **error_data,
+                                }
+                            )
                     else:
                         results["errors"].append(
                             {
@@ -573,7 +605,10 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
                 return None, format_form_errors(form.errors)
 
             # Save the form to create the object
-            obj = form.save()
+            try:
+                obj = form.save()
+            except (IntegrityError, OperationalError, ValidationError) as e:
+                return None, handle_database_error(e)
 
             # Log the action - use Pydantic for serialization (truncated for log size)
             data_json = _serialize_data_for_log(data)
@@ -588,15 +623,18 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
 
         result_id, result_data = await create_object()
 
-        # Check if validation failed
+        # Check if creation failed (validation or database error)
         if result_id is None:
-            return json_response(
-                {
+            # result_data contains the error dict from format_form_errors or handle_database_error
+            response_data = result_data
+            # If it's not already structured with error/code, add default structure
+            if "error" not in response_data:
+                response_data = {
                     "error": "Validation failed",
                     "code": "validation_error",
-                    "validation_errors": result_data,
+                    "validation_errors": response_data,
                 }
-            )
+            return json_response(response_data)
 
         response = CreateResponse(
             success=True,
@@ -698,7 +736,10 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
                 return None, format_form_errors(form.errors), {}
 
             # Save the form to update the object
-            obj = form.save()
+            try:
+                obj = form.save()
+            except (IntegrityError, OperationalError, ValidationError) as e:
+                return None, handle_database_error(e), {}
 
             # Handle inlines if provided
             inlines_result = {}
@@ -723,15 +764,18 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
 
         obj_dict, validation_errors, inlines_result = await update_object()
 
-        # Check if validation failed
+        # Check if update failed (validation or database error)
         if obj_dict is None:
-            return json_response(
-                {
+            # validation_errors contains the error dict from format_form_errors or handle_database_error
+            response_data = validation_errors
+            # If it's not already structured with error/code, add default structure
+            if "error" not in response_data:
+                response_data = {
                     "error": "Validation failed",
                     "code": "validation_error",
-                    "validation_errors": validation_errors,
+                    "validation_errors": response_data,
                 }
-            )
+            return json_response(response_data)
 
         response = UpdateResponse(
             success=True,
@@ -799,10 +843,18 @@ async def handle_delete(model_name: str, arguments: dict[str, Any], request: Htt
                 change_message="Deleted via MCP",
             )
 
-            obj.delete()
-            return obj_repr
+            try:
+                obj.delete()
+            except (IntegrityError, OperationalError, ValidationError) as e:
+                return None, handle_database_error(e)
 
-        await delete_object()
+            return obj_repr, None
+
+        result_repr, error_data = await delete_object()
+
+        # Check if delete failed
+        if result_repr is None:
+            return json_response(error_data)
 
         return json_response(
             {

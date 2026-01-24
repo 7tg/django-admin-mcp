@@ -9,6 +9,8 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.contrib.admin import actions as admin_module_actions
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, OperationalError
 from django.http import HttpRequest
 from pydantic import TypeAdapter
 
@@ -17,6 +19,7 @@ from django_admin_mcp.handlers.base import (
     format_form_errors,
     get_admin_form_class,
     get_model_admin,
+    handle_database_error,
     json_response,
     normalize_fk_fields,
 )
@@ -198,13 +201,16 @@ async def handle_action(
             # Handle built-in delete_selected
             if action_name == "delete_selected":
                 deleted_count = queryset.count()
-                queryset.delete()
-                return {
-                    "success": True,
-                    "action": action_name,
-                    "affected_count": deleted_count,
-                    "message": f"Deleted {deleted_count} {model._meta.verbose_name_plural}",
-                }
+                try:
+                    queryset.delete()
+                    return {
+                        "success": True,
+                        "action": action_name,
+                        "affected_count": deleted_count,
+                        "message": f"Deleted {deleted_count} {model._meta.verbose_name_plural}",
+                    }
+                except (IntegrityError, OperationalError, ValidationError) as e:
+                    return handle_database_error(e)
 
             # Find custom action in admin
             if model_admin:
@@ -307,14 +313,18 @@ async def handle_bulk(
                             )
                             continue
 
-                        obj = form.save()
-                        _log_action(
-                            user=user,
-                            obj=obj,
-                            action_flag=ADDITION,
-                            change_message="Bulk created via MCP",
-                        )
-                        results["success"].append({"index": i, "id": obj.pk, "created": True})
+                        try:
+                            obj = form.save()
+                            _log_action(
+                                user=user,
+                                obj=obj,
+                                action_flag=ADDITION,
+                                change_message="Bulk created via MCP",
+                            )
+                            results["success"].append({"index": i, "id": obj.pk, "created": True})
+                        except (IntegrityError, OperationalError, ValidationError) as e:
+                            error_data = handle_database_error(e)
+                            results["errors"].append({"index": i, **error_data})
                     except Exception as e:
                         results["errors"].append({"index": i, "error": str(e)})
 
@@ -353,21 +363,25 @@ async def handle_bulk(
                             )
                             continue
 
-                        obj = form.save()
-                        # Serialize data using Pydantic TypeAdapter
-                        serialized_data = data_adapter.dump_json(data, fallback=str).decode()
-                        # Truncate to keep change messages concise
-                        # Note: Truncation may result in invalid JSON, but preserves logging capability
-                        max_length = 500
-                        if len(serialized_data) > max_length:
-                            serialized_data = serialized_data[:max_length] + '... (truncated)"'
-                        _log_action(
-                            user=user,
-                            obj=obj,
-                            action_flag=CHANGE,
-                            change_message=f"Bulk updated via MCP: {serialized_data}",
-                        )
-                        results["success"].append({"index": i, "id": obj_id, "updated": True})
+                        try:
+                            obj = form.save()
+                            # Serialize data using Pydantic TypeAdapter
+                            serialized_data = data_adapter.dump_json(data, fallback=str).decode()
+                            # Truncate to keep change messages concise
+                            # Note: Truncation may result in invalid JSON, but preserves logging capability
+                            max_length = 500
+                            if len(serialized_data) > max_length:
+                                serialized_data = serialized_data[:max_length] + '... (truncated)"'
+                            _log_action(
+                                user=user,
+                                obj=obj,
+                                action_flag=CHANGE,
+                                change_message=f"Bulk updated via MCP: {serialized_data}",
+                            )
+                            results["success"].append({"index": i, "id": obj_id, "updated": True})
+                        except (IntegrityError, OperationalError, ValidationError) as e:
+                            error_data = handle_database_error(e)
+                            results["errors"].append({"index": i, **error_data})
                     except model.DoesNotExist:
                         results["errors"].append(
                             {
@@ -389,8 +403,12 @@ async def handle_bulk(
                             action_flag=DELETION,
                             change_message="Bulk deleted via MCP",
                         )
-                        obj.delete()
-                        results["success"].append({"index": i, "id": obj_id, "deleted": True})
+                        try:
+                            obj.delete()
+                            results["success"].append({"index": i, "id": obj_id, "deleted": True})
+                        except (IntegrityError, OperationalError, ValidationError) as e:
+                            error_data = handle_database_error(e)
+                            results["errors"].append({"index": i, "id": obj_id, **error_data})
                     except model.DoesNotExist:
                         results["errors"].append(
                             {
