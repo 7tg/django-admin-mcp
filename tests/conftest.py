@@ -17,8 +17,9 @@ register(MCPTokenFactory)
 def django_setup_with_admin(django_db_setup, django_db_blocker):
     """Register admin classes after Django is set up."""
     with django_db_blocker.unblock():
-        from django_admin_mcp import MCPAdminMixin
-        from tests.models import Article, Author
+        # Deferred import: must wait for Django app registry to be ready
+        from django_admin_mcp import MCPAdminMixin  # noqa: PLC0415
+        from tests.models import Article, Author  # noqa: PLC0415
 
         # Clear any existing registrations
         if Author in admin.site._registry:

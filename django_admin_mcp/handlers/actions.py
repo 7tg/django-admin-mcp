@@ -9,6 +9,7 @@ import json
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.contrib.admin import actions as admin_module_actions
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
@@ -71,8 +72,9 @@ def _log_action(user, obj, action_flag: int, change_message: str = ""):
     if user is None:
         return  # Can't log without a user
 
-    from django.contrib.admin.models import LogEntry
-    from django.contrib.contenttypes.models import ContentType
+    # Deferred import: Django models require app registry to be ready
+    from django.contrib.admin.models import LogEntry  # noqa: PLC0415
+    from django.contrib.contenttypes.models import ContentType  # noqa: PLC0415
 
     content_type = ContentType.objects.get_for_model(obj)
 
@@ -129,8 +131,6 @@ async def handle_actions(
             # Add built-in delete_selected if not disabled
             if admin_actions is not None:  # None means actions are disabled
                 # Check if delete_selected is available
-                from django.contrib.admin import actions as admin_module_actions
-
                 if hasattr(admin_module_actions, "delete_selected"):
                     actions_info.append(
                         {
@@ -282,8 +282,9 @@ async def handle_bulk(
 
         @sync_to_async
         def execute_bulk():
-            from django.contrib.admin.models import ADDITION, CHANGE, DELETION
-            from django.forms.models import model_to_dict
+            # Deferred import: Django models require app registry to be ready
+            from django.contrib.admin.models import ADDITION, CHANGE, DELETION  # noqa: PLC0415
+            from django.forms.models import model_to_dict  # noqa: PLC0415
 
             results = {"success": [], "errors": []}
 

@@ -11,6 +11,8 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from django.db import models
 from django.db.models import Q
+from django.forms import ModelForm
+from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
@@ -157,8 +159,6 @@ def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]
     Returns:
         Results dictionary with created, updated, deleted, and errors lists.
     """
-    from django.forms.models import model_to_dict, modelform_factory
-
     results: dict[str, list] = {"created": [], "updated": [], "deleted": [], "errors": []}
 
     if not admin or not inlines_data:
@@ -187,8 +187,6 @@ def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]
 
         # Get the form class for the inline
         # Check if inline has a custom form class (not the default ModelForm)
-        from django.forms import ModelForm
-
         inline_form_class = getattr(inline_class, "form", None)
         if inline_form_class is None or inline_form_class is ModelForm:
             # No custom form or default ModelForm - generate one
@@ -270,8 +268,9 @@ def _log_action(user: Any, obj: models.Model, action_flag: int, change_message: 
     if user is None:
         return  # Can't log without a user
 
-    from django.contrib.admin.models import LogEntry
-    from django.contrib.contenttypes.models import ContentType
+    # Deferred import: Django models require app registry to be ready
+    from django.contrib.admin.models import LogEntry  # noqa: PLC0415
+    from django.contrib.contenttypes.models import ContentType  # noqa: PLC0415
 
     content_type = ContentType.objects.get_for_model(obj)
 
@@ -497,7 +496,8 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
 
         @sync_to_async
         def create_object():
-            from django.contrib.admin.models import ADDITION
+            # Deferred import: Django models require app registry to be ready
+            from django.contrib.admin.models import ADDITION  # noqa: PLC0415
 
             # Normalize FK field names (convert field_id to field)
             normalized_data = normalize_fk_fields(model, data)
@@ -616,8 +616,8 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
 
         @sync_to_async
         def update_object():
-            from django.contrib.admin.models import CHANGE
-            from django.forms.models import model_to_dict
+            # Deferred import: Django models require app registry to be ready
+            from django.contrib.admin.models import CHANGE  # noqa: PLC0415
 
             obj = model.objects.get(pk=obj_id)
 
@@ -723,7 +723,8 @@ async def handle_delete(model_name: str, arguments: dict[str, Any], request: Htt
 
         @sync_to_async
         def delete_object():
-            from django.contrib.admin.models import DELETION
+            # Deferred import: Django models require app registry to be ready
+            from django.contrib.admin.models import DELETION  # noqa: PLC0415
 
             obj = model.objects.get(pk=obj_id)
             obj_repr = str(obj)

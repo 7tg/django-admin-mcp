@@ -8,8 +8,10 @@ for use across handler implementations.
 import json
 from typing import Any
 
+from asgiref.sync import sync_to_async
 from django.contrib.admin.sites import site
 from django.db import models
+from django.forms import ModelForm
 from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
 
@@ -61,8 +63,8 @@ def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | N
         Tuple of (Model, ModelAdmin) if found, or (None, None) if not found.
     """
     # First check MCPAdminMixin's registry (populated at runtime when admins are instantiated)
-    # Use late import to avoid circular dependency
-    from django_admin_mcp.mixin import MCPAdminMixin
+    # Late import to avoid circular dependency: mixin imports handlers, handlers need mixin
+    from django_admin_mcp.mixin import MCPAdminMixin  # noqa: PLC0415
 
     if model_name in MCPAdminMixin._registered_models:
         info = MCPAdminMixin._registered_models[model_name]
@@ -141,8 +143,6 @@ async def async_check_permission(request: HttpRequest, model_admin: Any, action:
     Returns:
         True if permission granted, False otherwise.
     """
-    from asgiref.sync import sync_to_async
-
     return await sync_to_async(check_permission)(request, model_admin, action)
 
 
@@ -243,8 +243,6 @@ def get_admin_form_class(
         # If ModelAdmin has a custom form class, use it directly
         form_class = getattr(model_admin, "form", None)
         if form_class is not None:
-            from django.forms import ModelForm
-
             if form_class is not ModelForm and issubclass(form_class, ModelForm):
                 return form_class
 

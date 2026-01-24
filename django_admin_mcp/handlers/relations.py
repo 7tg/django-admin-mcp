@@ -148,13 +148,14 @@ async def handle_history(
 
     @sync_to_async
     def get_history():
-        from django.contrib.admin.models import (
+        # Deferred import: Django models require app registry to be ready
+        from django.contrib.admin.models import (  # noqa: PLC0415
             ADDITION,
             CHANGE,
             DELETION,
             LogEntry,
         )
-        from django.contrib.contenttypes.models import ContentType
+        from django.contrib.contenttypes.models import ContentType  # noqa: PLC0415
 
         # Verify the object exists
         try:
