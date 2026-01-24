@@ -3,6 +3,9 @@
 [![PyPI version](https://badge.fury.io/py/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
 [![Python versions](https://img.shields.io/pypi/pyversions/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
 [![Django versions](https://img.shields.io/badge/django-3.2%20%7C%204.0%20%7C%204.1%20%7C%204.2%20%7C%205.0-blue.svg)](https://pypi.org/project/django-admin-mcp/)
+[![Tests](https://github.com/7tg/django-admin-mcp/actions/workflows/tests.yml/badge.svg)](https://github.com/7tg/django-admin-mcp/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/7tg/django-admin-mcp/graph/badge.svg)](https://codecov.io/gh/7tg/django-admin-mcp)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License](https://img.shields.io/pypi/l/django-admin-mcp.svg)](https://github.com/7tg/django-admin-mcp/blob/main/LICENSE)
 
 Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add a mixin to your ModelAdmin classes and get instant access to CRUD operations, admin actions, model history, and more.
