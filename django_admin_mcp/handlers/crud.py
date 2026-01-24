@@ -8,7 +8,7 @@ Delete operations extracted from the mixin module.
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.forms import ModelForm
 from django.forms.models import model_to_dict, modelform_factory
@@ -572,17 +572,19 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
             if not form.is_valid():
                 return None, format_form_errors(form.errors)
 
-            # Save the form to create the object
-            obj = form.save()
+            # Wrap save and logging in transaction for atomicity
+            with transaction.atomic():
+                # Save the form to create the object
+                obj = form.save()
 
-            # Log the action - use Pydantic for serialization (truncated for log size)
-            data_json = _serialize_data_for_log(data)
-            _log_action(
-                user=user,
-                obj=obj,
-                action_flag=ADDITION,
-                change_message=f"Created via MCP: {data_json}",
-            )
+                # Log the action - use Pydantic for serialization (truncated for log size)
+                data_json = _serialize_data_for_log(data)
+                _log_action(
+                    user=user,
+                    obj=obj,
+                    action_flag=ADDITION,
+                    change_message=f"Created via MCP: {data_json}",
+                )
 
             return obj.pk, serialize_instance(obj, model_admin)
 
@@ -697,27 +699,29 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
             if not form.is_valid():
                 return None, format_form_errors(form.errors), {}
 
-            # Save the form to update the object
-            obj = form.save()
+            # Wrap save, inline updates, and logging in transaction for atomicity
+            with transaction.atomic():
+                # Save the form to update the object
+                obj = form.save()
 
-            # Handle inlines if provided
-            inlines_result = {}
-            if inlines_data and model_admin:
-                inlines_result = _update_inlines(obj, model_admin, inlines_data, request)
+                # Handle inlines if provided
+                inlines_result = {}
+                if inlines_data and model_admin:
+                    inlines_result = _update_inlines(obj, model_admin, inlines_data, request)
 
-            # Log the action - use Pydantic for serialization (truncated for log size)
-            change_message = []
-            if data:
-                data_json = _serialize_data_for_log(data)
-                change_message.append(f"Changed via MCP: {data_json}")
-            if inlines_data:
-                change_message.append(f"Updated inlines: {list(inlines_data.keys())}")
-            _log_action(
-                user=user,
-                obj=obj,
-                action_flag=CHANGE,
-                change_message=(" | ".join(change_message) if change_message else "Updated via MCP"),
-            )
+                # Log the action - use Pydantic for serialization (truncated for log size)
+                change_message = []
+                if data:
+                    data_json = _serialize_data_for_log(data)
+                    change_message.append(f"Changed via MCP: {data_json}")
+                if inlines_data:
+                    change_message.append(f"Updated inlines: {list(inlines_data.keys())}")
+                _log_action(
+                    user=user,
+                    obj=obj,
+                    action_flag=CHANGE,
+                    change_message=(" | ".join(change_message) if change_message else "Updated via MCP"),
+                )
 
             return serialize_instance(obj, model_admin), None, inlines_result
 
@@ -791,15 +795,17 @@ async def handle_delete(model_name: str, arguments: dict[str, Any], request: Htt
             obj = model.objects.get(pk=obj_id)
             obj_repr = str(obj)
 
-            # Log the action BEFORE deleting (so we still have the object)
-            _log_action(
-                user=user,
-                obj=obj,
-                action_flag=DELETION,
-                change_message="Deleted via MCP",
-            )
+            # Wrap logging and deletion in transaction for atomicity
+            with transaction.atomic():
+                # Log the action BEFORE deleting (so we still have the object)
+                _log_action(
+                    user=user,
+                    obj=obj,
+                    action_flag=DELETION,
+                    change_message="Deleted via MCP",
+                )
 
-            obj.delete()
+                obj.delete()
             return obj_repr
 
         await delete_object()
