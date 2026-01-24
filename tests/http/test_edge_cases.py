@@ -39,7 +39,7 @@ class TestEmptyToolResult:
                 "/api/mcp/",
                 data=json.dumps({"method": "tools/call", "name": "test_tool", "arguments": {}}),
                 content_type="application/json",
-                headers={"Authorization": f"Bearer {token.token}"},
+                headers={"Authorization": f"Bearer {token.plaintext_token}"},
             )
 
             assert response.status_code == 500
@@ -76,7 +76,7 @@ class TestFunctionBasedViewEdgeCases:
             "/api/mcp/",
             data="invalid json {",
             content_type="application/json",
-            headers={"Authorization": f"Bearer {token.token}"},
+            headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 400
@@ -96,7 +96,7 @@ class TestFunctionBasedViewEdgeCases:
             "/api/mcp/",
             data=json.dumps({"method": "unknown/method"}),
             content_type="application/json",
-            headers={"Authorization": f"Bearer {token.token}"},
+            headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 400
@@ -116,7 +116,7 @@ class TestFunctionBasedViewEdgeCases:
             "/api/mcp/",
             data=json.dumps({"method": "tools/call", "arguments": {}}),
             content_type="application/json",
-            headers={"Authorization": f"Bearer {token.token}"},
+            headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 400
@@ -138,7 +138,7 @@ class TestFunctionBasedViewEdgeCases:
             "/api/mcp/",
             data=json.dumps({"method": "tools/call", "name": "find_models", "arguments": {}}),
             content_type="application/json",
-            headers={"Authorization": f"Bearer {token.token}"},
+            headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 200

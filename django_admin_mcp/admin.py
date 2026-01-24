@@ -25,8 +25,8 @@ class MCPTokenAdmin(admin.ModelAdmin):
         "last_used_at",
     ]
     list_filter = ["is_active", "created_at", "expires_at", "groups"]
-    search_fields = ["name", "token", "user__username"]
-    readonly_fields = ["token", "created_at", "last_used_at", "status_display"]
+    search_fields = ["name", "user__username"]
+    readonly_fields = ["token", "token_hash", "salt", "created_at", "last_used_at", "status_display"]
     filter_horizontal = ["groups", "permissions"]
 
     fieldsets = (
@@ -42,17 +42,21 @@ class MCPTokenAdmin(admin.ModelAdmin):
         (
             "Token Information",
             {
-                "fields": ("token", "created_at", "last_used_at", "status_display"),
+                "fields": ("token_hash", "salt", "created_at", "last_used_at", "status_display"),
                 "classes": ("collapse",),
+                "description": "Token is hashed for security. Only the hash is stored, not the plaintext token.",
             },
         ),
     )
 
     @admin.display(description="Token")
     def token_preview(self, obj):
-        """Show a preview of the token."""
-        if obj.token:
-            return f"{obj.token[:8]}...{obj.token[-8:]}"
+        """Show a preview of the token hash."""
+        if obj.token_hash:
+            return f"Hash: {obj.token_hash[:8]}...{obj.token_hash[-8:]}"
+        elif obj.token:
+            # Legacy: still showing token for backward compatibility
+            return f"Legacy: {obj.token[:8]}...{obj.token[-8:]}"
         return "-"
 
     @admin.display(description="Status")

@@ -2,6 +2,8 @@
 Models for django-admin-mcp authentication
 """
 
+import hashlib
+import hmac
 import secrets
 from datetime import timedelta
 
@@ -31,7 +33,24 @@ class MCPToken(models.Model):
         max_length=64,
         unique=True,
         editable=False,
-        help_text="The authentication token (auto-generated)",
+        null=True,
+        blank=True,
+        help_text="DEPRECATED: Token is now hashed. This field will be removed in future versions.",
+    )
+    token_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        editable=False,
+        null=True,
+        blank=True,
+        help_text="SHA-256 hash of the authentication token",
+    )
+    salt = models.CharField(
+        max_length=32,
+        editable=False,
+        null=True,
+        blank=True,
+        help_text="Salt used for token hashing",
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -69,15 +88,36 @@ class MCPToken(models.Model):
         """Track if expires_at is explicitly set."""
         # Check if expires_at is in kwargs before calling super
         self._expires_at_explicit = "expires_at" in kwargs
+        # Store the plaintext token temporarily for return after save
+        self._plaintext_token = None
         super().__init__(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.name} ({self.token[:8]}...)"
+        # Use first 8 chars of hash for display since token is hashed
+        if self.token_hash:
+            return f"{self.name} ({self.token_hash[:8]}...)"
+        elif self.token:
+            # Legacy: still showing token for backward compatibility
+            return f"{self.name} ({self.token[:8]}...)"
+        return f"{self.name}"
 
     def save(self, *args, **kwargs):
-        """Generate token and set default expiry on first save."""
-        if not self.token:
-            self.token = secrets.token_urlsafe(48)
+        """Generate token, hash it with salt, and set default expiry on first save."""
+        if not self.token_hash:
+            # Generate a new token
+            plaintext_token = secrets.token_urlsafe(48)
+
+            # Generate a unique salt for this token
+            self.salt = secrets.token_urlsafe(16)
+
+            # Hash the token with the salt
+            self.token_hash = self._hash_token(plaintext_token, self.salt)
+
+            # Store plaintext token temporarily so it can be returned to user once
+            self._plaintext_token = plaintext_token
+
+            # Clear the legacy token field (don't store plaintext)
+            self.token = None
 
         # Set default expiry to 90 days only for new tokens where expires_at wasn't explicitly set
         if self._should_set_default_expiry():
@@ -85,9 +125,63 @@ class MCPToken(models.Model):
 
         super().save(*args, **kwargs)
 
+    @staticmethod
+    def _hash_token(token: str, salt: str) -> str:
+        """
+        Hash a token using SHA-256 with salt.
+
+        Args:
+            token: The plaintext token
+            salt: The salt to use for hashing
+
+        Returns:
+            Hexadecimal hash string
+        """
+        # Combine salt and token, then hash
+        salted_token = f"{salt}{token}".encode()
+        return hashlib.sha256(salted_token).hexdigest()
+
+    def verify_token(self, provided_token: str) -> bool:
+        """
+        Verify a provided token against the stored hash using constant-time comparison.
+
+        Args:
+            provided_token: The plaintext token to verify
+
+        Returns:
+            True if token matches, False otherwise
+        """
+        if not self.token_hash or not self.salt:
+            # Legacy: fallback to plaintext comparison if hash not available
+            if self.token:
+                return hmac.compare_digest(self.token, provided_token)
+            return False
+
+        # Hash the provided token with the stored salt
+        provided_hash = self._hash_token(provided_token, self.salt)
+
+        # Use constant-time comparison to prevent timing attacks
+        return hmac.compare_digest(self.token_hash, provided_hash)
+
     def _should_set_default_expiry(self):
         """Check if default expiry should be set for new token."""
         return self.pk is None and not self._expires_at_explicit and self.expires_at is None
+
+    def get_plaintext_token(self) -> str | None:
+        """
+        Get the plaintext token. Only available immediately after creation.
+
+        Returns:
+            The plaintext token if available, None otherwise.
+
+        Note:
+            This should only be called once after token creation to display to the user.
+            After that, the plaintext token is lost forever (by design).
+        """
+        token = self._plaintext_token
+        # Clear the token after first retrieval for security
+        self._plaintext_token = None
+        return token
 
     def mark_used(self):
         """Mark token as recently used."""

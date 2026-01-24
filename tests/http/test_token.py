@@ -29,21 +29,22 @@ class TestMCPToken:
     def test_token_auto_generated(self):
         """Test that token is auto-generated on save."""
         token = MCPTokenFactory()
-        assert token.token is not None
-        assert len(token.token) > 0
+        assert token.plaintext_token is not None
+        assert len(token.plaintext_token) > 0
 
     def test_token_unique(self):
         """Test that tokens are unique."""
         token1 = MCPTokenFactory()
         token2 = MCPTokenFactory()
-        assert token1.token != token2.token
+        assert token1.plaintext_token != token2.plaintext_token
 
     def test_token_string_representation(self):
         """Test string representation of token."""
         token = MCPTokenFactory(name="My Token")
         str_repr = str(token)
         assert "My Token" in str_repr
-        assert token.token[:8] in str_repr
+        # String representation now shows hash, not plaintext token
+        assert token.token_hash[:8] in str_repr
 
     def test_token_default_expiry(self):
         """Test that tokens have default 90-day expiry."""
@@ -88,7 +89,7 @@ class TestMCPToken:
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
-            headers={"Authorization": f"Bearer {token.token}"},
+            headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 401
@@ -124,7 +125,7 @@ class TestMCPExpose:
                 "/api/mcp/",
                 data=json.dumps({"method": "tools/list"}),
                 content_type="application/json",
-                headers={"Authorization": f"Bearer {token.token}"},
+                headers={"Authorization": f"Bearer {token.plaintext_token}"},
             )
 
             assert response.status_code == 200

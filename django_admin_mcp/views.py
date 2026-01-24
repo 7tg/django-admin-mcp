@@ -7,6 +7,7 @@ Provides HTTP interface for MCP protocol with token-based authentication.
 import json
 
 from asgiref.sync import sync_to_async
+from django.db import models
 from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -34,16 +35,26 @@ def authenticate_token(request):
     token_value = auth_header[7:]  # Remove 'Bearer ' prefix
 
     try:
-        # Use select_related to pre-load user for async access
-        token = MCPToken.objects.select_related("user").get(token=token_value)
+        # First try to find by token_hash (new method)
+        # We need to check all tokens since we can't directly query by hash
+        # without knowing which token it is. For better performance in production,
+        # consider indexing or caching strategies.
+        tokens = MCPToken.objects.select_related("user").filter(
+            models.Q(token_hash__isnull=False) | models.Q(token__isnull=False)
+        )
 
-        # Check if token is valid (active and not expired)
-        if not token.is_valid():
-            return None
+        for token in tokens:
+            if token.verify_token(token_value):
+                # Check if token is valid (active and not expired)
+                if not token.is_valid():
+                    return None
 
-        token.mark_used()
-        return token
-    except MCPToken.DoesNotExist:
+                token.mark_used()
+                return token
+
+        # No matching token found
+        return None
+    except Exception:
         return None
 
 

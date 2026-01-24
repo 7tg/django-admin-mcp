@@ -28,3 +28,17 @@ class MCPTokenFactory(factory.django.DjangoModelFactory):
 
     name = factory.Sequence(lambda n: f"Token {n}")
     user = factory.SubFactory(UserFactory)
+
+    @factory.post_generation
+    def get_plaintext_token(obj, create, extracted, **kwargs):
+        """Store plaintext token as an attribute for tests."""
+        if create:
+            # The token is automatically generated and hashed on save
+            # Get the plaintext token if available
+            plaintext = obj.get_plaintext_token()
+            if plaintext:
+                # Store it as a test attribute so tests can use it
+                obj.plaintext_token = plaintext
+            else:
+                # Fallback for legacy tokens
+                obj.plaintext_token = obj.token if obj.token else None
