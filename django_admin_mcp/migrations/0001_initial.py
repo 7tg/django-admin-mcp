@@ -10,6 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+        ('auth', '0012_alter_user_first_name_max_length'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -61,6 +62,24 @@ class Migration(migrations.Migration):
                     "last_used_at",
                     models.DateTimeField(
                         blank=True, help_text="Last time this token was used", null=True
+                    ),
+                ),
+                (
+                    "groups",
+                    models.ManyToManyField(
+                        blank=True,
+                        help_text="Groups this token belongs to for permission management",
+                        related_name="mcp_tokens",
+                        to="auth.group",
+                    ),
+                ),
+                (
+                    "permissions",
+                    models.ManyToManyField(
+                        blank=True,
+                        help_text="Specific permissions granted to this token",
+                        related_name="mcp_tokens",
+                        to="auth.permission",
                     ),
                 ),
                 (
