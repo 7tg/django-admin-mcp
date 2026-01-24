@@ -7,7 +7,6 @@ are properly caught and return user-friendly error messages.
 
 import json
 import uuid
-from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.auth.models import User
@@ -22,7 +21,7 @@ from django_admin_mcp.handlers import (
     handle_update,
 )
 from django_admin_mcp.handlers.base import handle_database_error
-from tests.models import Article, Author
+from tests.models import Author
 
 
 def unique_username():
@@ -179,7 +178,9 @@ class TestDeleteErrorHandling:
         request = create_mock_request(user)
 
         # Create author without articles
-        author = await Author.objects.acreate(name=f"Test {uuid.uuid4().hex[:8]}", email=f"test_{uuid.uuid4().hex[:8]}@example.com")
+        name = f"Test {uuid.uuid4().hex[:8]}"
+        email = f"test_{uuid.uuid4().hex[:8]}@example.com"
+        author = await Author.objects.acreate(name=name, email=email)
 
         # Try to delete author
         arguments = {"id": author.pk}
@@ -220,8 +221,10 @@ class TestBulkErrorHandling:
         request = create_mock_request(user)
 
         # Create authors
-        author1 = await Author.objects.acreate(name=f"Author {uuid.uuid4().hex[:8]}", email=f"author1_{uuid.uuid4().hex[:8]}@example.com")
-        author2 = await Author.objects.acreate(name=f"Author {uuid.uuid4().hex[:8]}", email=f"author2_{uuid.uuid4().hex[:8]}@example.com")
+        email1 = f"author1_{uuid.uuid4().hex[:8]}@example.com"
+        email2 = f"author2_{uuid.uuid4().hex[:8]}@example.com"
+        author1 = await Author.objects.acreate(name=f"Author {uuid.uuid4().hex[:8]}", email=email1)
+        author2 = await Author.objects.acreate(name=f"Author {uuid.uuid4().hex[:8]}", email=email2)
 
         arguments = {
             "operation": "delete",
