@@ -377,6 +377,46 @@ class TestHandleBulk:
         await check_log_entry()
 
     @pytest.mark.asyncio
+    async def test_bulk_update_truncates_large_change_message(self):
+        """Test that bulk update truncates large change messages to avoid DB limits."""
+        uid = unique_id()
+        user = await create_superuser(uid)
+        author = await create_author(
+            name=f"Truncate Test {uid}",
+            email=f"truncate_{uid}@example.com",
+        )
+        request = create_mock_request(user)
+        # Create a very large update data dictionary
+        large_data = {f"field_{i}": "x" * 1000 for i in range(100)}  # ~100KB of data
+        result = await handle_bulk(
+            "author",
+            {
+                "operation": "update",
+                "items": [{"id": author.pk, "data": {"name": f"Updated {uid}"}}],
+            },
+            request,
+        )
+        parsed = json.loads(result[0].text)
+        assert parsed["success_count"] == 1
+
+        # Verify the log entry was created and message is truncated if needed
+        @sync_to_async
+        def check_log_entry():
+            ct = ContentType.objects.get_for_model(Author)
+            log = LogEntry.objects.filter(
+                user=user,
+                content_type=ct,
+                object_id=str(author.pk),
+            ).first()
+            assert log is not None
+            assert "Bulk updated via MCP:" in log.change_message
+            # Message should not exceed reasonable limits
+            assert len(log.change_message) < 65000  # MySQL TEXT limit
+            return log
+
+        await check_log_entry()
+
+    @pytest.mark.asyncio
     async def test_bulk_delete_multiple_items(self):
         """Test bulk delete with multiple items."""
         uid = unique_id()
