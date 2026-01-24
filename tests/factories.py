@@ -40,9 +40,5 @@ class MCPTokenFactory(factory.django.DjangoModelFactory):
             # The token is automatically generated and hashed on save
             # Get the plaintext token before it's cleared
             plaintext = obj.get_plaintext_token()
-            if plaintext:
-                # Store it as a test attribute so tests can use it
-                obj.plaintext_token = plaintext
-            else:
-                # Fallback for legacy tokens (migration compatibility)
-                obj.plaintext_token = obj.token if obj.token else None
+            # Store it as a test attribute so tests can use it
+            obj.plaintext_token = plaintext

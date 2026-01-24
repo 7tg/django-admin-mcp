@@ -29,7 +29,6 @@ class MCPTokenAdmin(admin.ModelAdmin):
     list_filter = ["is_active", "created_at", "expires_at", "groups"]
     search_fields = ["name", "user__username"]
     readonly_fields = [
-        "token",
         "token_hash",
         "salt",
         "created_at",
@@ -141,9 +140,6 @@ class MCPTokenAdmin(admin.ModelAdmin):
         """Show a preview of the token hash."""
         if obj.token_hash:
             return f"Hash: {obj.token_hash[:8]}...{obj.token_hash[-8:]}"
-        elif obj.token:
-            # Legacy: still showing token for backward compatibility
-            return f"Legacy: {obj.token[:8]}...{obj.token[-8:]}"
         return "-"
 
     @admin.display(description="Status")

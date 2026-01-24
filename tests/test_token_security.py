@@ -21,9 +21,6 @@ class TestTokenSecurity:
         assert token.token_hash is not None
         assert len(token.token_hash) == 64  # SHA-256 produces 64 hex characters
 
-        # Token field should be None (not stored in plaintext)
-        assert token.token is None
-
     def test_salt_is_generated(self):
         """Test that unique salt is generated for each token."""
         token = MCPTokenFactory()
@@ -115,18 +112,15 @@ class TestTokenSecurity:
         hash3 = MCPToken._hash_token(token_str, "different_salt")
         assert hash1 != hash3
 
-    def test_no_plaintext_token_in_database(self):
-        """Test that plaintext token is not stored in database."""
+    def test_token_verification_after_reload(self):
+        """Test that token can be verified after reloading from database."""
         token = MCPTokenFactory()
         plaintext = token.plaintext_token
 
         # Reload from database
         token.refresh_from_db()
 
-        # Token field should be None in database
-        assert token.token is None
-
-        # But should still verify against the original plaintext
+        # Should still verify against the original plaintext
         assert token.verify_token(plaintext) is True
 
     def test_token_string_representation_uses_hash(self):

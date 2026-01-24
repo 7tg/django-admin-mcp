@@ -29,14 +29,6 @@ class MCPToken(models.Model):
         max_length=200,
         help_text="A descriptive name for this token (e.g., 'Production API', 'Dev Testing')",
     )
-    token = models.CharField(
-        max_length=64,
-        unique=True,
-        editable=False,
-        null=True,
-        blank=True,
-        help_text="DEPRECATED: Token is now hashed. This field will be removed in future versions.",
-    )
     token_hash = models.CharField(
         max_length=64,
         unique=True,
@@ -45,11 +37,9 @@ class MCPToken(models.Model):
         blank=True,
         help_text="SHA-256 hash of the authentication token",
     )
-    salt = models.CharField(  # noqa: DJ001 - null=True needed for migration compatibility
+    salt = models.CharField(
         max_length=32,
         editable=False,
-        null=True,
-        blank=True,
         help_text="Salt used for token hashing",
     )
     user = models.ForeignKey(
@@ -96,12 +86,9 @@ class MCPToken(models.Model):
         super().__init__(*args, **kwargs)
 
     def __str__(self):
-        # Use first 8 chars of hash for display since token is hashed
+        # Use first 8 chars of hash for display
         if self.token_hash:
             return f"{self.name} ({self.token_hash[:8]}...)"
-        elif self.token:
-            # Legacy: still showing token for backward compatibility
-            return f"{self.name} ({self.token[:8]}...)"
         return f"{self.name}"
 
     def save(self, *args, **kwargs):
@@ -118,9 +105,6 @@ class MCPToken(models.Model):
 
             # Store plaintext token temporarily so it can be returned to user once
             self._plaintext_token = plaintext_token
-
-            # Clear the legacy token field (don't store plaintext)
-            self.token = None
 
         # Set default expiry to 90 days only for new tokens where expires_at wasn't explicitly set
         if self._should_set_default_expiry():
@@ -155,9 +139,6 @@ class MCPToken(models.Model):
             True if token matches, False otherwise
         """
         if not self.token_hash or not self.salt:
-            # Legacy: fallback to plaintext comparison if hash not available
-            if self.token:
-                return hmac.compare_digest(self.token, provided_token)
             return False
 
         # Hash the provided token with the stored salt
@@ -205,11 +186,8 @@ class MCPToken(models.Model):
         # Hash the token with the new salt
         self.token_hash = self._hash_token(plaintext_token, self.salt)
 
-        # Clear legacy token field
-        self.token = None
-
         # Save the changes
-        self.save(update_fields=["token_hash", "salt", "token"])
+        self.save(update_fields=["token_hash", "salt"])
 
         return plaintext_token
 

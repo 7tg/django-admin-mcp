@@ -51,15 +51,6 @@ def authenticate_token(request):
                 token.mark_used()
                 return token
 
-        # Fallback: check legacy tokens (for backward compatibility during migration)
-        try:
-            legacy_token = MCPToken.objects.select_related("user").get(token=token_value, is_active=True)
-            if legacy_token.is_valid():
-                legacy_token.mark_used()
-                return legacy_token
-        except MCPToken.DoesNotExist:
-            pass
-
         # No matching token found
         return None
     except Exception:
