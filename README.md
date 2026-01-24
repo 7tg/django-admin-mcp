@@ -2,11 +2,15 @@
 
 [![Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/7tg/django-admin-mcp)
 [![PyPI version](https://badge.fury.io/py/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
 [![Python versions](https://img.shields.io/pypi/pyversions/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
-[![Django versions](https://img.shields.io/badge/django-3.2%20%7C%204.0%20%7C%204.1%20%7C%204.2%20%7C%205.0-blue.svg)](https://pypi.org/project/django-admin-mcp/)
+[![Django](https://img.shields.io/badge/django-3.2%20%7C%204.x%20%7C%205.x-092E20.svg?logo=django)](https://www.djangoproject.com/)
 [![Tests](https://github.com/7tg/django-admin-mcp/actions/workflows/tests.yml/badge.svg)](https://github.com/7tg/django-admin-mcp/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/7tg/django-admin-mcp/graph/badge.svg)](https://codecov.io/gh/7tg/django-admin-mcp)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://docs.pydantic.dev)
+[![Typed: mypy](https://img.shields.io/badge/typed-mypy-blue.svg)](https://mypy-lang.org/)
 [![License](https://img.shields.io/pypi/l/django-admin-mcp.svg)](https://github.com/7tg/django-admin-mcp/blob/main/LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://7tg.github.io/django-admin-mcp/)
 
