@@ -27,6 +27,26 @@ from django_admin_mcp.handlers.base import (
 from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
 
 
+def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500) -> str:
+    """
+    Serialize data for Django admin log message with size limit.
+
+    Args:
+        data: Dictionary to serialize for logging.
+        max_length: Maximum length of the serialized string (default 500).
+
+    Returns:
+        Serialized JSON string, truncated if necessary with ellipsis.
+    """
+    adapter = TypeAdapter(dict[str, Any])
+    data_json = adapter.dump_json(data).decode("utf-8")
+
+    if len(data_json) > max_length:
+        return data_json[: max_length - 3] + "..."
+
+    return data_json
+
+
 def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q:
     """
     Build a Q object from filter parameters.
@@ -511,9 +531,8 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
             # Save the form to create the object
             obj = form.save()
 
-            # Log the action - use Pydantic for serialization
-            adapter = TypeAdapter(dict[str, Any])
-            data_json = adapter.dump_json(data).decode("utf-8")
+            # Log the action - use Pydantic for serialization (truncated for log size)
+            data_json = _serialize_data_for_log(data)
             _log_action(
                 user=user,
                 obj=obj,
@@ -642,11 +661,10 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
             if inlines_data and model_admin:
                 inlines_result = _update_inlines(obj, model_admin, inlines_data)
 
-            # Log the action - use Pydantic for serialization
+            # Log the action - use Pydantic for serialization (truncated for log size)
             change_message = []
             if data:
-                adapter = TypeAdapter(dict[str, Any])
-                data_json = adapter.dump_json(data).decode("utf-8")
+                data_json = _serialize_data_for_log(data)
                 change_message.append(f"Changed via MCP: {data_json}")
             if inlines_data:
                 change_message.append(f"Updated inlines: {list(inlines_data.keys())}")
