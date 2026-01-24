@@ -4,16 +4,16 @@ Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add
 
 ## Features
 
-- 📦 **Zero Dependencies** - Beyond Django and Pydantic, no additional dependencies required.
-- 🎫 **Token Authentication** - Secure Bearer token auth with configurable expiry (default 90 days).
-- 🛡️ **Django Admin Permissions** - Respects existing view/add/change/delete permissions.
-- ✏️ **Full CRUD** - List, get, create, update, delete operations for all exposed models.
-- ⚡ **Admin Actions** - Execute registered Django admin actions on selected records.
-- 📦 **Bulk Operations** - Update or delete multiple records at once.
-- 🔍 **Model Introspection** - Describe model fields and relationships programmatically.
-- 🔗 **Related Objects** - Traverse foreign keys and reverse relations.
-- 📜 **Change History** - Access Django admin's history log for audit trails.
-- 🔎 **Autocomplete** - Search suggestions for foreign key fields.
+- **Zero Dependencies** - Beyond Django and Pydantic, no additional dependencies required.
+- **Token Authentication** - Secure Bearer token auth with configurable expiry (default 90 days).
+- **Django Admin Permissions** - Respects existing view/add/change/delete permissions.
+- **Full CRUD** - List, get, create, update, delete operations for all exposed models.
+- **Admin Actions** - Execute registered Django admin actions on selected records.
+- **Bulk Operations** - Update or delete multiple records at once.
+- **Model Introspection** - Describe model fields and relationships programmatically.
+- **Related Objects** - Traverse foreign keys and reverse relations.
+- **Change History** - Access Django admin's history log for audit trails.
+- **Autocomplete** - Search suggestions for foreign key fields.
 
 ## Quick Example
 
@@ -48,11 +48,11 @@ Claude: [calls update_article with id=42, data={"published": true}]
 
 | Django Version | Status |
 |----------------|--------|
-| Django 3.2 LTS | ✅ Supported |
-| Django 4.0 | ✅ Supported |
-| Django 4.1 | ✅ Supported |
-| Django 4.2 LTS | ✅ Supported |
-| Django 5.0 | ✅ Supported |
+| Django 3.2 LTS | Supported |
+| Django 4.0 | Supported |
+| Django 4.1 | Supported |
+| Django 4.2 LTS | Supported |
+| Django 5.0 | Supported |
 
 ## License
 
