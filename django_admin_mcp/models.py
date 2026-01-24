@@ -83,6 +83,9 @@ class MCPToken(models.Model):
         verbose_name = "MCP Token"
         verbose_name_plural = "MCP Tokens"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["is_active", "token_hash"], name="mcp_token_active_hash_idx"),
+        ]
 
     def __init__(self, *args, **kwargs):
         """Track if expires_at is explicitly set."""

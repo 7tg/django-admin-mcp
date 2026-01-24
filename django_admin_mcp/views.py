@@ -35,22 +35,35 @@ def authenticate_token(request):
     token_value = auth_header[7:]  # Remove 'Bearer ' prefix
 
     try:
-        # First try to find by token_hash (new method)
-        # We need to check all tokens since we can't directly query by hash
-        # without knowing which token it is. For better performance in production,
-        # consider indexing or caching strategies.
+        # Get all active tokens with hashes
+        # Note: This approach requires iterating through tokens because we need the salt
+        # to hash the provided token. In production with many tokens, consider:
+        # 1. Caching active tokens
+        # 2. Using a separate lookup table with indexed hash prefixes
+        # 3. Limiting query to recently used tokens first
         tokens = MCPToken.objects.select_related("user").filter(
-            models.Q(token_hash__isnull=False) | models.Q(token__isnull=False)
+            is_active=True, token_hash__isnull=False
         )
 
         for token in tokens:
             if token.verify_token(token_value):
-                # Check if token is valid (active and not expired)
+                # Check if token is valid (not expired)
                 if not token.is_valid():
                     return None
 
                 token.mark_used()
                 return token
+
+        # Fallback: check legacy tokens (for backward compatibility during migration)
+        try:
+            legacy_token = MCPToken.objects.select_related("user").get(
+                token=token_value, is_active=True
+            )
+            if legacy_token.is_valid():
+                legacy_token.mark_used()
+                return legacy_token
+        except MCPToken.DoesNotExist:
+            pass
 
         # No matching token found
         return None
