@@ -7,7 +7,6 @@ Provides HTTP interface for MCP protocol with token-based authentication.
 import json
 
 from asgiref.sync import sync_to_async
-from django.db import models
 from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
