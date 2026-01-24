@@ -13,7 +13,7 @@ from django.db import models
 from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
 
-from ..protocol.types import TextContent
+from django_admin_mcp.protocol.types import TextContent
 
 
 def json_response(data: dict) -> list[TextContent]:
@@ -44,7 +44,7 @@ def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | N
     """
     # First check MCPAdminMixin's registry (populated at runtime when admins are instantiated)
     # Use late import to avoid circular dependency
-    from ..mixin import MCPAdminMixin
+    from django_admin_mcp.mixin import MCPAdminMixin
 
     if model_name in MCPAdminMixin._registered_models:
         info = MCPAdminMixin._registered_models[model_name]

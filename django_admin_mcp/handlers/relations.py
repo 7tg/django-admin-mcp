@@ -11,8 +11,8 @@ from asgiref.sync import sync_to_async
 from django.db.models import Q
 from django.http import HttpRequest
 
-from ..protocol.types import TextContent
-from .base import get_model_admin, json_response, serialize_instance
+from django_admin_mcp.handlers.base import get_model_admin, json_response, serialize_instance
+from django_admin_mcp.protocol.types import TextContent
 
 
 async def handle_related(

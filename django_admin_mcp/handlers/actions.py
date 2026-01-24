@@ -11,8 +11,7 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
 
-from ..protocol.types import TextContent
-from .base import (
+from django_admin_mcp.handlers.base import (
     async_check_permission,
     format_form_errors,
     get_admin_form_class,
@@ -20,6 +19,7 @@ from .base import (
     json_response,
     normalize_fk_fields,
 )
+from django_admin_mcp.protocol.types import TextContent
 
 
 def _get_action_info(action) -> dict[str, Any]:

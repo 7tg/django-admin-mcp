@@ -11,7 +11,7 @@ from typing import Any
 from django.db import models
 from django.http import HttpRequest
 
-from ..handlers import (
+from django_admin_mcp.handlers import (
     get_exposed_models,
     handle_action,
     handle_actions,
@@ -28,7 +28,7 @@ from ..handlers import (
     handle_update,
     json_response,
 )
-from ..protocol.types import TextContent, Tool
+from django_admin_mcp.protocol.types import TextContent, Tool
 
 # Type alias for handler functions
 HandlerFunc = Callable[

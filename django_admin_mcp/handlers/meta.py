@@ -12,8 +12,8 @@ from django.contrib.admin.sites import site
 from django.db import models
 from django.http import HttpRequest
 
-from ..protocol.types import TextContent
-from .base import get_model_admin, json_response
+from django_admin_mcp.handlers.base import get_model_admin, json_response
+from django_admin_mcp.protocol.types import TextContent
 
 
 def _get_field_metadata(field) -> dict[str, Any]:

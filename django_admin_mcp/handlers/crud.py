@@ -13,8 +13,7 @@ from django.db import models
 from django.db.models import Q
 from django.http import HttpRequest
 
-from ..protocol.types import TextContent
-from .base import (
+from django_admin_mcp.handlers.base import (
     async_check_permission,
     format_form_errors,
     get_admin_form_class,
@@ -23,6 +22,7 @@ from .base import (
     normalize_fk_fields,
     serialize_instance,
 )
+from django_admin_mcp.protocol.types import TextContent
 
 
 def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q:
