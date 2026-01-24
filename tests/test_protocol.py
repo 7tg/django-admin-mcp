@@ -3,6 +3,7 @@ Tests for django_admin_mcp.protocol module.
 """
 
 import pytest
+from pydantic import ValidationError
 
 from django_admin_mcp.protocol import (
     ImageContent,
@@ -12,6 +13,8 @@ from django_admin_mcp.protocol import (
     TextContent,
     Tool,
     ToolResult,
+    ToolsCallRequest,
+    ToolsListRequest,
 )
 
 
@@ -202,8 +205,6 @@ class TestMCPRequests:
 
     def test_tools_list_request(self):
         """Test ToolsListRequest validation."""
-        from django_admin_mcp.protocol import ToolsListRequest
-
         # Valid request
         request = ToolsListRequest(method="tools/list")
         assert request.method == "tools/list"
@@ -211,10 +212,6 @@ class TestMCPRequests:
 
     def test_tools_list_request_invalid_method(self):
         """Test ToolsListRequest rejects invalid method."""
-        from pydantic import ValidationError
-
-        from django_admin_mcp.protocol import ToolsListRequest
-
         # Invalid method should fail
         with pytest.raises(ValidationError) as exc_info:
             ToolsListRequest(method="invalid/method")
@@ -223,8 +220,6 @@ class TestMCPRequests:
 
     def test_tools_call_request(self):
         """Test ToolsCallRequest validation."""
-        from django_admin_mcp.protocol import ToolsCallRequest
-
         # Valid request with arguments
         request = ToolsCallRequest(method="tools/call", name="find_models", arguments={"query": "article"})
         assert request.method == "tools/call"
@@ -233,8 +228,6 @@ class TestMCPRequests:
 
     def test_tools_call_request_default_arguments(self):
         """Test ToolsCallRequest with default empty arguments."""
-        from django_admin_mcp.protocol import ToolsCallRequest
-
         # Request without arguments should default to empty dict
         request = ToolsCallRequest(method="tools/call", name="find_models")
         assert request.method == "tools/call"
@@ -243,10 +236,6 @@ class TestMCPRequests:
 
     def test_tools_call_request_missing_name(self):
         """Test ToolsCallRequest requires name field."""
-        from pydantic import ValidationError
-
-        from django_admin_mcp.protocol import ToolsCallRequest
-
         # Missing name should fail
         with pytest.raises(ValidationError) as exc_info:
             ToolsCallRequest(method="tools/call")
@@ -257,8 +246,6 @@ class TestMCPRequests:
 
     def test_tools_call_request_serialization(self):
         """Test ToolsCallRequest serializes correctly."""
-        from django_admin_mcp.protocol import ToolsCallRequest
-
         request = ToolsCallRequest(method="tools/call", name="list_article", arguments={"limit": 10})
         data = request.model_dump()
         assert data == {"method": "tools/call", "name": "list_article", "arguments": {"limit": 10}}

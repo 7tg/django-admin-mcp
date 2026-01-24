@@ -7,7 +7,6 @@ Provides HTTP interface for MCP protocol with token-based authentication.
 import json
 
 from asgiref.sync import sync_to_async
-from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -112,7 +111,7 @@ class MCPHTTPView(View):
 
         # Create request with user for permission checking
         tool_request = HttpRequest()
-        tool_request.user = token.user if token and token.user else AnonymousUser()
+        tool_request.user = token.user if token else None  # type: ignore[assignment]
 
         # Call the tool with request context
         result = await call_tool(tool_name, arguments, tool_request)
@@ -199,7 +198,7 @@ async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token
 
     # Create request with user for permission checking
     tool_request = HttpRequest()
-    tool_request.user = token.user if token and token.user else AnonymousUser()
+    tool_request.user = token.user if token else None  # type: ignore[assignment]
 
     # Call the tool with request context
     result = await call_tool(tool_name, arguments, tool_request)
