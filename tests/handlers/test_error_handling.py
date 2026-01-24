@@ -161,13 +161,18 @@ class TestCRUDErrorHandling:
     @pytest.mark.django_db
     async def test_create_integrity_error_no_leak(self, superuser_request):
         """Test that create handler doesn't leak constraint names."""
+        import uuid
+
+        unique_suffix = uuid.uuid4().hex[:8]
         # Create an author first
-        author = await sync_to_async(Author.objects.create)(name="Test Author", email="test@example.com", bio="Bio")
+        author = await sync_to_async(Author.objects.create)(
+            name=f"Test Author {unique_suffix}", email=f"test_{unique_suffix}@example.com", bio="Bio"
+        )
 
         # Try to create another with same email (unique constraint)
         result = await handle_create(
             "author",
-            {"data": {"name": "Another Author", "email": "test@example.com", "bio": "Bio 2"}},
+            {"data": {"name": "Another Author", "email": f"test_{unique_suffix}@example.com", "bio": "Bio 2"}},
             superuser_request,
         )
 
