@@ -19,17 +19,17 @@ cd django-admin-mcp
 
 ### Install Dependencies
 
-=== "uv"
+**Using uv (recommended):**
 
-    ```bash
-    uv sync --all-extras
-    ```
+```bash
+uv sync --all-extras
+```
 
-=== "pip"
+**Using pip:**
 
-    ```bash
-    pip install -e ".[dev]"
-    ```
+```bash
+pip install -e ".[dev]"
+```
 
 ### Set Up Pre-commit Hooks
 
