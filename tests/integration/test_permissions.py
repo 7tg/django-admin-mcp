@@ -177,3 +177,64 @@ class TestPermissionChecks:
         response = json.loads(result[0].text)
         assert "error" in response
         assert response.get("code") == "permission_denied"
+
+    async def test_related_permission_check(self):
+        """Test that related tool checks view permissions."""
+        User = get_user_model()
+
+        # Create an author
+        author = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: Author.objects.create(name="Related Perm Author", email="relatedperm@example.com"),
+        )
+
+        # Create a regular user without permissions
+        regular_user = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: User.objects.create_user(
+                username="relateduser",
+                email="related@example.com",
+                password="relatedpass123",
+            ),
+        )
+
+        # Test related without permission (should be denied)
+        result = await MCPAdminMixin.handle_tool_call(
+            "related_author",
+            {"id": author.id, "relation": "articles"},
+            user=regular_user,
+        )
+        response = json.loads(result[0].text)
+        assert "error" in response
+        assert response.get("code") == "permission_denied"
+
+    async def test_related_superuser_allowed(self):
+        """Test that superuser can access related objects."""
+        User = get_user_model()
+
+        # Create a superuser
+        superuser = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: User.objects.create_superuser(
+                username="relatedsuper",
+                email="relatedsuper@example.com",
+                password="superpass123",
+            ),
+        )
+
+        # Create an author
+        author = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: Author.objects.create(name="Super Related Author", email="superrelated@example.com"),
+        )
+
+        # Test related with superuser (should succeed)
+        result = await MCPAdminMixin.handle_tool_call(
+            "related_author",
+            {"id": author.id, "relation": "articles"},
+            user=superuser,
+        )
+        response = json.loads(result[0].text)
+        assert "error" not in response
+        assert response["relation"] == "articles"
+        assert response["type"] == "many"

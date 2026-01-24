@@ -11,7 +11,12 @@ from asgiref.sync import sync_to_async
 from django.db.models import Q
 from django.http import HttpRequest
 
-from django_admin_mcp.handlers.base import get_model_admin, json_response, serialize_instance
+from django_admin_mcp.handlers.base import (
+    async_check_permission,
+    get_model_admin,
+    json_response,
+    serialize_instance,
+)
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -46,6 +51,15 @@ async def handle_related(
 
     if model is None:
         return json_response({"error": f"Model '{model_name}' not found"})
+
+    # Check view permission
+    if not await async_check_permission(request, model_admin, "view"):
+        return json_response(
+            {
+                "error": f"Permission denied: cannot view {model_name}",
+                "code": "permission_denied",
+            }
+        )
 
     obj_id = arguments.get("id")
     relation = arguments.get("relation")
