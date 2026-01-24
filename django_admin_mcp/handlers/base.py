@@ -393,7 +393,7 @@ def handle_database_error(error: Exception) -> dict[str, Any]:
                 "error": "A record with these values already exists",
                 "code": "duplicate_entry",
             }
-        elif "foreign key" in error_str or "constraint" in error_str:
+        elif "foreign key" in error_str:
             return {
                 "error": "Referenced record does not exist",
                 "code": "invalid_reference",
