@@ -75,6 +75,10 @@ dev = [
     "pre-commit>=3.7.0",
     "djlint>=1.34.0",
 ]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"

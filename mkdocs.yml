@@ -1,0 +1,88 @@
+site_name: Django Admin MCP
+site_description: Expose Django admin models to MCP (Model Context Protocol) clients
+site_url: https://7tg.github.io/django-admin-mcp/
+repo_name: 7tg/django-admin-mcp
+repo_url: https://github.com/7tg/django-admin-mcp
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quick-start.md
+    - Configuration: getting-started/configuration.md
+  - User Guide:
+    - Exposing Models: guide/exposing-models.md
+    - Token Management: guide/tokens.md
+    - Permissions: guide/permissions.md
+    - Client Setup: guide/client-setup.md
+  - Tools Reference:
+    - Overview: tools/overview.md
+    - CRUD Operations: tools/crud.md
+    - Admin Actions: tools/actions.md
+    - Model Introspection: tools/introspection.md
+    - Relationships: tools/relationships.md
+  - Examples:
+    - Conversations: examples/conversations.md
+    - Use Cases: examples/use-cases.md
+  - Reference:
+    - HTTP API: reference/api.md
+    - Settings: reference/settings.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/7tg/django-admin-mcp
