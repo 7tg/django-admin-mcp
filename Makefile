@@ -17,12 +17,14 @@ install:
 
 lint:
 	uv run ruff check .
+	uv run djlint django_admin_mcp/ --check
 
 fix:
 	uv run ruff check . --fix
 
 format:
 	uv run ruff format .
+	uv run djlint django_admin_mcp/ --reformat
 
 typecheck:
 	uv run mypy django_admin_mcp/
