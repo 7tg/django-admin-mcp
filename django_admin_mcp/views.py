@@ -276,10 +276,14 @@ async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token
         # This provides type safety without the overhead of parse-then-reserialize
         try:
             dict_adapter.validate_json(content.text)
-        except ValidationError:
+        except ValidationError as e:
             error_response = JsonRpcResponse(
                 id=request_id,
-                error=JsonRpcError(code=-32000, message="Invalid JSON in tool result"),
+                error=JsonRpcError(
+                    code=-32000,
+                    message="Invalid JSON in tool result",
+                    data={"validation_errors": e.errors()},
+                ),
             )
             return JsonResponse(error_response.model_dump(), status=500)
 
