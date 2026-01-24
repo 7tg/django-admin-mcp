@@ -5,12 +5,12 @@ This module provides handlers for admin actions and bulk operations
 extracted from the mixin module.
 """
 
-import json
 from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.contrib.admin import actions as admin_module_actions
 from django.http import HttpRequest
+from pydantic import TypeAdapter
 
 from django_admin_mcp.handlers.base import (
     async_check_permission,
@@ -319,6 +319,9 @@ async def handle_bulk(
                         results["errors"].append({"index": i, "error": str(e)})
 
             elif operation == "update":
+                # Create TypeAdapter once for efficiency
+                data_adapter = TypeAdapter(dict[str, Any])
+
                 for i, item in enumerate(items):
                     try:
                         obj_id = item.get("id")
@@ -351,11 +354,18 @@ async def handle_bulk(
                             continue
 
                         obj = form.save()
+                        # Serialize data using Pydantic TypeAdapter
+                        serialized_data = data_adapter.dump_json(data, fallback=str).decode()
+                        # Truncate to keep change messages concise
+                        # Note: Truncation may result in invalid JSON, but preserves logging capability
+                        max_length = 500
+                        if len(serialized_data) > max_length:
+                            serialized_data = serialized_data[:max_length] + '... (truncated)"'
                         _log_action(
                             user=user,
                             obj=obj,
                             action_flag=CHANGE,
-                            change_message=f"Bulk updated via MCP: {json.dumps(data, default=str)}",
+                            change_message=f"Bulk updated via MCP: {serialized_data}",
                         )
                         results["success"].append({"index": i, "id": obj_id, "updated": True})
                     except model.DoesNotExist:
