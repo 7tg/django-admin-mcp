@@ -397,6 +397,30 @@ class TestHandleAutocomplete:
 
     @pytest.mark.django_db
     @pytest.mark.asyncio
+    async def test_permission_denied(self):
+        """Test that users without view permission are denied access."""
+        uid = unique_id()
+        # Create a regular user without any permissions
+        regular_user = await sync_to_async(User.objects.create_user)(
+            username=f"noperm_auto_{uid}",
+            email=f"noperm_auto_{uid}@example.com",
+            password="testpass",
+        )
+
+        # Create request with user who has no permissions
+        request = create_mock_request(user=regular_user)
+        result = await handle_autocomplete(
+            "author",
+            {"term": "test"},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "Permission denied" in data["error"]
+        assert data.get("code") == "permission_denied"
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
     async def test_model_not_found(self):
         """Test error when model is not found."""
         request = create_mock_request()

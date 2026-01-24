@@ -259,6 +259,15 @@ async def handle_autocomplete(
     if model is None:
         return json_response({"error": f"Model '{model_name}' not found"})
 
+    # Check view permission
+    if not await async_check_permission(request, model_admin, "view"):
+        return json_response(
+            {
+                "error": f"Permission denied: cannot view {model_name}",
+                "code": "permission_denied",
+            }
+        )
+
     term = arguments.get("term", "")
     limit = arguments.get("limit", 10)
 

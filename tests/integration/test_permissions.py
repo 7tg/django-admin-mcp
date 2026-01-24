@@ -299,3 +299,58 @@ class TestPermissionChecks:
         assert "error" not in response
         assert response["model"] == "author"
         assert response["object_id"] == author.id
+
+    async def test_autocomplete_permission_check(self):
+        """Test that autocomplete tool checks view permissions."""
+        User = get_user_model()
+
+        # Create a regular user without permissions
+        regular_user = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: User.objects.create_user(
+                username="autocompleteuser",
+                email="autocomplete@example.com",
+                password="autocompletepass123",
+            ),
+        )
+
+        # Test autocomplete without permission (should be denied)
+        result = await MCPAdminMixin.handle_tool_call(
+            "autocomplete_author",
+            {"term": "test"},
+            user=regular_user,
+        )
+        response = json.loads(result[0].text)
+        assert "error" in response
+        assert response.get("code") == "permission_denied"
+
+    async def test_autocomplete_superuser_allowed(self):
+        """Test that superuser can access autocomplete."""
+        User = get_user_model()
+
+        # Create a superuser
+        superuser = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: User.objects.create_superuser(
+                username="autocompletesuper",
+                email="autocompletesuper@example.com",
+                password="superpass123",
+            ),
+        )
+
+        # Create an author to search for
+        await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: Author.objects.create(name="Super Autocomplete Author", email="superautocomplete@example.com"),
+        )
+
+        # Test autocomplete with superuser (should succeed)
+        result = await MCPAdminMixin.handle_tool_call(
+            "autocomplete_author",
+            {"term": "Super"},
+            user=superuser,
+        )
+        response = json.loads(result[0].text)
+        assert "error" not in response
+        assert response["model"] == "author"
+        assert response["count"] >= 1
