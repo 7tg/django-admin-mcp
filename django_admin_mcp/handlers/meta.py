@@ -12,7 +12,11 @@ from django.contrib.admin.sites import site
 from django.db import models
 from django.http import HttpRequest
 
-from django_admin_mcp.handlers.base import get_model_admin, json_response
+from django_admin_mcp.handlers.base import (
+    async_check_permission,
+    get_model_admin,
+    json_response,
+)
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -131,6 +135,15 @@ async def handle_describe(
         if model is None:
             return json_response({"error": f"Model '{model_name}' not found"})
 
+        # Check view permission
+        if not await async_check_permission(request, model_admin, "view"):
+            return json_response(
+                {
+                    "error": f"Permission denied: cannot view {model_name}",
+                    "code": "permission_denied",
+                }
+            )
+
         # Collect field metadata
         fields = []
         relationships = []
@@ -225,7 +238,8 @@ async def handle_find_models(
     try:
         query = arguments.get("query", "")
 
-        models_info = []
+        # Collect candidate models first (sync operation)
+        candidates = []
         for model, model_admin in site._registry.items():
             model_name_lower = model._meta.model_name or ""
             verbose_name = str(model._meta.verbose_name)
@@ -242,8 +256,9 @@ async def handle_find_models(
             if not has_tools_exposed:
                 continue
 
-            models_info.append(
+            candidates.append(
                 {
+                    "model_admin": model_admin,
                     "model_name": model_name_lower,
                     "verbose_name": verbose_name,
                     "verbose_name_plural": verbose_name_plural,
@@ -251,6 +266,21 @@ async def handle_find_models(
                     "tools_exposed": has_tools_exposed,
                 }
             )
+
+        # Filter by user permissions (async operation)
+        models_info = []
+        for candidate in candidates:
+            if await async_check_permission(request, candidate["model_admin"], "view"):
+                # Remove model_admin before adding to response
+                models_info.append(
+                    {
+                        "model_name": candidate["model_name"],
+                        "verbose_name": candidate["verbose_name"],
+                        "verbose_name_plural": candidate["verbose_name_plural"],
+                        "app_label": candidate["app_label"],
+                        "tools_exposed": candidate["tools_exposed"],
+                    }
+                )
 
         return json_response(
             {

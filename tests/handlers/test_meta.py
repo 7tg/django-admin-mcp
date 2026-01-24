@@ -9,6 +9,8 @@ Tests metadata operation handlers:
 import json
 
 import pytest
+from asgiref.sync import sync_to_async
+from django.contrib.auth import get_user_model
 
 from django_admin_mcp.handlers import (
     create_mock_request,
@@ -20,6 +22,8 @@ from django_admin_mcp.handlers.meta import (
     _model_matches_query,
 )
 from tests.models import Article, Author
+
+User = get_user_model()
 
 
 class TestModelMatchesQuery:
@@ -225,3 +229,98 @@ class TestHandleFindModels:
         assert "author" in model_names
         # Article should not match "auth"
         assert "article" not in model_names
+
+
+# Unique counter for test isolation
+_counter = 0
+
+
+def unique_id():
+    """Generate unique ID for test isolation."""
+    global _counter
+    _counter += 1
+    return f"{_counter}"
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestHandleDescribePermissions:
+    """Tests for handle_describe permission checking."""
+
+    async def test_permission_denied_for_regular_user(self):
+        """Test that users without view permission are denied access."""
+        uid = unique_id()
+        # Create a regular user without any permissions
+        regular_user = await sync_to_async(User.objects.create_user)(
+            username=f"noperm_describe_{uid}",
+            email=f"noperm_describe_{uid}@example.com",
+            password="testpass",
+        )
+
+        request = create_mock_request(user=regular_user)
+        result = await handle_describe("author", {}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" in data
+        assert "Permission denied" in data["error"]
+        assert data.get("code") == "permission_denied"
+
+    async def test_superuser_allowed(self):
+        """Test that superuser can describe models."""
+        uid = unique_id()
+        superuser = await sync_to_async(User.objects.create_superuser)(
+            username=f"super_describe_{uid}",
+            email=f"super_describe_{uid}@example.com",
+            password="testpass",
+        )
+
+        request = create_mock_request(user=superuser)
+        result = await handle_describe("author", {}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" not in data
+        assert data["model_name"] == "author"
+        assert "fields" in data
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestHandleFindModelsPermissions:
+    """Tests for handle_find_models permission filtering."""
+
+    async def test_regular_user_gets_empty_list(self):
+        """Test that users without view permission get no models."""
+        uid = unique_id()
+        # Create a regular user without any permissions
+        regular_user = await sync_to_async(User.objects.create_user)(
+            username=f"noperm_find_{uid}",
+            email=f"noperm_find_{uid}@example.com",
+            password="testpass",
+        )
+
+        request = create_mock_request(user=regular_user)
+        result = await handle_find_models("", {}, request)
+        data = json.loads(result[0].text)
+
+        # User should see no models (filtered by permissions)
+        assert data["count"] == 0
+        assert data["models"] == []
+
+    async def test_superuser_sees_all_models(self):
+        """Test that superuser sees all MCP-exposed models."""
+        uid = unique_id()
+        superuser = await sync_to_async(User.objects.create_superuser)(
+            username=f"super_find_{uid}",
+            email=f"super_find_{uid}@example.com",
+            password="testpass",
+        )
+
+        request = create_mock_request(user=superuser)
+        result = await handle_find_models("", {}, request)
+        data = json.loads(result[0].text)
+
+        # Superuser should see all exposed models
+        assert data["count"] >= 2  # At least author and article
+        model_names = [m["model_name"] for m in data["models"]]
+        assert "author" in model_names
+        assert "article" in model_names

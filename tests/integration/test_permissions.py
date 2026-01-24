@@ -354,3 +354,102 @@ class TestPermissionChecks:
         assert "error" not in response
         assert response["model"] == "author"
         assert response["count"] >= 1
+
+    async def test_describe_permission_check(self):
+        """Test that describe tool checks view permissions."""
+        User = get_user_model()
+
+        # Create a regular user without permissions
+        regular_user = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: User.objects.create_user(
+                username="describeuser",
+                email="describe@example.com",
+                password="describepass123",
+            ),
+        )
+
+        # Test describe without permission (should be denied)
+        result = await MCPAdminMixin.handle_tool_call(
+            "describe_author",
+            {},
+            user=regular_user,
+        )
+        response = json.loads(result[0].text)
+        assert "error" in response
+        assert response.get("code") == "permission_denied"
+
+    async def test_describe_superuser_allowed(self):
+        """Test that superuser can describe models."""
+        User = get_user_model()
+
+        # Create a superuser
+        superuser = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: User.objects.create_superuser(
+                username="describesuper",
+                email="describesuper@example.com",
+                password="superpass123",
+            ),
+        )
+
+        # Test describe with superuser (should succeed)
+        result = await MCPAdminMixin.handle_tool_call(
+            "describe_author",
+            {},
+            user=superuser,
+        )
+        response = json.loads(result[0].text)
+        assert "error" not in response
+        assert response["model_name"] == "author"
+        assert "fields" in response
+
+    async def test_find_models_permission_check(self):
+        """Test that find_models only returns accessible models."""
+        User = get_user_model()
+
+        # Create a regular user without permissions
+        regular_user = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: User.objects.create_user(
+                username="findmodelsuser",
+                email="findmodels@example.com",
+                password="findmodelspass123",
+            ),
+        )
+
+        # Test find_models without permission (should return empty list)
+        result = await MCPAdminMixin.handle_tool_call(
+            "find_models",
+            {},
+            user=regular_user,
+        )
+        response = json.loads(result[0].text)
+        assert response["count"] == 0
+        assert response["models"] == []
+
+    async def test_find_models_superuser_allowed(self):
+        """Test that superuser can see all models."""
+        User = get_user_model()
+
+        # Create a superuser
+        superuser = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: User.objects.create_superuser(
+                username="findmodelssuper",
+                email="findmodelssuper@example.com",
+                password="superpass123",
+            ),
+        )
+
+        # Test find_models with superuser (should see all models)
+        result = await MCPAdminMixin.handle_tool_call(
+            "find_models",
+            {},
+            user=superuser,
+        )
+        response = json.loads(result[0].text)
+        assert response["count"] >= 2
+        model_names = [m["model_name"] for m in response["models"]]
+        assert "author" in model_names
+        assert "article" in model_names
