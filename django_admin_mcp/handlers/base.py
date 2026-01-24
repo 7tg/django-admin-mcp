@@ -5,7 +5,6 @@ This module provides shared utilities extracted from the mixin module
 for use across handler implementations.
 """
 
-import json
 from typing import Any
 
 from asgiref.sync import sync_to_async
@@ -14,8 +13,12 @@ from django.db import models
 from django.forms import ModelForm
 from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
+from pydantic import TypeAdapter
 
 from django_admin_mcp.protocol.types import TextContent
+
+# Pydantic TypeAdapter for JSON serialization - reused across all json_response calls
+_JSON_ADAPTER = TypeAdapter(dict[str, Any])
 
 
 class MCPRequest(HttpRequest):
@@ -46,7 +49,9 @@ def json_response(data: dict) -> list[TextContent]:
     Returns:
         List containing a single TextContent with JSON-serialized data.
     """
-    return [TextContent(text=json.dumps(data, default=str))]
+    # Use Pydantic TypeAdapter for JSON serialization with better type safety
+    json_bytes = _JSON_ADAPTER.dump_json(data, by_alias=True)
+    return [TextContent(text=json_bytes.decode("utf-8"))]
 
 
 def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | None]:
