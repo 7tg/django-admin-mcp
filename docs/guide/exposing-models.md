@@ -118,6 +118,76 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'view_count']
 ```
 
+### Field Filtering
+
+Control which fields are exposed in MCP responses using field filtering. This is critical for preventing sensitive data exposure.
+
+#### MCP-Specific Field Control
+
+Use `mcp_fields` and `mcp_exclude_fields` for MCP-specific field visibility:
+
+```python
+class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    # Only expose these fields via MCP
+    mcp_fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_active']
+    # Never expose password, even though it exists in the model
+```
+
+Alternatively, exclude specific fields:
+
+```python
+class APIKeyAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    # Exclude sensitive fields from MCP responses
+    mcp_exclude_fields = ['secret_key', 'api_token', 'private_data']
+```
+
+#### Django Admin Field Fallback
+
+If `mcp_fields` or `mcp_exclude_fields` are not set, django-admin-mcp falls back to Django admin's `fields` and `exclude` attributes:
+
+```python
+class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    fields = ['title', 'content', 'author', 'published']  # Used if mcp_fields not set
+```
+
+#### Field Filtering Rules
+
+1. **MCP-specific takes precedence**: If `mcp_fields` is set, it overrides `fields`
+2. **MCP-specific exclusion takes precedence**: If `mcp_exclude_fields` is set, it overrides `exclude`
+3. **Exclusion wins over inclusion**: If a field is in both `mcp_fields` and `mcp_exclude_fields`, it's excluded
+4. **No configuration = all fields**: If no field configuration is provided, all model fields are exposed
+
+#### Example: Protecting Sensitive Data
+
+```python
+from django_admin_mcp import MCPAdminMixin
+
+@admin.register(MCPToken)
+class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    # Never expose token credentials via MCP
+    mcp_exclude_fields = ['token_key', 'token_hash', 'salt']
+    
+    list_display = ['name', 'user', 'is_active', 'created_at']
+    readonly_fields = ['token_key', 'token_hash', 'salt']  # Also readonly in admin
+```
+
+When listing or getting tokens via MCP, sensitive fields are automatically filtered out:
+
+```json
+{
+  "id": 1,
+  "name": "Production API Token",
+  "user": 1,
+  "is_active": true,
+  "expires_at": "2026-04-24T16:48:36Z"
+  // token_key, token_hash, and salt are NOT included
+}
+```
+
 ### Custom Actions
 
 Admin actions are automatically exposed:
@@ -191,12 +261,24 @@ class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 ### Protect Sensitive Fields
 
-Use `readonly_fields` for computed or sensitive fields:
+Use `mcp_exclude_fields` to prevent sensitive data exposure:
 
 ```python
 class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
+    # Never expose password or sensitive authentication data
+    mcp_exclude_fields = ['password', 'security_token', 'api_secret']
     readonly_fields = ['password', 'last_login', 'date_joined']
+```
+
+For models with many fields, use `mcp_fields` to explicitly allowlist safe fields:
+
+```python
+class CustomerAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    # Only expose non-sensitive customer data
+    mcp_fields = ['id', 'name', 'email', 'company', 'created_at']
+    # This excludes: credit_card, ssn, internal_notes, etc.
 ```
 
 ## Next Steps
