@@ -19,6 +19,7 @@ setup(
     url="https://github.com/7tg/django-admin-mcp",
     project_urls={
         "Homepage": "https://github.com/7tg/django-admin-mcp",
+        "Documentation": "https://7tg.github.io/django-admin-mcp/",
         "Repository": "https://github.com/7tg/django-admin-mcp",
         "Issues": "https://github.com/7tg/django-admin-mcp/issues",
         "Changelog": "https://github.com/7tg/django-admin-mcp/releases",
