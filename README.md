@@ -1,19 +1,24 @@
 # django-admin-mcp
 
+[![PyPI version](https://badge.fury.io/py/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
+[![Python versions](https://img.shields.io/pypi/pyversions/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
+[![Django versions](https://img.shields.io/badge/django-3.2%20%7C%204.0%20%7C%204.1%20%7C%204.2%20%7C%205.0-blue.svg)](https://pypi.org/project/django-admin-mcp/)
+[![License](https://img.shields.io/pypi/l/django-admin-mcp.svg)](https://github.com/7tg/django-admin-mcp/blob/main/LICENSE)
+
 Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add a mixin to your ModelAdmin classes and get instant access to CRUD operations, admin actions, model history, and more.
 
 ## Features
 
-- 📦 **Zero dependencies** beyond Django and Pydantic
-- 🎫 **Token authentication** - secure Bearer token auth with configurable expiry
-- 🛡️ **Django admin permissions** - respects existing view/add/change/delete permissions
-- ✏️ **Full CRUD** - list, get, create, update, delete operations
-- ⚡ **Admin actions** - execute registered Django admin actions
-- 📦 **Bulk operations** - update or delete multiple records at once
-- 🔍 **Model introspection** - describe model fields and relationships
-- 🔗 **Related objects** - traverse foreign keys and reverse relations
-- 📜 **Change history** - access Django admin's history log
-- 🔎 **Autocomplete** - search suggestions for foreign key fields
+- **Zero dependencies** beyond Django and Pydantic
+- **Token authentication** - secure Bearer token auth with configurable expiry
+- **Django admin permissions** - respects existing view/add/change/delete permissions
+- **Full CRUD** - list, get, create, update, delete operations
+- **Admin actions** - execute registered Django admin actions
+- **Bulk operations** - update or delete multiple records at once
+- **Model introspection** - describe model fields and relationships
+- **Related objects** - traverse foreign keys and reverse relations
+- **Change history** - access Django admin's history log
+- **Autocomplete** - search suggestions for foreign key fields
 
 ## Installation
 
