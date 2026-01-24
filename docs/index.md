@@ -4,69 +4,16 @@ Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add
 
 ## Features
 
-<div class="grid cards" markdown>
-
-- :package: **Zero Dependencies**
-
-    ---
-
-    Beyond Django and Pydantic, no additional dependencies required.
-
-- :ticket: **Token Authentication**
-
-    ---
-
-    Secure Bearer token auth with configurable expiry (default 90 days).
-
-- :shield: **Django Admin Permissions**
-
-    ---
-
-    Respects existing view/add/change/delete permissions.
-
-- :pencil: **Full CRUD**
-
-    ---
-
-    List, get, create, update, delete operations for all exposed models.
-
-- :zap: **Admin Actions**
-
-    ---
-
-    Execute registered Django admin actions on selected records.
-
-- :package: **Bulk Operations**
-
-    ---
-
-    Update or delete multiple records at once.
-
-- :mag: **Model Introspection**
-
-    ---
-
-    Describe model fields and relationships programmatically.
-
-- :link: **Related Objects**
-
-    ---
-
-    Traverse foreign keys and reverse relations.
-
-- :scroll: **Change History**
-
-    ---
-
-    Access Django admin's history log for audit trails.
-
-- :mag_right: **Autocomplete**
-
-    ---
-
-    Search suggestions for foreign key fields.
-
-</div>
+- **Zero Dependencies** - Beyond Django and Pydantic, no additional dependencies required.
+- **Token Authentication** - Secure Bearer token auth with configurable expiry (default 90 days).
+- **Django Admin Permissions** - Respects existing view/add/change/delete permissions.
+- **Full CRUD** - List, get, create, update, delete operations for all exposed models.
+- **Admin Actions** - Execute registered Django admin actions on selected records.
+- **Bulk Operations** - Update or delete multiple records at once.
+- **Model Introspection** - Describe model fields and relationships programmatically.
+- **Related Objects** - Traverse foreign keys and reverse relations.
+- **Change History** - Access Django admin's history log for audit trails.
+- **Autocomplete** - Search suggestions for foreign key fields.
 
 ## Quick Example
 
@@ -101,11 +48,11 @@ Claude: [calls update_article with id=42, data={"published": true}]
 
 | Django Version | Status |
 |----------------|--------|
-| Django 3.2 LTS | :white_check_mark: Supported |
-| Django 4.0 | :white_check_mark: Supported |
-| Django 4.1 | :white_check_mark: Supported |
-| Django 4.2 LTS | :white_check_mark: Supported |
-| Django 5.0 | :white_check_mark: Supported |
+| Django 3.2 LTS | Supported |
+| Django 4.0 | Supported |
+| Django 4.1 | Supported |
+| Django 4.2 LTS | Supported |
+| Django 5.0 | Supported |
 
 ## License
 
