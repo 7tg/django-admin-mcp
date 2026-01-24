@@ -2,13 +2,13 @@
 
 This guide covers configuring MCP clients to connect to Django Admin MCP.
 
-## Claude Code
+## MCP Client
 
-Claude Code is the primary MCP client for interacting with Django Admin MCP.
+Any MCP-compatible client can interact with Django Admin MCP.
 
 ### Configuration File Locations
 
-Claude Code looks for configuration in these locations:
+MCP clients typically look for configuration in these locations:
 
 | Location | Scope | Priority |
 |----------|-------|----------|
@@ -79,17 +79,17 @@ Configure multiple Django projects:
 
 After editing the configuration:
 
-1. Restart Claude Code
+1. Restart your MCP client
 2. The MCP server should connect automatically
 3. Tools will be available for use
 
 ### Verifying Connection
 
-Ask Claude to list available tools:
+Ask the agent to list available tools:
 
 ```
 User: What Django admin tools are available?
-Claude: [calls tools/list]
+Agent: [calls tools/list]
 I have access to the following Django admin tools:
 - find_models: Discover available Django models
 - list_article: List Article instances

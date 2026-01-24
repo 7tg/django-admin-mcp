@@ -1,6 +1,6 @@
 # Example Conversations
 
-This page shows real-world example conversations between users and Claude using Django Admin MCP.
+This page shows real-world example conversations between users and agents using Django Admin MCP.
 
 ## Model Discovery
 
@@ -9,7 +9,7 @@ This page shows real-world example conversations between users and Claude using 
 ```
 User: What models are available in Django admin?
 
-Claude: [calls find_models]
+Agent: [calls find_models]
 
 I found the following models available through Django Admin MCP:
 
@@ -30,7 +30,7 @@ Would you like me to describe any of these models in detail?
 ```
 User: What fields does article have?
 
-Claude: [calls describe_article]
+Agent: [calls describe_article]
 
 The Article model has the following fields:
 
@@ -61,7 +61,7 @@ The admin is configured with:
 ```
 User: Show me the latest 10 articles
 
-Claude: [calls list_article with limit=10]
+Agent: [calls list_article with limit=10]
 
 Here are the 10 most recent articles:
 
@@ -81,7 +81,7 @@ Showing 10 of 42 total articles.
 ```
 User: Find all published articles about Django
 
-Claude: [calls list_article with search="Django", filters={"published": true}]
+Agent: [calls list_article with search="Django", filters={"published": true}]
 
 Found 5 published articles matching "Django":
 
@@ -102,11 +102,11 @@ Found 5 published articles matching "Django":
 ```
 User: Create a new article titled "Introduction to Python"
 
-Claude: I'll create that article. Who should be the author?
+Agent: I'll create that article. Who should be the author?
 
 User: Jane Doe
 
-Claude: [calls autocomplete_author with search="Jane Doe"]
+Agent: [calls autocomplete_author with search="Jane Doe"]
 [calls create_article with data={"title": "Introduction to Python", "author_id": 5}]
 
 Created article #43: "Introduction to Python"
@@ -123,7 +123,7 @@ Would you like me to add content or publish it?
 User: Update article 43 with this content: "Python is a versatile programming
 language..." and mark it as published
 
-Claude: [calls update_article with id=43, data={"content": "Python is a versatile
+Agent: [calls update_article with id=43, data={"content": "Python is a versatile
 programming language...", "published": true}]
 
 Updated article #43:
@@ -138,12 +138,12 @@ The article is now live!
 ```
 User: Delete article 43
 
-Claude: Are you sure you want to delete article #43 "Introduction to Python"?
+Agent: Are you sure you want to delete article #43 "Introduction to Python"?
 This action cannot be undone.
 
 User: Yes, delete it
 
-Claude: [calls delete_article with id=43]
+Agent: [calls delete_article with id=43]
 
 Deleted article #43 "Introduction to Python".
 ```
@@ -157,7 +157,7 @@ Deleted article #43 "Introduction to Python".
 ```
 User: What actions can I perform on articles?
 
-Claude: [calls actions_article]
+Agent: [calls actions_article]
 
 Available actions for articles:
 
@@ -174,7 +174,7 @@ Which action would you like to perform?
 ```
 User: Mark articles 1, 2, and 3 as published
 
-Claude: [calls action_article with action="mark_as_published", ids=[1, 2, 3]]
+Agent: [calls action_article with action="mark_as_published", ids=[1, 2, 3]]
 
 Marked 3 articles as published:
 - Article #1: "Getting Started"
@@ -193,7 +193,7 @@ All three articles are now live.
 ```
 User: Set status to "archived" for articles 10 through 15
 
-Claude: [calls bulk_article with operation="update", ids=[10, 11, 12, 13, 14, 15],
+Agent: [calls bulk_article with operation="update", ids=[10, 11, 12, 13, 14, 15],
 data={"status": "archived"}]
 
 Updated 6 articles:
@@ -207,7 +207,7 @@ All changes have been saved.
 ```
 User: Delete all draft articles from 2023
 
-Claude: [calls list_article with filters={"published": false,
+Agent: [calls list_article with filters={"published": false,
 "created_at__year": 2023}]
 
 Found 12 draft articles from 2023. Here they are:
@@ -219,7 +219,7 @@ Do you want me to delete all 12 articles?
 
 User: Yes, delete them all
 
-Claude: [calls bulk_article with operation="delete", ids=[15, 18, ...]]
+Agent: [calls bulk_article with operation="delete", ids=[15, 18, ...]]
 
 Deleted 12 draft articles from 2023.
 ```
@@ -233,7 +233,7 @@ Deleted 12 draft articles from 2023.
 ```
 User: Show me all comments on article 42
 
-Claude: [calls related_article with id=42, relation="comments"]
+Agent: [calls related_article with id=42, relation="comments"]
 
 Article #42 "Getting Started with Django" has 8 comments:
 
@@ -250,7 +250,7 @@ Showing 8 comments total.
 ```
 User: What changes were made to article 42?
 
-Claude: [calls history_article with id=42]
+Agent: [calls history_article with id=42]
 
 Change history for article #42:
 
@@ -271,7 +271,7 @@ The article was created on Jan 15 and modified once.
 ```
 User: Find all articles by Jane Doe and add the "featured" category to them
 
-Claude: [calls list_article with filters={"author__name": "Jane Doe"}]
+Agent: [calls list_article with filters={"author__name": "Jane Doe"}]
 [calls autocomplete_category with search="featured"]
 
 Found 15 articles by Jane Doe and the "featured" category (ID: 7).
@@ -294,7 +294,7 @@ All articles are now featured!
 ```
 User: Show me articles that haven't been updated in the last 30 days
 
-Claude: [calls list_article with filters={"updated_at__lt": "2023-12-15"}]
+Agent: [calls list_article with filters={"updated_at__lt": "2023-12-15"}]
 
 Found 23 articles not updated in the last 30 days:
 
@@ -318,7 +318,7 @@ Would you like me to archive these or take another action?
 ```
 User: Delete all articles
 
-Claude: [calls bulk_article with operation="delete", ids=[...]]
+Agent: [calls bulk_article with operation="delete", ids=[...]]
 
 I can't delete articles - the API token doesn't have delete permission.
 
@@ -335,7 +335,7 @@ Or use a different token with delete access.
 ```
 User: Create an article without a title
 
-Claude: [calls create_article with data={"content": "Some content"}]
+Agent: [calls create_article with data={"content": "Some content"}]
 
 Couldn't create the article - validation failed:
 

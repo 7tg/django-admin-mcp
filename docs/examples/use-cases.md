@@ -6,7 +6,7 @@ This page explores real-world scenarios where Django Admin MCP shines.
 
 ### Blog Administration
 
-A content team uses Claude to manage their Django-powered blog:
+A content team uses the agent to manage their Django-powered blog:
 
 **Daily Tasks:**
 
@@ -33,15 +33,15 @@ Managing a publication with multiple contributors:
 ```
 User: Show me all draft articles waiting for review
 
-Claude: [lists drafts ordered by creation date]
+Agent: [lists drafts ordered by creation date]
 
 User: Assign article 42 to the "editors" review queue
 
-Claude: [updates article with status="in_review"]
+Agent: [updates article with status="in_review"]
 
 User: What articles has John submitted this month?
 
-Claude: [lists articles filtered by author and date]
+Agent: [lists articles filtered by author and date]
 ```
 
 ---
@@ -50,7 +50,7 @@ Claude: [lists articles filtered by author and date]
 
 ### Order Management
 
-Customer service uses Claude to handle orders:
+Customer service uses the agent to handle orders:
 
 **Order Lookup:**
 
@@ -74,15 +74,15 @@ Customer service uses Claude to handle orders:
 ```
 User: Show me products with less than 10 items in stock
 
-Claude: [lists products with low inventory]
+Agent: [lists products with low inventory]
 
 User: Update product #567 stock to 100 units
 
-Claude: [updates inventory count]
+Agent: [updates inventory count]
 
 User: Which products haven't sold in 30 days?
 
-Claude: [analyzes sales data]
+Agent: [analyzes sales data]
 ```
 
 ---
@@ -110,15 +110,15 @@ IT teams manage user accounts:
 ```
 User: Who has admin access to the billing section?
 
-Claude: [queries users with specific permissions]
+Agent: [queries users with specific permissions]
 
 User: Remove billing access from user #456
 
-Claude: [removes permissions]
+Agent: [removes permissions]
 
 User: Show me the change history for user #789
 
-Claude: [displays audit log]
+Agent: [displays audit log]
 ```
 
 ---
@@ -146,11 +146,11 @@ Analysts query data through natural language:
 ```
 User: Compare this month's signups to last month
 
-Claude: [queries user creation dates, calculates comparison]
+Agent: [queries user creation dates, calculates comparison]
 
 User: Show me the growth trend for the past 6 months
 
-Claude: [aggregates monthly data, presents trend]
+Agent: [aggregates monthly data, presents trend]
 ```
 
 ---
@@ -159,7 +159,7 @@ Claude: [aggregates monthly data, presents trend]
 
 ### Scheduled Tasks
 
-Combine Claude with automation for scheduled operations:
+Combine the agent with automation for scheduled operations:
 
 **Daily Cleanup:**
 
@@ -178,11 +178,11 @@ Combine Claude with automation for scheduled operations:
 ```
 User: Export all premium users for the newsletter system
 
-Claude: [lists premium users with email addresses]
+Agent: [lists premium users with email addresses]
 
 User: Mark these 50 users as newsletter-synced
 
-Claude: [bulk updates users with sync timestamp]
+Agent: [bulk updates users with sync timestamp]
 ```
 
 ---
@@ -196,11 +196,11 @@ Developers populate test data:
 ```
 User: Create 10 test articles with random titles
 
-Claude: [bulk creates articles with generated data]
+Agent: [bulk creates articles with generated data]
 
 User: Create a test user with all permissions
 
-Claude: [creates user, assigns permission groups]
+Agent: [creates user, assigns permission groups]
 ```
 
 ### Debugging
@@ -210,15 +210,15 @@ Investigating issues in staging:
 ```
 User: Show me the last 5 orders that failed processing
 
-Claude: [lists orders with error status]
+Agent: [lists orders with error status]
 
 User: What changed on order #999 in the last hour?
 
-Claude: [shows change history]
+Agent: [shows change history]
 
 User: Who modified the product pricing yesterday?
 
-Claude: [queries audit logs]
+Agent: [queries audit logs]
 ```
 
 ---
@@ -246,15 +246,15 @@ Support teams resolve issues faster:
 ```
 User: Find all support tickets marked as urgent
 
-Claude: [lists high-priority tickets]
+Agent: [lists high-priority tickets]
 
 User: Assign tickets 1, 2, 3 to the senior team
 
-Claude: [bulk updates ticket assignments]
+Agent: [bulk updates ticket assignments]
 
 User: Add internal note to ticket #5
 
-Claude: [updates ticket with internal comment]
+Agent: [updates ticket with internal comment]
 ```
 
 ---

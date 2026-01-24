@@ -28,14 +28,14 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     list_display = ['title', 'author', 'published']
 ```
 
-Once configured, Claude can use the tools directly:
+Once configured, the agent can use the tools directly:
 
 ```
 User: Show me the latest 10 articles
-Claude: [calls list_article with limit=10]
+Agent: [calls list_article with limit=10]
 
 User: Update article 42 to set published=True
-Claude: [calls update_article with id=42, data={"published": true}]
+Agent: [calls update_article with id=42, data={"published": true}]
 ```
 
 ## Requirements

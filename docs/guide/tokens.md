@@ -11,7 +11,7 @@ Django Admin MCP uses token-based authentication for all API requests. This guid
 3. Click **Add MCP Token**
 4. Configure the token:
 
-    - **Name**: Descriptive identifier (e.g., "Claude Code - Development")
+    - **Name**: Descriptive identifier (e.g., "MCP - Development")
     - **User**: Associated user for audit logging (required)
     - **Is Active**: Enable/disable the token
     - **Expires At**: Expiration date (default: 90 days from now)

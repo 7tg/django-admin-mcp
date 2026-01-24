@@ -32,7 +32,7 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
 2. Navigate to **Django Admin MCP > MCP Tokens**
 3. Click **Add MCP Token**
 4. Fill in:
-    - **Name**: A descriptive name (e.g., "Claude Code Token")
+    - **Name**: A descriptive name (e.g., "MCP Token")
     - **User**: Select a user (for audit logging)
     - **Groups/Permissions**: Assign appropriate permissions
 5. Click **Save**
@@ -41,9 +41,9 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
 !!! warning "Token Security"
     Tokens without permissions have no access (principle of least privilege). Make sure to assign the necessary permissions for the models you want to access.
 
-## Step 3: Configure Claude Code
+## Step 3: Configure Your MCP Client
 
-Add the MCP server configuration to Claude Code. Create or edit the configuration file:
+Add the MCP server configuration to your MCP client. Create or edit the configuration file:
 
 === "Global Config"
 
@@ -79,21 +79,21 @@ Replace `YOUR_TOKEN_HERE` with the token you created in Step 2.
 
 ## Step 4: Start Using It
 
-Restart Claude Code to load the new MCP configuration. Then start interacting:
+Restart your MCP client to load the new configuration. Then start interacting:
 
 ```
 User: What models are available in Django admin?
-Claude: [calls find_models tool]
+Agent: [calls find_models tool]
 I found the following models:
 - article (tools exposed: list, get, create, update, delete)
 - author (discoverable, no direct tools)
 
 User: Show me the latest 10 articles
-Claude: [calls list_article with limit=10]
+Agent: [calls list_article with limit=10]
 Here are the 10 most recent articles...
 
 User: Create a new article titled "Getting Started with Django"
-Claude: [calls create_article with title="Getting Started with Django"]
+Agent: [calls create_article with title="Getting Started with Django"]
 Created article #15: "Getting Started with Django"
 ```
 

@@ -1,6 +1,6 @@
 # AGENTS.md - AI Agent Instructions for django-admin-mcp
 
-This document provides context and guidelines for AI agents (GitHub Copilot, Claude, etc.) working on this codebase.
+This document provides context and guidelines for AI agents (GitHub Copilot, etc.) working on this codebase.
 
 ## Project Overview
 
@@ -17,7 +17,7 @@ This document provides context and guidelines for AI agents (GitHub Copilot, Cla
 ## Architecture
 
 ```
-MCP Client (Claude, IDE, etc.)
+MCP Client (IDE, Agent, etc.)
     ↓ HTTP + Bearer Token
 MCPHTTPView (django_admin_mcp/views.py)
     ↓ JSON-RPC

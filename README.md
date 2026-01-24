@@ -84,9 +84,9 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 Go to Django admin at `/admin/django_admin_mcp/mcptoken/` and create a token. Tokens can optionally be tied to users, groups, or have direct permissions assigned.
 
-### 3. Configure Claude Code
+### 3. Configure Your MCP Client
 
-Add to your Claude Code MCP settings (`~/.claude/claude_desktop_config.json` or project `.mcp.json`):
+Add to your MCP client settings (`~/.claude/claude_desktop_config.json` or project `.mcp.json`):
 
 ```json
 {
@@ -101,19 +101,19 @@ Add to your Claude Code MCP settings (`~/.claude/claude_desktop_config.json` or 
 }
 ```
 
-### 4. Use with Claude
+### 4. Use with Your Agent
 
-Once configured, Claude can use the tools directly:
+Once configured, the agent can use the tools directly:
 
 ```
 User: What models are available in Django admin?
-Claude: [calls find_models tool]
+Agent: [calls find_models tool]
 
 User: Show me the latest 10 articles
-Claude: [calls list_article with limit=10]
+Agent: [calls list_article with limit=10]
 
 User: Get article #42 and update its title to "New Title"
-Claude: [calls get_article with id=42, then update_article]
+Agent: [calls get_article with id=42, then update_article]
 ```
 
 ## Available Tools
@@ -178,18 +178,18 @@ curl -X POST http://localhost:8000/mcp/ \
 ```
 User: Create a new article titled "Getting Started with Django"
 
-Claude: I'll create that article for you.
+Agent: I'll create that article for you.
 [calls create_article with title="Getting Started with Django"]
 Created article #15: "Getting Started with Django"
 
 User: Update article 15 to add content
 
-Claude: [calls update_article with id=15, content="..."]
+Agent: [calls update_article with id=15, content="..."]
 Updated article #15 successfully.
 
 User: Delete article 15
 
-Claude: [calls delete_article with id=15]
+Agent: [calls delete_article with id=15]
 Deleted article #15.
 ```
 
@@ -198,7 +198,7 @@ Deleted article #15.
 ```
 User: Mark articles 1, 2, and 3 as published
 
-Claude: [calls action_article with action="mark_as_published", ids=[1,2,3]]
+Agent: [calls action_article with action="mark_as_published", ids=[1,2,3]]
 Marked 3 articles as published.
 ```
 
@@ -207,12 +207,12 @@ Marked 3 articles as published.
 ```
 User: Set status to "archived" for articles 10-15
 
-Claude: [calls bulk_article with operation="update", ids=[10,11,12,13,14,15], data={"status": "archived"}]
+Agent: [calls bulk_article with operation="update", ids=[10,11,12,13,14,15], data={"status": "archived"}]
 Updated 6 articles.
 
 User: Delete all draft articles from last month
 
-Claude: [calls list_article to find drafts, then bulk_article with operation="delete"]
+Agent: [calls list_article to find drafts, then bulk_article with operation="delete"]
 Deleted 12 draft articles.
 ```
 
@@ -221,12 +221,12 @@ Deleted 12 draft articles.
 ```
 User: Show me all comments on article 42
 
-Claude: [calls related_article with id=42, relation="comments"]
+Agent: [calls related_article with id=42, relation="comments"]
 Found 8 comments on article #42...
 
 User: What changes were made to article 42?
 
-Claude: [calls history_article with id=42]
+Agent: [calls history_article with id=42]
 Change history for article #42:
 - 2024-01-15: Changed title (admin)
 - 2024-01-10: Created (admin)
@@ -237,7 +237,7 @@ Change history for article #42:
 ```
 User: What can I manage through MCP?
 
-Claude: [calls find_models]
+Agent: [calls find_models]
 Available models:
 - article (5 tools: list, get, create, update, delete)
 - author (5 tools: list, get, create, update, delete)
@@ -245,7 +245,7 @@ Available models:
 
 User: What fields does article have?
 
-Claude: [calls describe_article]
+Agent: [calls describe_article]
 Article fields:
 - id (AutoField, read-only)
 - title (CharField, max_length=200, required)
@@ -259,7 +259,7 @@ Article fields:
 
 ### Two-Level Exposure
 
-Models with `MCPAdminMixin` are automatically discoverable via the `find_models` tool, allowing Claude to see what's available. To expose full CRUD tools directly, set `mcp_expose = True`:
+Models with `MCPAdminMixin` are automatically discoverable via the `find_models` tool, allowing the agent to see what's available. To expose full CRUD tools directly, set `mcp_expose = True`:
 
 ```python
 # Discoverable via find_models only
