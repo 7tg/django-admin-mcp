@@ -17,6 +17,9 @@ from pydantic import TypeAdapter
 
 from django_admin_mcp.protocol.types import TextContent
 
+# Pydantic TypeAdapter for JSON serialization - reused across all json_response calls
+_JSON_ADAPTER = TypeAdapter(dict[str, Any])
+
 
 class MCPRequest(HttpRequest):
     """
@@ -46,10 +49,8 @@ def json_response(data: dict) -> list[TextContent]:
     Returns:
         List containing a single TextContent with JSON-serialized data.
     """
-    # Use Pydantic TypeAdapter for JSON serialization
-    # serialize_as_any=True allows serialization of any type (similar to default=str)
-    adapter = TypeAdapter(dict[str, Any])
-    json_bytes = adapter.dump_json(data, by_alias=True)
+    # Use Pydantic TypeAdapter for JSON serialization with better type safety
+    json_bytes = _JSON_ADAPTER.dump_json(data, by_alias=True)
     return [TextContent(text=json_bytes.decode("utf-8"))]
 
 
