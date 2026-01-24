@@ -206,11 +206,12 @@ class TestBulkCreateTransactionSafety:
         initial_log_count = await get_log_count()
 
         # Create a mock that fails on the second call
-        call_count = [0]
+        call_count = 0
 
         def log_action_side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 2:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
                 raise Exception("Log failure on second item")
 
         # Patch _log_action to fail on second item
@@ -273,11 +274,12 @@ class TestBulkUpdateTransactionSafety:
         initial_log_count = await get_log_count()
 
         # Create a mock that fails on the second call
-        call_count = [0]
+        call_count = 0
 
         def log_action_side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 2:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
                 raise Exception("Log failure on second item")
 
         # Patch _log_action to fail on second item
@@ -341,11 +343,12 @@ class TestBulkDeleteTransactionSafety:
         initial_log_count = await get_log_count()
 
         # Create a mock that fails on the second call
-        call_count = [0]
+        call_count = 0
 
         def log_action_side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 2:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
                 raise Exception("Log failure on second item")
 
         # Patch _log_action to fail on second item
