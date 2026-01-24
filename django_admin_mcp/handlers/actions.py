@@ -357,9 +357,10 @@ async def handle_bulk(
                         # Serialize data using Pydantic TypeAdapter
                         serialized_data = data_adapter.dump_json(data, fallback=str).decode()
                         # Truncate to avoid exceeding database limits (MySQL TEXT: 65KB)
+                        # Note: Truncation may result in invalid JSON, but preserves logging capability
                         max_length = 60000  # Leave some margin for the prefix
                         if len(serialized_data) > max_length:
-                            serialized_data = serialized_data[:max_length] + "... (truncated)"
+                            serialized_data = serialized_data[:max_length] + '... (truncated)"'
                         _log_action(
                             user=user,
                             obj=obj,
