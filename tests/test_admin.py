@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from django_admin_mcp.admin import MCPTokenAdmin
 from django_admin_mcp.models import MCPToken
+from tests.factories import MCPTokenFactory, UserFactory
 
 
 @pytest.mark.django_db
@@ -18,7 +19,7 @@ class TestMCPTokenAdmin:
 
     def test_token_preview_with_token(self):
         """Test token_preview method shows preview of token."""
-        token = MCPToken.objects.create(name="Test Token")
+        token = MCPTokenFactory()
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         preview = admin_instance.token_preview(token)
@@ -29,7 +30,8 @@ class TestMCPTokenAdmin:
     def test_token_preview_without_token(self):
         """Test token_preview method with empty token."""
         # Create a token instance without calling save to avoid auto-generation
-        token = MCPToken(name="Test Token")
+        user = UserFactory()
+        token = MCPToken(name="Test Token", user=user)
         token.token = ""  # Empty token
 
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
@@ -39,7 +41,7 @@ class TestMCPTokenAdmin:
 
     def test_status_display_inactive(self):
         """Test status_display for inactive token."""
-        token = MCPToken.objects.create(name="Test Token", is_active=False)
+        token = MCPTokenFactory(is_active=False)
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         status = admin_instance.status_display(token)
@@ -50,7 +52,7 @@ class TestMCPTokenAdmin:
     def test_status_display_expired(self):
         """Test status_display for expired token."""
         past_date = timezone.now() - timedelta(days=1)
-        token = MCPToken.objects.create(name="Expired Token", is_active=True, expires_at=past_date)
+        token = MCPTokenFactory(is_active=True, expires_at=past_date)
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         status = admin_instance.status_display(token)
@@ -60,7 +62,7 @@ class TestMCPTokenAdmin:
 
     def test_status_display_active_indefinite(self):
         """Test status_display for active indefinite token."""
-        token = MCPToken.objects.create(name="Indefinite Token", is_active=True, expires_at=None)
+        token = MCPTokenFactory(is_active=True, expires_at=None)
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         status = admin_instance.status_display(token)
@@ -72,7 +74,7 @@ class TestMCPTokenAdmin:
         """Test status_display for token expiring within 7 days."""
         # Token expires in 5 days
         future_date = timezone.now() + timedelta(days=5)
-        token = MCPToken.objects.create(name="Expires Soon Token", is_active=True, expires_at=future_date)
+        token = MCPTokenFactory(is_active=True, expires_at=future_date)
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         status = admin_instance.status_display(token)
@@ -85,7 +87,7 @@ class TestMCPTokenAdmin:
         """Test status_display for active token with future expiry."""
         # Token expires in 30 days (more than 7 days)
         future_date = timezone.now() + timedelta(days=30)
-        token = MCPToken.objects.create(name="Active Token", is_active=True, expires_at=future_date)
+        token = MCPTokenFactory(is_active=True, expires_at=future_date)
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         status = admin_instance.status_display(token)

@@ -85,9 +85,7 @@ class Migration(migrations.Migration):
                 (
                     "user",
                     models.ForeignKey(
-                        blank=True,
-                        help_text="Optional user this token belongs to (for permission checking)",
-                        null=True,
+                        help_text="User for audit logging (actions are logged under this user)",
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="mcp_tokens",
                         to=settings.AUTH_USER_MODEL,

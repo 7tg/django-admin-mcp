@@ -17,7 +17,10 @@ class MCPToken(models.Model):
 
     Each token provides access to specific MCP tools and can be enabled/disabled.
     Tokens can have an expiry date or be indefinite (expires_at=None).
-    Tokens can optionally be linked to a Django User for permission checking.
+
+    Permissions are managed through direct permissions and groups assigned to the token,
+    NOT inherited from the linked user. The user field is used only for audit logging
+    (actions taken via this token are logged under the user in Django admin history).
     """
 
     name = models.CharField(
@@ -33,10 +36,8 @@ class MCPToken(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        null=True,
-        blank=True,
         related_name="mcp_tokens",
-        help_text="Optional user this token belongs to (for permission checking)",
+        help_text="User for audit logging (actions are logged under this user)",
     )
     is_active = models.BooleanField(default=True, help_text="Whether this token is currently active")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -136,10 +137,6 @@ class MCPToken(models.Model):
         ).exists():
             return True
 
-        # Check user permissions if user is set
-        if self.user:
-            return self.user.has_perm(f"{app_label}.{codename}")
-
         # Default: deny access (principle of least privilege)
         return False
 
@@ -172,9 +169,5 @@ class MCPToken(models.Model):
         for group in self.groups.prefetch_related("permissions__content_type").all():
             for perm in group.permissions.all():
                 perms.add(f"{perm.content_type.app_label}.{perm.codename}")
-
-        # Add user permissions if user is set
-        if self.user:
-            perms.update(self.user.get_all_permissions())
 
         return perms

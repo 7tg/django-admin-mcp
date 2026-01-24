@@ -4,6 +4,13 @@ Pytest configuration for django-admin-mcp tests
 
 import pytest
 from django.contrib import admin
+from pytest_factoryboy import register
+
+from tests.factories import MCPTokenFactory, UserFactory
+
+# Register factories as fixtures
+register(UserFactory)
+register(MCPTokenFactory)
 
 
 @pytest.fixture(scope="session", autouse=True)

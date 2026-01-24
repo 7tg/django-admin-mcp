@@ -34,7 +34,8 @@ def authenticate_token(request):
     token_value = auth_header[7:]  # Remove 'Bearer ' prefix
 
     try:
-        token = MCPToken.objects.get(token=token_value)
+        # Use select_related to pre-load user for async access
+        token = MCPToken.objects.select_related("user").get(token=token_value)
 
         # Check if token is valid (active and not expired)
         if not token.is_valid():
