@@ -191,7 +191,7 @@ async def mcp_endpoint(request):
             id=data.get("id"),
             result=InitializeResult(
                 protocolVersion="2025-11-25",
-                serverInfo=ServerInfo(name="django-admin-mcp", version="0.2.0"),
+                serverInfo=ServerInfo(name="django-admin-mcp", version="0.2.1"),
                 capabilities=ServerCapabilities(),
             ),
         )
