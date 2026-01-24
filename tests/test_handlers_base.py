@@ -18,6 +18,7 @@ from django_admin_mcp.handlers import (
     json_response,
     serialize_instance,
 )
+from django_admin_mcp.handlers.base import MCPRequest
 from django_admin_mcp.protocol.types import TextContent
 from tests.models import Article, Author
 
@@ -96,6 +97,25 @@ class TestCreateMockRequest:
         request = create_mock_request(user)
         assert request.user == user
         assert request.user.username == f"testuser_{uid}"
+
+    def test_request_has_required_attributes(self):
+        """Test that MCPRequest has all required attributes for permission checks."""
+        request = create_mock_request()
+        # Verify it's an MCPRequest instance
+        assert isinstance(request, MCPRequest)
+        # Verify all required attributes exist
+        assert hasattr(request, "user")
+        assert hasattr(request, "method")
+        assert hasattr(request, "path")
+        assert hasattr(request, "META")
+        assert hasattr(request, "GET")
+        assert hasattr(request, "POST")
+        # Verify default values
+        assert request.method == "GET"
+        assert request.path == "/"
+        assert isinstance(request.META, dict)
+        assert isinstance(request.GET, dict)
+        assert isinstance(request.POST, dict)
 
 
 @pytest.mark.django_db

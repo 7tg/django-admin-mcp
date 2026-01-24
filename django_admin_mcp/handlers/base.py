@@ -16,6 +16,24 @@ from django.http import HttpRequest
 from django_admin_mcp.protocol.types import TextContent
 
 
+class MCPRequest(HttpRequest):
+    """
+    Lightweight request object for MCP permission checks.
+
+    Provides the minimal HttpRequest interface needed for Django admin
+    permission methods without using test utilities.
+    """
+
+    def __init__(self, user=None):
+        super().__init__()
+        self.user = user
+        self.method = "GET"
+        self.path = "/"
+        self.META = {}
+        self.GET = {}
+        self.POST = {}
+
+
 def json_response(data: dict) -> list[TextContent]:
     """
     Wrap response data in TextContent list.
@@ -68,11 +86,7 @@ def create_mock_request(user=None) -> HttpRequest:
     Returns:
         HttpRequest with user set (None if not provided).
     """
-    from django.test import RequestFactory
-
-    request = RequestFactory().get("/")
-    request.user = user  # Keep as None if not provided (skips permission checks)
-    return request
+    return MCPRequest(user)
 
 
 def check_permission(request: HttpRequest, model_admin: Any, action: str) -> bool:
