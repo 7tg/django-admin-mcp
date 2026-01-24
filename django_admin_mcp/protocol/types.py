@@ -162,3 +162,38 @@ class ToolsCallResponse(JsonRpcResponse):
     """Response to tools/call request."""
 
     result: ToolsCallResult  # type: ignore[assignment]
+
+
+# =============================================================================
+# CRUD Response Models
+# =============================================================================
+
+
+class ListResponse(BaseModel):
+    """Response model for list operations."""
+
+    count: int
+    total_count: int
+    results: list[dict[str, Any]]
+
+
+class GetResponse(BaseModel):
+    """Response model for get operations."""
+
+    pass
+
+
+class CreateResponse(BaseModel):
+    """Response model for create operations."""
+
+    success: bool
+    id: int | str
+    object: dict[str, Any]
+
+
+class UpdateResponse(BaseModel):
+    """Response model for update operations."""
+
+    success: bool
+    object: dict[str, Any]
+    inlines: dict[str, Any] | None = None
