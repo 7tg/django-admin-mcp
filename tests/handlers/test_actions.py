@@ -378,7 +378,7 @@ class TestHandleBulk:
 
     @pytest.mark.asyncio
     async def test_bulk_update_truncates_large_change_message(self):
-        """Test that bulk update truncates large change messages to avoid DB limits."""
+        """Test that bulk update truncates large change messages to keep them concise."""
         uid = unique_id()
         user = await create_superuser(uid)
         author = await create_author(
@@ -414,8 +414,8 @@ class TestHandleBulk:
             # But if it does, it should not exceed limits
             if log:
                 assert "Bulk updated via MCP:" in log.change_message
-                # Message should not exceed reasonable limits
-                assert len(log.change_message) < 65000  # MySQL TEXT limit
+                # Message should be truncated to around 500 chars for the data + prefix
+                assert len(log.change_message) < 600  # 500 + prefix margin
             return log
 
         await check_log_entry()
