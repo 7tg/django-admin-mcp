@@ -90,7 +90,24 @@ class TestTokenSecurity:
         token2 = MCPToken(
             name="Duplicate",
             user=token1.user,
+            token_key="different_key",  # Different key to isolate hash constraint
             token_hash=token1.token_hash,
+            salt=token1.salt,
+        )
+
+        with pytest.raises(IntegrityError):
+            token2.save()
+
+    def test_token_key_uniqueness_constraint(self):
+        """Test that token_key has uniqueness constraint."""
+        token1 = MCPTokenFactory()
+
+        # Try to create a token with the same key (should fail)
+        token2 = MCPToken(
+            name="Duplicate",
+            user=token1.user,
+            token_key=token1.token_key,
+            token_hash="different_hash_12345678901234567890123456789012345678901234567890123456",
             salt=token1.salt,
         )
 
@@ -123,16 +140,16 @@ class TestTokenSecurity:
         # Should still verify against the original plaintext
         assert token.verify_token(plaintext) is True
 
-    def test_token_string_representation_uses_hash(self):
-        """Test that string representation uses hash, not plaintext."""
+    def test_token_string_representation_uses_key(self):
+        """Test that string representation uses token key, not secret."""
         token = MCPTokenFactory()
         plaintext = token.plaintext_token  # Capture before it's consumed
 
         str_repr = str(token)
 
-        # Should contain part of hash
-        assert token.token_hash[:8] in str_repr
-        # Should not contain plaintext token
+        # Should contain token key with prefix
+        assert f"mcp_{token.token_key}" in str_repr
+        # Should not contain the full plaintext token (which includes the secret)
         assert plaintext not in str_repr
 
     def test_regenerate_token(self):
@@ -170,3 +187,102 @@ class TestTokenSecurity:
         # Hash should be updated in database
         assert token.token_hash != old_hash
         assert token.verify_token(new_plaintext) is True
+
+
+@pytest.mark.django_db
+class TestTokenFormat:
+    """Test suite for token format (mcp_<key>.<secret>)."""
+
+    def test_token_format_has_prefix(self):
+        """Test that generated tokens have mcp_ prefix."""
+        token = MCPTokenFactory()
+        plaintext = token.plaintext_token
+
+        assert plaintext.startswith("mcp_")
+
+    def test_token_format_has_key_and_secret(self):
+        """Test that token format contains key and secret separated by period."""
+        token = MCPTokenFactory()
+        plaintext = token.plaintext_token
+
+        # Remove prefix and check format
+        body = plaintext[4:]  # Remove 'mcp_'
+        parts = body.split(".", 1)
+
+        assert len(parts) == 2
+        assert parts[0] == token.token_key
+        assert len(parts[1]) > 0  # Secret should exist
+
+    def test_parse_token_valid(self):
+        """Test parse_token with valid token."""
+        token = MCPTokenFactory()
+        plaintext = token.plaintext_token
+
+        parsed = MCPToken.parse_token(plaintext)
+
+        assert parsed is not None
+        key, secret = parsed
+        assert key == token.token_key
+        assert len(secret) > 0
+
+    def test_parse_token_missing_prefix(self):
+        """Test parse_token rejects tokens without mcp_ prefix."""
+        result = MCPToken.parse_token("invalid_key_secret")
+        assert result is None
+
+    def test_parse_token_missing_secret(self):
+        """Test parse_token rejects tokens without secret part."""
+        result = MCPToken.parse_token("mcp_keyonly")
+        assert result is None
+
+    def test_parse_token_empty(self):
+        """Test parse_token rejects empty tokens."""
+        assert MCPToken.parse_token("") is None
+        assert MCPToken.parse_token(None) is None
+
+    def test_get_by_key_finds_active_token(self):
+        """Test get_by_key finds active tokens."""
+        token = MCPTokenFactory()
+
+        found = MCPToken.get_by_key(token.token_key)
+
+        assert found is not None
+        assert found.id == token.id
+
+    def test_get_by_key_ignores_inactive_token(self):
+        """Test get_by_key ignores inactive tokens."""
+        token = MCPTokenFactory(is_active=False)
+
+        found = MCPToken.get_by_key(token.token_key)
+
+        assert found is None
+
+    def test_get_by_key_not_found(self):
+        """Test get_by_key returns None for unknown key."""
+        found = MCPToken.get_by_key("nonexistent_key")
+
+        assert found is None
+
+    def test_verify_secret_correct(self):
+        """Test verify_secret with correct secret."""
+        token = MCPTokenFactory()
+        plaintext = token.plaintext_token
+
+        # Extract secret from full token
+        parsed = MCPToken.parse_token(plaintext)
+        _, secret = parsed
+
+        assert token.verify_secret(secret) is True
+
+    def test_verify_secret_incorrect(self):
+        """Test verify_secret with incorrect secret."""
+        token = MCPTokenFactory()
+
+        assert token.verify_secret("wrong_secret") is False
+
+    def test_token_keys_are_unique(self):
+        """Test that different tokens have different keys."""
+        token1 = MCPTokenFactory()
+        token2 = MCPTokenFactory()
+
+        assert token1.token_key != token2.token_key

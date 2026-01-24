@@ -22,7 +22,11 @@ from django_admin_mcp.tools import call_tool, get_tools
 @sync_to_async
 def authenticate_token(request):
     """
-    Authenticate request using Bearer token.
+    Authenticate request using Bearer token with O(1) lookup.
+
+    Token format: mcp_<key>_<secret>
+    - key: used for indexed database lookup
+    - secret: verified against stored hash
 
     Returns:
         MCPToken if valid, None otherwise
@@ -34,25 +38,28 @@ def authenticate_token(request):
     token_value = auth_header[7:]  # Remove 'Bearer ' prefix
 
     try:
-        # Get all active tokens with hashes
-        # Note: This approach requires iterating through tokens because we need the salt
-        # to hash the provided token. In production with many tokens, consider:
-        # 1. Caching active tokens
-        # 2. Using a separate lookup table with indexed hash prefixes
-        # 3. Limiting query to recently used tokens first
-        tokens = MCPToken.objects.select_related("user").filter(is_active=True, token_hash__isnull=False)
+        # Parse token to extract key and secret
+        parsed = MCPToken.parse_token(token_value)
+        if not parsed:
+            return None
 
-        for token in tokens:
-            if token.verify_token(token_value):
-                # Check if token is valid (not expired)
-                if not token.is_valid():
-                    return None
+        key, secret = parsed
 
-                token.mark_used()
-                return token
+        # O(1) lookup by key (indexed)
+        token = MCPToken.get_by_key(key)
+        if not token:
+            return None
 
-        # No matching token found
-        return None
+        # Verify the secret portion
+        if not token.verify_secret(secret):
+            return None
+
+        # Check if token is valid (not expired)
+        if not token.is_valid():
+            return None
+
+        token.mark_used()
+        return token
     except Exception:
         return None
 

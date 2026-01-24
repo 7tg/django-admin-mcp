@@ -29,6 +29,7 @@ class MCPTokenAdmin(admin.ModelAdmin):
     list_filter = ["is_active", "created_at", "expires_at", "groups"]
     search_fields = ["name", "user__username"]
     readonly_fields = [
+        "token_key",
         "token_hash",
         "salt",
         "created_at",
@@ -52,6 +53,7 @@ class MCPTokenAdmin(admin.ModelAdmin):
             "Token Information",
             {
                 "fields": (
+                    "token_key",
                     "token_hash",
                     "salt",
                     "created_at",
@@ -60,7 +62,8 @@ class MCPTokenAdmin(admin.ModelAdmin):
                     "regenerate_token_button",
                 ),
                 "classes": ("collapse",),
-                "description": "Token is hashed for security. Only the hash is stored, not the plaintext token.",
+                "description": "Token format: mcp_<key>.<secret>. The key is stored for lookup, "
+                "the secret is hashed for security.",
             },
         ),
     )
@@ -137,9 +140,9 @@ class MCPTokenAdmin(admin.ModelAdmin):
 
     @admin.display(description="Token")
     def token_preview(self, obj):
-        """Show a preview of the token hash."""
-        if obj.token_hash:
-            return f"Hash: {obj.token_hash[:8]}...{obj.token_hash[-8:]}"
+        """Show a preview of the token (key prefix only)."""
+        if obj.token_key:
+            return f"{obj.TOKEN_PREFIX}{obj.token_key}..."
         return "-"
 
     @admin.display(description="Status")

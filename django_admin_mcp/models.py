@@ -25,9 +25,22 @@ class MCPToken(models.Model):
     (actions taken via this token are logged under the user in Django admin history).
     """
 
+    # Token format: mcp_<key>.<secret>
+    # - key: stored in plaintext for O(1) lookup
+    # - secret: hashed with salt for security
+    # Note: We use '.' as separator because '_' and '-' are valid in token_urlsafe output
+    TOKEN_PREFIX = "mcp_"
+
     name = models.CharField(
         max_length=200,
         help_text="A descriptive name for this token (e.g., 'Production API', 'Dev Testing')",
+    )
+    token_key = models.CharField(
+        max_length=16,
+        unique=True,
+        editable=False,
+        db_index=True,
+        help_text="Public token key for O(1) database lookup",
     )
     token_hash = models.CharField(
         max_length=64,
@@ -35,12 +48,12 @@ class MCPToken(models.Model):
         editable=False,
         null=True,
         blank=True,
-        help_text="SHA-256 hash of the authentication token",
+        help_text="SHA-256 hash of the secret portion of the token",
     )
     salt = models.CharField(
         max_length=32,
         editable=False,
-        help_text="Salt used for token hashing",
+        help_text="Salt used for hashing the token secret",
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -74,7 +87,7 @@ class MCPToken(models.Model):
         verbose_name_plural = "MCP Tokens"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["is_active", "token_hash"], name="mcp_token_active_hash_idx"),
+            models.Index(fields=["is_active", "token_key"], name="mcp_token_active_key_idx"),
         ]
 
     def __init__(self, *args, **kwargs):
@@ -86,25 +99,27 @@ class MCPToken(models.Model):
         super().__init__(*args, **kwargs)
 
     def __str__(self):
-        # Use first 8 chars of hash for display
-        if self.token_hash:
-            return f"{self.name} ({self.token_hash[:8]}...)"
+        # Use token key for display (safe since it's already public)
+        if self.token_key:
+            return f"{self.name} ({self.TOKEN_PREFIX}{self.token_key}...)"
         return f"{self.name}"
 
     def save(self, *args, **kwargs):
         """Generate token, hash it with salt, and set default expiry on first save."""
-        if not self.token_hash:
-            # Generate a new token
-            plaintext_token = secrets.token_urlsafe(48)
+        if not self.token_key:
+            # Generate token key (public, for lookup) and secret (hashed)
+            # Token format: mcp_<key>.<secret>
+            self.token_key = secrets.token_urlsafe(12)  # ~16 chars, for O(1) lookup
+            token_secret = secrets.token_urlsafe(32)  # ~43 chars, hashed for security
 
             # Generate a unique salt for this token
             self.salt = secrets.token_urlsafe(16)
 
-            # Hash the token with the salt
-            self.token_hash = self._hash_token(plaintext_token, self.salt)
+            # Hash only the secret part
+            self.token_hash = self._hash_token(token_secret, self.salt)
 
-            # Store plaintext token temporarily so it can be returned to user once
-            self._plaintext_token = plaintext_token
+            # Store full plaintext token temporarily so it can be returned to user once
+            self._plaintext_token = f"{self.TOKEN_PREFIX}{self.token_key}.{token_secret}"
 
         # Set default expiry to 90 days only for new tokens where expires_at wasn't explicitly set
         if self._should_set_default_expiry():
@@ -128,24 +143,93 @@ class MCPToken(models.Model):
         salted_token = f"{salt}{token}".encode()
         return hashlib.sha256(salted_token).hexdigest()
 
-    def verify_token(self, provided_token: str) -> bool:
+    @classmethod
+    def parse_token(cls, full_token: str) -> tuple[str, str] | None:
         """
-        Verify a provided token against the stored hash using constant-time comparison.
+        Parse a full token into key and secret parts.
 
         Args:
-            provided_token: The plaintext token to verify
+            full_token: The full token string (e.g., 'mcp_<key>.<secret>')
 
         Returns:
-            True if token matches, False otherwise
+            Tuple of (key, secret) if valid format, None otherwise
+        """
+        if not full_token or not full_token.startswith(cls.TOKEN_PREFIX):
+            return None
+
+        # Remove prefix and split by period (not underscore, since that's in token_urlsafe)
+        token_body = full_token[len(cls.TOKEN_PREFIX) :]
+        parts = token_body.split(".", 1)
+
+        if len(parts) != 2:
+            return None
+
+        key, secret = parts
+        if not key or not secret:
+            return None
+
+        return key, secret
+
+    @classmethod
+    def get_by_key(cls, token_key: str):
+        """
+        Look up a token by its key (O(1) indexed lookup).
+
+        Args:
+            token_key: The public key portion of the token
+
+        Returns:
+            MCPToken instance if found, None otherwise
+        """
+        try:
+            return cls.objects.select_related("user").get(
+                token_key=token_key,
+                is_active=True,
+            )
+        except cls.DoesNotExist:
+            return None
+
+    def verify_secret(self, provided_secret: str) -> bool:
+        """
+        Verify the secret portion of a token using constant-time comparison.
+
+        Args:
+            provided_secret: The secret part of the token to verify
+
+        Returns:
+            True if secret matches, False otherwise
         """
         if not self.token_hash or not self.salt:
             return False
 
-        # Hash the provided token with the stored salt
-        provided_hash = self._hash_token(provided_token, self.salt)
+        # Hash the provided secret with the stored salt
+        provided_hash = self._hash_token(provided_secret, self.salt)
 
         # Use constant-time comparison to prevent timing attacks
         return hmac.compare_digest(self.token_hash, provided_hash)
+
+    def verify_token(self, provided_token: str) -> bool:
+        """
+        Verify a full token (key + secret) against this token instance.
+
+        Args:
+            provided_token: The full plaintext token to verify
+
+        Returns:
+            True if token matches, False otherwise
+        """
+        parsed = self.parse_token(provided_token)
+        if not parsed:
+            return False
+
+        key, secret = parsed
+
+        # Verify key matches this token
+        if key != self.token_key:
+            return False
+
+        # Verify the secret
+        return self.verify_secret(secret)
 
     def _should_set_default_expiry(self):
         """Check if default expiry should be set for new token."""
@@ -169,27 +253,28 @@ class MCPToken(models.Model):
 
     def regenerate_token(self) -> str:
         """
-        Regenerate the token with a new value.
+        Regenerate the token with a new key and secret.
 
         Returns:
-            The new plaintext token (only available once).
+            The new full plaintext token (only available once).
 
         Note:
             This invalidates the old token immediately.
         """
-        # Generate a new token
-        plaintext_token = secrets.token_urlsafe(48)
+        # Generate new key and secret
+        self.token_key = secrets.token_urlsafe(12)
+        token_secret = secrets.token_urlsafe(32)
 
         # Generate a new salt
         self.salt = secrets.token_urlsafe(16)
 
-        # Hash the token with the new salt
-        self.token_hash = self._hash_token(plaintext_token, self.salt)
+        # Hash the secret with the new salt
+        self.token_hash = self._hash_token(token_secret, self.salt)
 
         # Save the changes
-        self.save(update_fields=["token_hash", "salt"])
+        self.save(update_fields=["token_key", "token_hash", "salt"])
 
-        return plaintext_token
+        return f"{self.TOKEN_PREFIX}{self.token_key}.{token_secret}"
 
     def mark_used(self):
         """Mark token as recently used."""

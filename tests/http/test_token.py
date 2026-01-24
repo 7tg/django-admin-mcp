@@ -43,8 +43,8 @@ class TestMCPToken:
         token = MCPTokenFactory(name="My Token")
         str_repr = str(token)
         assert "My Token" in str_repr
-        # String representation now shows hash, not plaintext token
-        assert token.token_hash[:8] in str_repr
+        # String representation shows token key prefix for identification
+        assert f"mcp_{token.token_key}" in str_repr
 
     def test_token_default_expiry(self):
         """Test that tokens have default 90-day expiry."""

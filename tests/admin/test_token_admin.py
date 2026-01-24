@@ -19,23 +19,23 @@ class TestMCPTokenAdmin:
     """Test suite for MCPTokenAdmin."""
 
     def test_token_preview_with_token(self):
-        """Test token_preview method shows preview of token hash."""
+        """Test token_preview method shows token key prefix."""
         token = MCPTokenFactory()
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         preview = admin_instance.token_preview(token)
 
-        # Should show first 8 and last 8 characters of the hash
-        assert "Hash:" in preview
-        assert token.token_hash[:8] in preview
-        assert token.token_hash[-8:] in preview
+        # Should show mcp_ prefix and token key
+        assert "mcp_" in preview
+        assert token.token_key in preview
+        assert "..." in preview  # Indicates truncation
 
     def test_token_preview_without_token(self):
         """Test token_preview method with empty token."""
         # Create a token instance without calling save to avoid auto-generation
         user = UserFactory()
         token = MCPToken(name="Test Token", user=user)
-        # No token_hash or token set
+        # No token_key set
 
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
         preview = admin_instance.token_preview(token)

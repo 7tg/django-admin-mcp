@@ -35,11 +35,21 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
+                    "token_key",
+                    models.CharField(
+                        db_index=True,
+                        editable=False,
+                        help_text="Public token key for O(1) database lookup",
+                        max_length=16,
+                        unique=True,
+                    ),
+                ),
+                (
                     "token_hash",
                     models.CharField(
                         blank=True,
                         editable=False,
-                        help_text="SHA-256 hash of the authentication token",
+                        help_text="SHA-256 hash of the secret portion of the token",
                         max_length=64,
                         null=True,
                         unique=True,
@@ -49,7 +59,7 @@ class Migration(migrations.Migration):
                     "salt",
                     models.CharField(
                         editable=False,
-                        help_text="Salt used for token hashing",
+                        help_text="Salt used for hashing the token secret",
                         max_length=32,
                     ),
                 ),
@@ -108,7 +118,7 @@ class Migration(migrations.Migration):
                 "ordering": ["-created_at"],
                 "indexes": [
                     models.Index(
-                        fields=["is_active", "token_hash"], name="mcp_token_active_hash_idx"
+                        fields=["is_active", "token_key"], name="mcp_token_active_key_idx"
                     ),
                 ],
             },
