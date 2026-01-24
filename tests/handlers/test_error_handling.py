@@ -6,6 +6,7 @@ like database schema details, filesystem paths, or internal error messages.
 """
 
 import json
+import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -31,15 +32,13 @@ from django_admin_mcp.handlers.errors import (
     handle_validation_error,
 )
 from django_admin_mcp.handlers.meta import handle_describe, handle_find_models
-from django_admin_mcp.handlers.relations import handle_autocomplete, handle_history, handle_related
-from tests.models import Article, Author
+from django_admin_mcp.handlers.relations import handle_autocomplete
+from tests.models import Author
 
 
 @pytest.fixture
 async def superuser():
     """Create a superuser for testing."""
-    import uuid
-
     unique_suffix = uuid.uuid4().hex[:8]
     user = await sync_to_async(User.objects.create_superuser)(
         username=f"test_admin_{unique_suffix}",
@@ -161,8 +160,6 @@ class TestCRUDErrorHandling:
     @pytest.mark.django_db
     async def test_create_integrity_error_no_leak(self, superuser_request):
         """Test that create handler doesn't leak constraint names."""
-        import uuid
-
         unique_suffix = uuid.uuid4().hex[:8]
         # Create an author first
         author = await sync_to_async(Author.objects.create)(
@@ -183,14 +180,15 @@ class TestCRUDErrorHandling:
         assert data["code"] in ["integrity_error", "validation_error"]
         # Should NOT contain table names or constraint names
         assert "unique constraint" not in data["error"].lower()
-        assert "email" not in data.get("error", "").lower() or "validation" in data.get("error", "").lower()
+        # "email" should only appear if it's part of a generic validation message, not raw constraint details
+        if "email" in data.get("error", "").lower():
+            # If email is mentioned, it should be in context of validation, not database constraints
+            assert "validation" in data.get("error", "").lower()
 
     @pytest.mark.asyncio
     @pytest.mark.django_db
     async def test_update_generic_error_no_leak(self, superuser_request):
         """Test that update handler catches and sanitizes generic errors."""
-        import uuid
-
         unique_suffix = uuid.uuid4().hex[:8]
         # Create test data
         author = await sync_to_async(Author.objects.create)(
@@ -244,8 +242,6 @@ class TestActionsErrorHandling:
     @pytest.mark.django_db
     async def test_handle_action_generic_error_no_leak(self, superuser_request):
         """Test that action execution handler sanitizes errors."""
-        import uuid
-
         unique_suffix = uuid.uuid4().hex[:8]
         # Create test data
         author = await sync_to_async(Author.objects.create)(
@@ -289,7 +285,10 @@ class TestActionsErrorHandling:
             data = json.loads(result[0].text)
             assert "error" in data
             # Should NOT contain role names or connection details
-            assert "role" not in data["error"].lower() or "database" in data["error"].lower()
+            # Allow "database" as part of generic message, but not "role" in connection details
+            if "role" in data["error"].lower():
+                # If "role" appears, it should only be in generic context like "database error"
+                assert "database" in data["error"].lower()
 
 
 class TestMetaErrorHandling:

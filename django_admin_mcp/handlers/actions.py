@@ -362,7 +362,7 @@ async def handle_bulk(
                         # Note: Truncation may result in invalid JSON, but preserves logging capability
                         max_length = 500
                         if len(serialized_data) > max_length:
-                            serialized_data = serialized_data[:max_length] + '... (truncated)"'
+                            serialized_data = serialized_data[:max_length] + "... (truncated)"
                         _log_action(
                             user=user,
                             obj=obj,
