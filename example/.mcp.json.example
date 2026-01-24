@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "django-admin": {
+      "type": "http",
+      "url": "http://localhost:8000/api/mcp/",
+      "headers": {
+        "Authorization": "Bearer <your-mcp-token>"
+      }
+    }
+  }
+}
