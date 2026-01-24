@@ -14,8 +14,11 @@ from django.http import HttpRequest
 from ..protocol.types import TextContent
 from .base import (
     async_check_permission,
+    format_form_errors,
+    get_admin_form_class,
     get_model_admin,
     json_response,
+    normalize_fk_fields,
 )
 
 
@@ -232,7 +235,10 @@ async def handle_bulk(
     request: HttpRequest,
 ) -> list[TextContent]:
     """
-    Bulk create/update/delete operations.
+    Bulk create/update/delete operations with form validation.
+
+    Uses Django admin's form system for validation when ModelAdmin is available.
+    Falls back to auto-generated ModelForm otherwise.
 
     Args:
         model_name: The name of the model to perform bulk operations on.
@@ -277,13 +283,30 @@ async def handle_bulk(
         @sync_to_async
         def execute_bulk():
             from django.contrib.admin.models import ADDITION, CHANGE, DELETION
+            from django.forms.models import model_to_dict
 
             results = {"success": [], "errors": []}
 
             if operation == "create":
+                # Get form class for create operations
+                form_class = get_admin_form_class(model, model_admin, request, obj=None)
+
                 for i, item_data in enumerate(items):
                     try:
-                        obj = model.objects.create(**item_data)
+                        # Normalize FK field names
+                        normalized_data = normalize_fk_fields(model, item_data)
+                        form = form_class(data=normalized_data)
+                        if not form.is_valid():
+                            results["errors"].append(
+                                {
+                                    "index": i,
+                                    "error": "Validation failed",
+                                    "validation_errors": format_form_errors(form.errors),
+                                }
+                            )
+                            continue
+
+                        obj = form.save()
                         _log_action(
                             user=user,
                             obj=obj,
@@ -304,9 +327,29 @@ async def handle_bulk(
                             continue
 
                         obj = model.objects.get(pk=obj_id)
-                        for key, value in data.items():
-                            setattr(obj, key, value)
-                        obj.save()
+
+                        # Normalize FK field names
+                        normalized_data = normalize_fk_fields(model, data)
+
+                        # Get form class for this instance
+                        form_class = get_admin_form_class(model, model_admin, request, obj=obj)
+
+                        # Merge existing data with updates
+                        existing_data = model_to_dict(obj)
+                        merged_data = {**existing_data, **normalized_data}
+
+                        form = form_class(data=merged_data, instance=obj)
+                        if not form.is_valid():
+                            results["errors"].append(
+                                {
+                                    "index": i,
+                                    "error": "Validation failed",
+                                    "validation_errors": format_form_errors(form.errors),
+                                }
+                            )
+                            continue
+
+                        obj = form.save()
                         _log_action(
                             user=user,
                             obj=obj,

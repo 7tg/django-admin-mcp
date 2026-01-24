@@ -14,10 +14,13 @@ from django_admin_mcp.handlers.base import (
     async_check_permission,
     check_permission,
     create_mock_request,
+    format_form_errors,
+    get_admin_form_class,
     get_exposed_models,
     get_model_admin,
     get_model_name,
     json_response,
+    normalize_fk_fields,
     serialize_instance,
 )
 from django_admin_mcp.handlers.crud import (
@@ -42,10 +45,13 @@ __all__ = [
     "async_check_permission",
     "check_permission",
     "create_mock_request",
+    "format_form_errors",
+    "get_admin_form_class",
     "get_exposed_models",
     "get_model_admin",
     "get_model_name",
     "json_response",
+    "normalize_fk_fields",
     "serialize_instance",
     # Action handlers
     "handle_action",

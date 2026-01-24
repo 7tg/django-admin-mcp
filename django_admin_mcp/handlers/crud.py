@@ -16,8 +16,11 @@ from django.http import HttpRequest
 from ..protocol.types import TextContent
 from .base import (
     async_check_permission,
+    format_form_errors,
+    get_admin_form_class,
     get_model_admin,
     json_response,
+    normalize_fk_fields,
     serialize_instance,
 )
 
@@ -141,7 +144,10 @@ def _get_inline_data(obj: models.Model, admin: Any) -> dict[str, list[dict[str, 
 
 def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]) -> dict[str, Any]:
     """
-    Update inline related objects for a model instance.
+    Update inline related objects for a model instance with form validation.
+
+    Uses the inline's form class for validation when available, otherwise
+    falls back to auto-generated ModelForm.
 
     Args:
         obj: The parent model instance.
@@ -151,6 +157,8 @@ def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]
     Returns:
         Results dictionary with created, updated, deleted, and errors lists.
     """
+    from django.forms.models import model_to_dict, modelform_factory
+
     results: dict[str, list] = {"created": [], "updated": [], "deleted": [], "errors": []}
 
     if not admin or not inlines_data:
@@ -177,6 +185,15 @@ def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]
         if not fk_field:
             continue
 
+        # Get the form class for the inline
+        # Check if inline has a custom form class (not the default ModelForm)
+        from django.forms import ModelForm
+
+        inline_form_class = getattr(inline_class, "form", None)
+        if inline_form_class is None or inline_form_class is ModelForm:
+            # No custom form or default ModelForm - generate one
+            inline_form_class = modelform_factory(inline_model, fields="__all__")
+
         inline_items = inlines_data[inline_model_name]
         for item in inline_items:
             try:
@@ -189,20 +206,45 @@ def _update_inlines(obj: models.Model, admin: Any, inlines_data: dict[str, list]
                     inline_model.objects.filter(pk=item_id).delete()
                     results["deleted"].append({"model": inline_model_name, "id": item_id})
                 elif item_id:
-                    # Update existing inline
+                    # Update existing inline with form validation
                     inline_obj = inline_model.objects.get(pk=item_id)
-                    for key, value in item_data.items():
-                        if key not in ["id", "_delete"]:
-                            setattr(inline_obj, key, value)
-                    inline_obj.save()
-                    results["updated"].append({"model": inline_model_name, "id": item_id})
+
+                    # Merge existing data with updates
+                    existing_data = model_to_dict(inline_obj)
+                    update_data = {k: v for k, v in item_data.items() if k not in ["id", "_delete"]}
+                    merged_data = {**existing_data, **update_data}
+
+                    form = inline_form_class(data=merged_data, instance=inline_obj)
+                    if form.is_valid():
+                        form.save()
+                        results["updated"].append({"model": inline_model_name, "id": item_id})
+                    else:
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": item_id,
+                                "error": "Validation failed",
+                                "validation_errors": format_form_errors(form.errors),
+                            }
+                        )
                 else:
-                    # Create new inline
-                    item_data[fk_field.name] = obj
-                    new_obj = inline_model.objects.create(
-                        **{k: v for k, v in item_data.items() if k not in ["id", "_delete"]}
-                    )
-                    results["created"].append({"model": inline_model_name, "id": new_obj.pk})
+                    # Create new inline with form validation
+                    create_data = {k: v for k, v in item_data.items() if k not in ["id", "_delete"]}
+                    create_data[fk_field.name] = obj.pk  # Set FK to parent
+
+                    form = inline_form_class(data=create_data)
+                    if form.is_valid():
+                        new_obj = form.save()
+                        results["created"].append({"model": inline_model_name, "id": new_obj.pk})
+                    else:
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": None,
+                                "error": "Validation failed",
+                                "validation_errors": format_form_errors(form.errors),
+                            }
+                        )
             except Exception as e:
                 results["errors"].append(
                     {
@@ -417,7 +459,10 @@ async def handle_get(model_name: str, arguments: dict[str, Any], request: HttpRe
 
 async def handle_create(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
     """
-    Create new model instance.
+    Create new model instance with form validation.
+
+    Uses Django admin's form system for validation when ModelAdmin is available.
+    Falls back to auto-generated ModelForm otherwise.
 
     Args:
         model_name: The lowercase name of the model.
@@ -426,7 +471,9 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
         request: HttpRequest with user for permission checking and logging.
 
     Returns:
-        List of TextContent with JSON response containing success, id, and object.
+        List of TextContent with JSON response containing:
+        - On success: success, id, object
+        - On validation error: error, code, validation_errors
     """
     model, model_admin = get_model_admin(model_name)
 
@@ -452,7 +499,21 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
         def create_object():
             from django.contrib.admin.models import ADDITION
 
-            obj = model.objects.create(**data)
+            # Normalize FK field names (convert field_id to field)
+            normalized_data = normalize_fk_fields(model, data)
+
+            # Get the form class from ModelAdmin or generate one
+            form_class = get_admin_form_class(model, model_admin, request, obj=None)
+
+            # Instantiate form with submitted data
+            form = form_class(data=normalized_data)
+
+            # Validate the form
+            if not form.is_valid():
+                return None, format_form_errors(form.errors)
+
+            # Save the form to create the object
+            obj = form.save()
 
             # Log the action
             _log_action(
@@ -464,12 +525,22 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
 
             return obj.pk, serialize_instance(obj, model_admin)
 
-        obj_id, obj_dict = await create_object()
+        result_id, result_data = await create_object()
+
+        # Check if validation failed
+        if result_id is None:
+            return json_response(
+                {
+                    "error": "Validation failed",
+                    "code": "validation_error",
+                    "validation_errors": result_data,
+                }
+            )
 
         return [
             TextContent(
                 text=json.dumps(
-                    {"success": True, "id": obj_id, "object": obj_dict},
+                    {"success": True, "id": result_id, "object": result_data},
                     indent=2,
                     default=str,
                 ),
@@ -481,7 +552,10 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
 
 async def handle_update(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
     """
-    Update model instance.
+    Update model instance with form validation.
+
+    Uses Django admin's form system for validation when ModelAdmin is available.
+    The form is initialized with the existing instance and partial data is merged.
 
     Args:
         model_name: The lowercase name of the model.
@@ -492,7 +566,9 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
         request: HttpRequest with user for permission checking and logging.
 
     Returns:
-        List of TextContent with JSON response containing success and object.
+        List of TextContent with JSON response containing:
+        - On success: success, object, (optional) inlines
+        - On validation error: error, code, validation_errors
     """
     model, model_admin = get_model_admin(model_name)
 
@@ -541,12 +617,29 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
         @sync_to_async
         def update_object():
             from django.contrib.admin.models import CHANGE
+            from django.forms.models import model_to_dict
 
             obj = model.objects.get(pk=obj_id)
-            # Update only the specified fields
-            for key, value in data.items():
-                setattr(obj, key, value)
-            obj.save()
+
+            # Normalize FK field names (convert field_id to field)
+            normalized_data = normalize_fk_fields(model, data)
+
+            # Get the form class from ModelAdmin
+            form_class = get_admin_form_class(model, model_admin, request, obj=obj)
+
+            # For partial updates, merge existing data with new data
+            existing_data = model_to_dict(obj)
+            merged_data = {**existing_data, **normalized_data}
+
+            # Instantiate form with merged data and existing instance
+            form = form_class(data=merged_data, instance=obj)
+
+            # Validate the form
+            if not form.is_valid():
+                return None, format_form_errors(form.errors), {}
+
+            # Save the form to update the object
+            obj = form.save()
 
             # Handle inlines if provided
             inlines_result = {}
@@ -566,9 +659,19 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
                 change_message=(" | ".join(change_message) if change_message else "Updated via MCP"),
             )
 
-            return serialize_instance(obj, model_admin), inlines_result
+            return serialize_instance(obj, model_admin), None, inlines_result
 
-        obj_dict, inlines_result = await update_object()
+        obj_dict, validation_errors, inlines_result = await update_object()
+
+        # Check if validation failed
+        if obj_dict is None:
+            return json_response(
+                {
+                    "error": "Validation failed",
+                    "code": "validation_error",
+                    "validation_errors": validation_errors,
+                }
+            )
 
         response = {"success": True, "object": obj_dict}
         if inlines_result and any(inlines_result.values()):

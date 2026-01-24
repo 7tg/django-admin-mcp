@@ -10,7 +10,7 @@ from typing import Any
 
 from django.contrib.admin.sites import site
 from django.db import models
-from django.forms.models import model_to_dict
+from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
 
 from ..protocol.types import TextContent
@@ -192,3 +192,110 @@ def get_model_name(model: type[models.Model]) -> str:
     """
     # model_name is always a string for concrete models
     return model._meta.model_name or ""
+
+
+def get_admin_form_class(
+    model: type[models.Model],
+    model_admin: Any,
+    request: HttpRequest,
+    obj: models.Model | None = None,
+) -> type:
+    """
+    Get the form class to use for a model.
+
+    Uses ModelAdmin's get_form() method if available, which respects
+    the admin's form, fields, exclude, and readonly_fields attributes.
+    Falls back to modelform_factory for auto-generated form.
+
+    Args:
+        model: The Django model class.
+        model_admin: The ModelAdmin instance (may be None).
+        request: HttpRequest for form customization.
+        obj: Existing instance for update operations (None for create).
+
+    Returns:
+        Form class to use for validation.
+    """
+    if model_admin is not None:
+        # Check if request.user is valid (has has_perm method)
+        user = getattr(request, "user", None)
+        if user is not None and hasattr(user, "has_perm"):
+            try:
+                return model_admin.get_form(request, obj=obj)
+            except (AttributeError, TypeError):
+                # Fall back if get_form fails
+                pass
+
+        # If ModelAdmin has a custom form class, use it directly
+        form_class = getattr(model_admin, "form", None)
+        if form_class is not None:
+            from django.forms import ModelForm
+
+            if form_class is not ModelForm and issubclass(form_class, ModelForm):
+                return form_class
+
+    return modelform_factory(model, fields="__all__")
+
+
+def normalize_fk_fields(model: type[models.Model], data: dict) -> dict:
+    """
+    Normalize foreign key field names for form compatibility.
+
+    Converts field_id (database column names) to field (model field names)
+    for foreign key fields, enabling backward compatibility with clients
+    that use the _id suffix.
+
+    Args:
+        model: The Django model class.
+        data: Dictionary of field:value pairs.
+
+    Returns:
+        New dictionary with normalized field names.
+    """
+    # Get FK field names and their db column names
+    fk_fields = {}
+    for field in model._meta.get_fields():
+        if hasattr(field, "attname") and hasattr(field, "name"):
+            # FK fields have attname like 'author_id' and name like 'author'
+            if field.attname != field.name:
+                fk_fields[field.attname] = field.name
+
+    # Normalize the data
+    normalized = {}
+    for key, value in data.items():
+        if key in fk_fields:
+            # Convert field_id to field
+            normalized[fk_fields[key]] = value
+        else:
+            normalized[key] = value
+
+    return normalized
+
+
+def format_form_errors(form_errors: dict) -> dict:
+    """
+    Format Django form errors into a structured JSON-serializable format.
+
+    Args:
+        form_errors: The form.errors dictionary (ErrorDict).
+
+    Returns:
+        Dictionary with:
+        - errors: list of error dicts with 'field' and 'messages' keys
+        - error_count: total number of errors
+        - fields_with_errors: list of field names that have errors
+    """
+    errors_list = []
+    for field, messages in form_errors.items():
+        errors_list.append(
+            {
+                "field": field,
+                "messages": [str(msg) for msg in messages],
+            }
+        )
+
+    return {
+        "errors": errors_list,
+        "error_count": sum(len(e["messages"]) for e in errors_list),
+        "fields_with_errors": list(form_errors.keys()),
+    }
