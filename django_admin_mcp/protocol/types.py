@@ -38,3 +38,17 @@ class ToolResult(BaseModel):
 
     content: list[Content]
     isError: bool = False
+
+
+class ToolsListRequest(BaseModel):
+    """Request to list available MCP tools."""
+
+    method: Literal["tools/list"]
+
+
+class ToolsCallRequest(BaseModel):
+    """Request to call a specific MCP tool."""
+
+    method: Literal["tools/call"]
+    name: str
+    arguments: dict[str, Any] = {}

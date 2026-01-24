@@ -12,8 +12,10 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from pydantic import ValidationError
 
 from django_admin_mcp.models import MCPToken
+from django_admin_mcp.protocol import ToolsCallRequest, ToolsListRequest
 from django_admin_mcp.tools import call_tool, get_tools
 
 
@@ -65,13 +67,23 @@ class MCPHTTPView(View):
         except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON in request body"}, status=400)
 
-        # Get method from request
+        # Get method from request to determine which model to use
         method = data.get("method")
 
         if method == "tools/list":
+            # Validate with ToolsListRequest
+            try:
+                _ = ToolsListRequest.model_validate(data)
+            except ValidationError as e:
+                return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
             return await self.handle_list_tools(request)
         elif method == "tools/call":
-            return await self.handle_call_tool(request, data, token=token)
+            # Validate with ToolsCallRequest
+            try:
+                request_obj = ToolsCallRequest.model_validate(data)
+            except ValidationError as e:
+                return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
+            return await self.handle_call_tool(request, request_obj, token=token)
         else:
             return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
 
@@ -92,20 +104,14 @@ class MCPHTTPView(View):
 
         return JsonResponse({"tools": tools_data})
 
-    async def handle_call_tool(self, request, data, token=None):
+    async def handle_call_tool(self, request, request_obj: ToolsCallRequest, token=None):
         """Handle tools/call request."""
-        # Get token from request (it was validated in post method)
-        token = await authenticate_token(request)
-
-        tool_name = data.get("name")
-        arguments = data.get("arguments", {})
-
-        if not tool_name:
-            return JsonResponse({"error": "Missing tool name"}, status=400)
+        tool_name = request_obj.name
+        arguments = request_obj.arguments
 
         # Create request with user for permission checking
         tool_request = HttpRequest()
-        tool_request.user = token.user if token else None
+        tool_request.user = token.user if token else None  # type: ignore[assignment]
 
         # Call the tool with request context
         result = await call_tool(tool_name, arguments, tool_request)
@@ -142,13 +148,23 @@ async def mcp_endpoint(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON in request body"}, status=400)
 
-    # Get method from request
+    # Get method from request to determine which model to use
     method = data.get("method")
 
     if method == "tools/list":
+        # Validate with ToolsListRequest
+        try:
+            _ = ToolsListRequest.model_validate(data)
+        except ValidationError as e:
+            return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
         return await handle_list_tools_request(request)
     elif method == "tools/call":
-        return await handle_call_tool_request(request, data, token=token)
+        # Validate with ToolsCallRequest
+        try:
+            request_obj = ToolsCallRequest.model_validate(data)
+        except ValidationError as e:
+            return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
+        return await handle_call_tool_request(request, request_obj, token=token)
     else:
         return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
 
@@ -175,20 +191,14 @@ async def handle_list_tools_request(request):
     return JsonResponse({"tools": tools_data})
 
 
-async def handle_call_tool_request(request, data, token=None):
+async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token=None):
     """Handle tools/call request."""
-    # Get token from request (it was validated in mcp_endpoint)
-    token = await authenticate_token(request)
-
-    tool_name = data.get("name")
-    arguments = data.get("arguments", {})
-
-    if not tool_name:
-        return JsonResponse({"error": "Missing tool name"}, status=400)
+    tool_name = request_obj.name
+    arguments = request_obj.arguments
 
     # Create request with user for permission checking
     tool_request = HttpRequest()
-    tool_request.user = token.user if token else None
+    tool_request.user = token.user if token else None  # type: ignore[assignment]
 
     # Call the tool with request context
     result = await call_tool(tool_name, arguments, tool_request)

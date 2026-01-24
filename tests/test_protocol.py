@@ -2,6 +2,9 @@
 Tests for django_admin_mcp.protocol module.
 """
 
+import pytest
+from pydantic import ValidationError
+
 from django_admin_mcp.protocol import (
     ImageContent,
     JsonRpcError,
@@ -10,6 +13,8 @@ from django_admin_mcp.protocol import (
     TextContent,
     Tool,
     ToolResult,
+    ToolsCallRequest,
+    ToolsListRequest,
 )
 
 
@@ -193,3 +198,54 @@ class TestJsonRpcResponse:
         data = response.model_dump()
         assert data["error"]["code"] == -32601
         assert data["error"]["message"] == "Method not found"
+
+
+class TestMCPRequests:
+    """Test suite for MCP request models."""
+
+    def test_tools_list_request(self):
+        """Test ToolsListRequest validation."""
+        # Valid request
+        request = ToolsListRequest(method="tools/list")
+        assert request.method == "tools/list"
+        assert request.model_dump() == {"method": "tools/list"}
+
+    def test_tools_list_request_invalid_method(self):
+        """Test ToolsListRequest rejects invalid method."""
+        # Invalid method should fail
+        with pytest.raises(ValidationError) as exc_info:
+            ToolsListRequest(method="invalid/method")
+        assert len(exc_info.value.errors()) > 0
+        assert "method" in str(exc_info.value)
+
+    def test_tools_call_request(self):
+        """Test ToolsCallRequest validation."""
+        # Valid request with arguments
+        request = ToolsCallRequest(method="tools/call", name="find_models", arguments={"query": "article"})
+        assert request.method == "tools/call"
+        assert request.name == "find_models"
+        assert request.arguments == {"query": "article"}
+
+    def test_tools_call_request_default_arguments(self):
+        """Test ToolsCallRequest with default empty arguments."""
+        # Request without arguments should default to empty dict
+        request = ToolsCallRequest(method="tools/call", name="find_models")
+        assert request.method == "tools/call"
+        assert request.name == "find_models"
+        assert request.arguments == {}
+
+    def test_tools_call_request_missing_name(self):
+        """Test ToolsCallRequest requires name field."""
+        # Missing name should fail
+        with pytest.raises(ValidationError) as exc_info:
+            ToolsCallRequest(method="tools/call")
+        assert len(exc_info.value.errors()) > 0
+        # Check that 'name' field is mentioned in the error
+        error_fields = [err["loc"][0] for err in exc_info.value.errors()]
+        assert "name" in error_fields
+
+    def test_tools_call_request_serialization(self):
+        """Test ToolsCallRequest serializes correctly."""
+        request = ToolsCallRequest(method="tools/call", name="list_article", arguments={"limit": 10})
+        data = request.model_dump()
+        assert data == {"method": "tools/call", "name": "list_article", "arguments": {"limit": 10}}
