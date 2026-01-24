@@ -74,7 +74,7 @@ class TestHTTPInterface:
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
-            headers={"Authorization": f"Bearer {token.token}"},
+            headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 200
@@ -101,7 +101,7 @@ class TestHTTPInterface:
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
-            headers={"Authorization": f"Bearer {token.token}"},
+            headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 401
@@ -121,7 +121,7 @@ class TestHTTPInterface:
             "/api/mcp/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
-            headers={"Authorization": f"Bearer {token.token}"},
+            headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 200

@@ -22,7 +22,11 @@ from django_admin_mcp.tools import call_tool, get_tools
 @sync_to_async
 def authenticate_token(request):
     """
-    Authenticate request using Bearer token.
+    Authenticate request using Bearer token with O(1) lookup.
+
+    Token format: mcp_<key>_<secret>
+    - key: used for indexed database lookup
+    - secret: verified against stored hash
 
     Returns:
         MCPToken if valid, None otherwise
@@ -34,16 +38,29 @@ def authenticate_token(request):
     token_value = auth_header[7:]  # Remove 'Bearer ' prefix
 
     try:
-        # Use select_related to pre-load user for async access
-        token = MCPToken.objects.select_related("user").get(token=token_value)
+        # Parse token to extract key and secret
+        parsed = MCPToken.parse_token(token_value)
+        if not parsed:
+            return None
 
-        # Check if token is valid (active and not expired)
+        key, secret = parsed
+
+        # O(1) lookup by key (indexed)
+        token = MCPToken.get_by_key(key)
+        if not token:
+            return None
+
+        # Verify the secret portion
+        if not token.verify_secret(secret):
+            return None
+
+        # Check if token is valid (not expired)
         if not token.is_valid():
             return None
 
         token.mark_used()
         return token
-    except MCPToken.DoesNotExist:
+    except Exception:
         return None
 
 
