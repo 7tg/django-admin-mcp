@@ -3,6 +3,7 @@ Tests for HTTP interface edge cases
 """
 
 import json
+from unittest.mock import AsyncMock, patch
 
 import django
 import pytest
@@ -26,7 +27,6 @@ class TestEmptyToolResult:
     @pytest.mark.asyncio
     async def test_empty_tool_result(self):
         """Test mcp_endpoint when call_tool returns empty result."""
-        from unittest.mock import AsyncMock, patch
 
         # Create a valid token
         token = await sync_to_async(MCPTokenFactory)()

@@ -3,11 +3,13 @@ Tests for edge cases and error paths to achieve 100% coverage.
 """
 
 import asyncio
+import json
 
 import pytest
+from django.contrib import admin
 
 from django_admin_mcp import MCPAdminMixin
-from tests.models import Author
+from tests.models import Article, Author
 
 
 @pytest.mark.django_db
@@ -17,7 +19,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_invalid_tool_name_format(self):
         """Test handling of invalid tool name format (no underscore)."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("invalidtoolname", {})
         response = json.loads(result[0].text)
@@ -26,7 +27,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_unknown_operation(self):
         """Test handling of unknown operation."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("unknown_author", {})
         response = json.loads(result[0].text)
@@ -35,7 +35,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_unregistered_model(self):
         """Test handling of unregistered model."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("list_nonexistent", {})
         response = json.loads(result[0].text)
@@ -44,7 +43,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_get_missing_id_parameter(self):
         """Test get without id parameter."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("get_author", {})
         response = json.loads(result[0].text)
@@ -53,7 +51,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_delete_missing_id_parameter(self):
         """Test delete without id parameter."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("delete_author", {})
         response = json.loads(result[0].text)
@@ -62,7 +59,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_update_missing_id_parameter(self):
         """Test update without id parameter."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("update_author", {"data": {"name": "Test"}})
         response = json.loads(result[0].text)
@@ -71,11 +67,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_update_readonly_fields(self):
         """Test updating readonly fields (protected by admin)."""
-        import json
-
-        from django.contrib import admin
-
-        from tests.models import Author
 
         # Create author
         author = await asyncio.get_event_loop().run_in_executor(
@@ -103,7 +94,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_related_missing_id(self):
         """Test related tool without id parameter."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("related_author", {"relation": "articles"})
         response = json.loads(result[0].text)
@@ -112,7 +102,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_related_missing_relation(self):
         """Test related tool without relation parameter."""
-        import json
 
         author = await asyncio.get_event_loop().run_in_executor(
             None,
@@ -126,9 +115,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_related_single_object(self):
         """Test related navigation for single object (FK/OneToOne)."""
-        import json
-
-        from tests.models import Article
 
         # Create author and article
         author = await asyncio.get_event_loop().run_in_executor(
@@ -148,7 +134,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_related_simple_value(self):
         """Test related navigation for simple field value."""
-        import json
 
         author = await asyncio.get_event_loop().run_in_executor(
             None,
@@ -163,7 +148,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_bulk_missing_operation(self):
         """Test bulk without operation parameter."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("bulk_author", {"items": []})
         response = json.loads(result[0].text)
@@ -172,7 +156,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_bulk_invalid_operation(self):
         """Test bulk with invalid operation."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("bulk_author", {"operation": "invalid", "items": []})
         response = json.loads(result[0].text)
@@ -181,7 +164,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_bulk_update_missing_id(self):
         """Test bulk update with item missing id."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call(
             "bulk_author",
@@ -193,7 +175,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_bulk_update_not_found(self):
         """Test bulk update with non-existent id."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call(
             "bulk_author",
@@ -205,7 +186,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_bulk_delete_not_found(self):
         """Test bulk delete with non-existent id."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("bulk_author", {"operation": "delete", "items": [99999]})
         response = json.loads(result[0].text)
@@ -214,7 +194,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_action_not_found(self):
         """Test action with non-existent action name."""
-        import json
 
         author = await asyncio.get_event_loop().run_in_executor(
             None,
@@ -230,7 +209,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_action_no_objects_found(self):
         """Test action with ids that don't match any objects."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call(
             "action_author", {"action": "delete_selected", "ids": [99999, 99998]}
@@ -241,7 +219,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_inline_update_with_errors(self):
         """Test inline updates with errors."""
-        import json
 
         # Create author
         author = await asyncio.get_event_loop().run_in_executor(
@@ -272,9 +249,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_inline_delete(self):
         """Test deleting inline objects."""
-        import json
-
-        from tests.models import Article
 
         # Create author and article
         author = await asyncio.get_event_loop().run_in_executor(
@@ -306,9 +280,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_inline_create(self):
         """Test creating inline objects."""
-        import json
-
-        from tests.models import Article
 
         # Create author
         author = await asyncio.get_event_loop().run_in_executor(
@@ -345,9 +316,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_inline_update(self):
         """Test updating inline objects."""
-        import json
-
-        from tests.models import Article
 
         # Create author and article
         author = await asyncio.get_event_loop().run_in_executor(
@@ -386,7 +354,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_get_exception_handling(self):
         """Test exception handling in get operation."""
-        import json
 
         # Pass invalid id type that might cause an exception
         result = await MCPAdminMixin.handle_tool_call("get_author", {"id": "invalid_id_format"})
@@ -395,7 +362,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_create_exception_handling(self):
         """Test exception handling in create operation."""
-        import json
 
         # Try to create with invalid data (duplicate unique field)
         await asyncio.get_event_loop().run_in_executor(
@@ -412,7 +378,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_delete_exception_handling(self):
         """Test exception handling in delete operation."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("delete_author", {"id": "invalid_id"})
         response = json.loads(result[0].text)
@@ -420,7 +385,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_bulk_exception_handling(self):
         """Test exception handling in bulk operations."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call(
             "bulk_author",
@@ -432,7 +396,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_related_exception_handling(self):
         """Test exception handling in related operation."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("related_author", {"id": "invalid", "relation": "articles"})
         response = json.loads(result[0].text)
@@ -440,7 +403,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_history_exception_handling(self):
         """Test exception handling in history operation."""
-        import json
 
         result = await MCPAdminMixin.handle_tool_call("history_author", {"id": "invalid"})
         response = json.loads(result[0].text)
@@ -448,7 +410,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_serialize_model_instance_with_model_field(self):
         """Test serialization of model instance with related model field."""
-        from tests.models import Article
 
         # Create author and article
         author = await asyncio.get_event_loop().run_in_executor(
@@ -462,7 +423,6 @@ class TestEdgeCasesAndErrors:
 
         # Get article - author FK should be serialized as string
         result = await MCPAdminMixin.handle_tool_call("get_article", {"id": article.id})
-        import json
 
         response = json.loads(result[0].text)
         # The author field should be serialized
@@ -470,7 +430,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_get_with_no_admin(self):
         """Test getting inline data when no admin is configured."""
-        import json
 
         # This tests line 467 - when admin is None
         # We can't easily unregister, but we can test with include_inlines=True on a model
@@ -485,9 +444,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_inline_without_data_key(self):
         """Test inline update where item doesn't have 'data' key."""
-        import json
-
-        from tests.models import Article
 
         # Create author and article
         author = await asyncio.get_event_loop().run_in_executor(
@@ -519,11 +475,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_describe_with_fieldsets(self):
         """Test describe with fieldsets configured."""
-        import json
-
-        from django.contrib import admin
-
-        from tests.models import Author
 
         # Temporarily add fieldsets to AuthorAdmin
         author_admin = admin.site._registry[Author]
@@ -543,11 +494,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_describe_with_date_hierarchy(self):
         """Test describe with date_hierarchy configured."""
-        import json
-
-        from django.contrib import admin
-
-        from tests.models import Article
 
         # Temporarily add date_hierarchy to ArticleAdmin
         article_admin = admin.site._registry[Article]
@@ -564,11 +510,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_action_with_custom_action(self):
         """Test executing a custom action."""
-        import json
-
-        from django.contrib import admin
-
-        from tests.models import Author
 
         # Define a custom action
         def mark_featured(modeladmin, request, queryset):
@@ -602,11 +543,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_autocomplete_without_search_fields(self):
         """Test autocomplete when admin has no search_fields."""
-        import json
-
-        from django.contrib import admin
-
-        from tests.models import Author
 
         # Temporarily remove search_fields from AuthorAdmin
         author_admin = admin.site._registry[Author]
@@ -633,7 +569,6 @@ class TestEdgeCasesAndErrors:
 
     async def test_autocomplete_with_ordering(self):
         """Test autocomplete when admin has ordering configured."""
-        import json
 
         # Create authors
         await asyncio.get_event_loop().run_in_executor(

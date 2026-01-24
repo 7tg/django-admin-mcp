@@ -7,6 +7,8 @@ Tests tool registration, routing, and schema generation.
 import json
 
 import pytest
+from asgiref.sync import sync_to_async
+from django.contrib.auth.models import User
 from django.test import RequestFactory
 
 from django_admin_mcp.protocol.types import TextContent, Tool
@@ -21,6 +23,7 @@ from django_admin_mcp.tools.registry import (
     _format_fields_doc,
     _get_field_info,
 )
+from tests.models import Author
 
 
 class TestHandlersRegistry:
@@ -68,8 +71,6 @@ class TestCallTool:
     @pytest.mark.django_db
     async def test_call_tool_list_operation(self, django_setup_with_admin):
         """call_tool should route list operations correctly."""
-        from asgiref.sync import sync_to_async
-        from django.contrib.auth.models import User
 
         @sync_to_async
         def create_user():
@@ -121,7 +122,6 @@ class TestGetFieldInfo:
     @pytest.mark.django_db
     def test_get_field_info_returns_fields(self, django_setup_with_admin):
         """_get_field_info should return field information."""
-        from tests.models import Author
 
         fields = _get_field_info(Author)
 
@@ -133,7 +133,6 @@ class TestGetFieldInfo:
     @pytest.mark.django_db
     def test_get_field_info_includes_required_status(self, django_setup_with_admin):
         """_get_field_info should include required status."""
-        from tests.models import Author
 
         fields = _get_field_info(Author)
 
@@ -172,7 +171,6 @@ class TestGetModelTools:
     @pytest.mark.django_db
     def test_get_model_tools_returns_all_operations(self, django_setup_with_admin):
         """get_model_tools should return tools for all operations."""
-        from tests.models import Author
 
         tools = get_model_tools(Author)
 
@@ -197,7 +195,6 @@ class TestGetModelTools:
     @pytest.mark.django_db
     def test_get_model_tools_includes_field_documentation(self, django_setup_with_admin):
         """get_model_tools should include field documentation in descriptions."""
-        from tests.models import Author
 
         tools = get_model_tools(Author)
 
@@ -208,7 +205,6 @@ class TestGetModelTools:
     @pytest.mark.django_db
     def test_get_model_tools_schema_structure(self, django_setup_with_admin):
         """get_model_tools should generate valid schema structure."""
-        from tests.models import Author
 
         tools = get_model_tools(Author)
 

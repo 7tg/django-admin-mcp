@@ -3,6 +3,7 @@ Tests for basic CRUD operations via MCP tools
 """
 
 import asyncio
+import json
 
 import pytest
 
@@ -29,7 +30,6 @@ class TestCRUDOperations:
         )
 
         assert len(result) == 1
-        import json
 
         response = json.loads(result[0].text)
         assert response["success"] is True
@@ -47,7 +47,6 @@ class TestCRUDOperations:
         result = await MCPAdminMixin.handle_tool_call("list_author", {"limit": 10})
 
         assert len(result) == 1
-        import json
 
         response = json.loads(result[0].text)
         assert "count" in response
@@ -65,7 +64,6 @@ class TestCRUDOperations:
         result = await MCPAdminMixin.handle_tool_call("get_author", {"id": author.id})
 
         assert len(result) == 1
-        import json
 
         response = json.loads(result[0].text)
         assert response["name"] == "Author 2"
@@ -84,7 +82,6 @@ class TestCRUDOperations:
         )
 
         assert len(result) == 1
-        import json
 
         response = json.loads(result[0].text)
         assert response["success"] is True
@@ -101,7 +98,6 @@ class TestCRUDOperations:
         result = await MCPAdminMixin.handle_tool_call("delete_author", {"id": author.id})
 
         assert len(result) == 1
-        import json
 
         response = json.loads(result[0].text)
         assert response["success"] is True
@@ -111,7 +107,6 @@ class TestCRUDOperations:
         result = await MCPAdminMixin.handle_tool_call("get_author", {"id": 99999})
 
         assert len(result) == 1
-        import json
 
         response = json.loads(result[0].text)
         assert "error" in response
@@ -129,7 +124,6 @@ class TestCRUDOperations:
         )
 
         assert len(result) == 1
-        import json
 
         response = json.loads(result[0].text)
         assert "error" in response
@@ -156,7 +150,6 @@ class TestCRUDOperations:
         )
 
         assert len(result) == 1
-        import json
 
         response = json.loads(result[0].text)
         # Check if error or success
@@ -172,7 +165,6 @@ class TestCRUDOperations:
         result = await MCPAdminMixin.handle_tool_call("find_models", {})
 
         assert len(result) == 1
-        import json
 
         response = json.loads(result[0].text)
         assert "count" in response

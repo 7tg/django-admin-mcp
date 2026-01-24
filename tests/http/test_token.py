@@ -8,10 +8,12 @@ from datetime import timedelta
 import django
 import pytest
 from asgiref.sync import sync_to_async
+from django.contrib import admin
 from django.test import AsyncClient
 from django.utils import timezone
 
 from tests.factories import MCPTokenFactory
+from tests.models import Author
 
 # AsyncClient headers= parameter requires Django 4.2+
 DJANGO_42_PLUS = django.VERSION >= (4, 2)
@@ -102,9 +104,6 @@ class TestMCPExpose:
     @pytest.mark.asyncio
     async def test_tools_not_exposed_without_mcp_expose(self):
         """Test that tools are not exposed when mcp_expose is False."""
-        from django.contrib import admin
-
-        from tests.models import Author
 
         # Get the registered admin
         admin_class = admin.site._registry.get(Author).__class__

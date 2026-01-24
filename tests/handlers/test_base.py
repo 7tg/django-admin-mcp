@@ -4,6 +4,7 @@ Tests for django_admin_mcp.handlers.base utilities.
 
 import json
 import uuid
+from datetime import datetime
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, User
@@ -46,7 +47,6 @@ class TestJsonResponse:
 
     def test_handles_non_serializable_with_default_str(self):
         """Test that json_response handles non-serializable types via default=str."""
-        from datetime import datetime
 
         data = {"created_at": datetime(2024, 1, 15, 10, 30, 0)}
         result = json_response(data)

@@ -6,7 +6,10 @@ import json
 import uuid
 
 import pytest
+from asgiref.sync import sync_to_async
+from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
 from django.contrib.auth.models import AnonymousUser, User
+from django.contrib.contenttypes.models import ContentType
 
 from django_admin_mcp.handlers import (
     create_mock_request,
@@ -132,7 +135,6 @@ class TestHandleList:
 
     async def _create_author(self, uid):
         """Helper to create an author."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create():
@@ -142,7 +144,6 @@ class TestHandleList:
 
     async def _create_superuser_request(self, uid):
         """Helper to create a request with superuser."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create_user():
@@ -234,7 +235,6 @@ class TestHandleGet:
 
     async def _create_author(self, uid):
         """Helper to create an author."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create():
@@ -244,7 +244,6 @@ class TestHandleGet:
 
     async def _create_article(self, uid, author):
         """Helper to create an article."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create():
@@ -258,7 +257,6 @@ class TestHandleGet:
 
     async def _create_superuser_request(self, uid):
         """Helper to create a request with superuser."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create_user():
@@ -297,8 +295,6 @@ class TestHandleCreate:
     @pytest.mark.django_db
     async def test_create_logs_action(self):
         """Test that handle_create logs the action."""
-        from asgiref.sync import sync_to_async
-        from django.contrib.admin.models import ADDITION, LogEntry
 
         uid = unique_id()
         request = await self._create_superuser_request(uid)
@@ -314,8 +310,6 @@ class TestHandleCreate:
 
         @sync_to_async
         def check_log():
-            from django.contrib.contenttypes.models import ContentType
-
             ct = ContentType.objects.get_for_model(Author)
             log = LogEntry.objects.filter(content_type=ct, object_id=str(obj_id), action_flag=ADDITION).first()
             return log is not None
@@ -341,7 +335,6 @@ class TestHandleCreate:
 
     async def _create_superuser_request(self, uid):
         """Helper to create a request with superuser."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create_user():
@@ -424,8 +417,6 @@ class TestHandleUpdate:
     @pytest.mark.django_db
     async def test_update_logs_action(self):
         """Test that handle_update logs the action."""
-        from asgiref.sync import sync_to_async
-        from django.contrib.admin.models import CHANGE, LogEntry
 
         uid = unique_id()
         author = await self._create_author(uid)
@@ -439,8 +430,6 @@ class TestHandleUpdate:
 
         @sync_to_async
         def check_log():
-            from django.contrib.contenttypes.models import ContentType
-
             ct = ContentType.objects.get_for_model(Author)
             log = LogEntry.objects.filter(content_type=ct, object_id=str(author.pk), action_flag=CHANGE).first()
             return log is not None
@@ -473,7 +462,6 @@ class TestHandleUpdate:
 
     async def _create_author(self, uid):
         """Helper to create an author."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create():
@@ -483,7 +471,6 @@ class TestHandleUpdate:
 
     async def _create_article(self, uid, author):
         """Helper to create an article."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create():
@@ -497,7 +484,6 @@ class TestHandleUpdate:
 
     async def _create_superuser_request(self, uid):
         """Helper to create a request with superuser."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create_user():
@@ -518,7 +504,6 @@ class TestHandleDelete:
     @pytest.mark.django_db
     async def test_delete_removes_object(self):
         """Test that handle_delete removes the object."""
-        from asgiref.sync import sync_to_async
 
         uid = unique_id()
         author = await self._create_author(uid)
@@ -569,8 +554,6 @@ class TestHandleDelete:
     @pytest.mark.django_db
     async def test_delete_logs_action(self):
         """Test that handle_delete logs the action."""
-        from asgiref.sync import sync_to_async
-        from django.contrib.admin.models import DELETION, LogEntry
 
         uid = unique_id()
         author = await self._create_author(uid)
@@ -581,8 +564,6 @@ class TestHandleDelete:
 
         @sync_to_async
         def check_log():
-            from django.contrib.contenttypes.models import ContentType
-
             ct = ContentType.objects.get_for_model(Author)
             log = LogEntry.objects.filter(content_type=ct, object_id=str(author_pk), action_flag=DELETION).first()
             return log is not None
@@ -592,7 +573,6 @@ class TestHandleDelete:
 
     async def _create_author(self, uid):
         """Helper to create an author."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create():
@@ -602,7 +582,6 @@ class TestHandleDelete:
 
     async def _create_superuser_request(self, uid):
         """Helper to create a request with superuser."""
-        from asgiref.sync import sync_to_async
 
         @sync_to_async
         def create_user():

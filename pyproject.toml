@@ -114,6 +114,7 @@ select = [
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
     "DJ",     # flake8-django
+    "PLC0415", # import-outside-toplevel (no local imports)
 ]
 ignore = ["E203"]
 
