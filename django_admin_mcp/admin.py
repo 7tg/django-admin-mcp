@@ -9,12 +9,17 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
+from django_admin_mcp import MCPAdminMixin
 from django_admin_mcp.models import MCPToken
 
 
 @admin.register(MCPToken)
-class MCPTokenAdmin(admin.ModelAdmin):
+class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
     """Admin for MCP authentication tokens."""
+
+    # Enable MCP exposure with restricted fields for security
+    mcp_expose = True
+    mcp_exclude_fields = ["token_key", "token_hash", "salt"]  # Never expose sensitive token data via MCP
 
     list_display = [
         "name",

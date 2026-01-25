@@ -172,20 +172,43 @@ def get_exposed_models() -> list[tuple[str, Any]]:
 
 def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
     """
-    Serialize a Django model instance to dict.
+    Serialize a Django model instance to dict with field filtering.
 
-    Handles related fields by converting them to string representations,
-    and uses json.dumps with default=str to handle datetime and other
-    non-JSON-serializable types.
+    Respects field visibility configuration from ModelAdmin:
+    1. mcp_fields: MCP-specific list of fields to include (takes precedence)
+    2. mcp_exclude_fields: MCP-specific list of fields to exclude (takes precedence)
+    3. fields: Django admin's fields list (fallback if mcp_fields not set)
+    4. exclude: Django admin's exclude list (fallback if mcp_exclude_fields not set)
+
+    Field filtering prevents sensitive data exposure in MCP responses.
 
     Args:
         instance: The Django model instance to serialize.
-        model_admin: Optional ModelAdmin (reserved for future use).
+        model_admin: Optional ModelAdmin with field configuration.
 
     Returns:
-        Dictionary representation of the model instance.
+        Dictionary representation of the model instance with filtered fields.
     """
-    obj_dict = model_to_dict(instance)
+    # Determine which fields to include/exclude
+    fields_to_include = None
+    fields_to_exclude = None
+
+    if model_admin is not None:
+        # 1. Check for MCP-specific field configuration (takes precedence)
+        if hasattr(model_admin, "mcp_fields") and model_admin.mcp_fields is not None:
+            fields_to_include = model_admin.mcp_fields
+        elif hasattr(model_admin, "fields") and model_admin.fields is not None:
+            # 2. Fallback to Django admin's fields
+            fields_to_include = model_admin.fields
+
+        if hasattr(model_admin, "mcp_exclude_fields") and model_admin.mcp_exclude_fields is not None:
+            fields_to_exclude = model_admin.mcp_exclude_fields
+        elif hasattr(model_admin, "exclude") and model_admin.exclude is not None:
+            # 2. Fallback to Django admin's exclude
+            fields_to_exclude = model_admin.exclude
+
+    # Use model_to_dict with fields/exclude parameters
+    obj_dict = model_to_dict(instance, fields=fields_to_include, exclude=fields_to_exclude)
 
     # Convert non-serializable fields
     serialized = {}

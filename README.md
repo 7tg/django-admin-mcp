@@ -21,6 +21,7 @@ Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add
 - **Zero dependencies** beyond Django and Pydantic
 - **Token authentication** - secure Bearer token auth with configurable expiry
 - **Django admin permissions** - respects existing view/add/change/delete permissions
+- **Field filtering** - control which fields are exposed via `mcp_fields` and `mcp_exclude_fields`
 - **Full CRUD** - list, get, create, update, delete operations
 - **Admin actions** - execute registered Django admin actions
 - **Bulk operations** - update or delete multiple records at once
@@ -78,6 +79,18 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 @admin.register(Author)
 class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
     pass  # Discoverable via find_models, no direct tools
+```
+
+#### Protecting Sensitive Fields
+
+Use `mcp_exclude_fields` to prevent sensitive data exposure:
+
+```python
+@admin.register(User)
+class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    # Never expose sensitive fields via MCP
+    mcp_exclude_fields = ['password', 'security_token']
 ```
 
 ### 2. Create an API token
