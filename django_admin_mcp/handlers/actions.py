@@ -9,6 +9,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.contrib.admin import actions as admin_module_actions
+from django.db import transaction
 from django.http import HttpRequest
 from pydantic import TypeAdapter
 
@@ -307,13 +308,15 @@ async def handle_bulk(
                             )
                             continue
 
-                        obj = form.save()
-                        _log_action(
-                            user=user,
-                            obj=obj,
-                            action_flag=ADDITION,
-                            change_message="Bulk created via MCP",
-                        )
+                        # Wrap save and logging in transaction for atomicity
+                        with transaction.atomic():
+                            obj = form.save()
+                            _log_action(
+                                user=user,
+                                obj=obj,
+                                action_flag=ADDITION,
+                                change_message="Bulk created via MCP",
+                            )
                         results["success"].append({"index": i, "id": obj.pk, "created": True})
                     except Exception as e:
                         results["errors"].append({"index": i, "error": str(e)})
@@ -353,20 +356,22 @@ async def handle_bulk(
                             )
                             continue
 
-                        obj = form.save()
-                        # Serialize data using Pydantic TypeAdapter
-                        serialized_data = data_adapter.dump_json(data, fallback=str).decode()
-                        # Truncate to keep change messages concise
-                        # Note: Truncation may result in invalid JSON, but preserves logging capability
-                        max_length = 500
-                        if len(serialized_data) > max_length:
-                            serialized_data = serialized_data[:max_length] + '... (truncated)"'
-                        _log_action(
-                            user=user,
-                            obj=obj,
-                            action_flag=CHANGE,
-                            change_message=f"Bulk updated via MCP: {serialized_data}",
-                        )
+                        # Wrap save and logging in transaction for atomicity
+                        with transaction.atomic():
+                            obj = form.save()
+                            # Serialize data using Pydantic TypeAdapter
+                            serialized_data = data_adapter.dump_json(data, fallback=str).decode()
+                            # Truncate to keep change messages concise
+                            # Note: Truncation may result in invalid JSON, but preserves logging capability
+                            max_length = 500
+                            if len(serialized_data) > max_length:
+                                serialized_data = serialized_data[:max_length] + '... (truncated)"'
+                            _log_action(
+                                user=user,
+                                obj=obj,
+                                action_flag=CHANGE,
+                                change_message=f"Bulk updated via MCP: {serialized_data}",
+                            )
                         results["success"].append({"index": i, "id": obj_id, "updated": True})
                     except model.DoesNotExist:
                         results["errors"].append(
@@ -383,13 +388,15 @@ async def handle_bulk(
                 for i, obj_id in enumerate(ids):
                     try:
                         obj = model.objects.get(pk=obj_id)
-                        _log_action(
-                            user=user,
-                            obj=obj,
-                            action_flag=DELETION,
-                            change_message="Bulk deleted via MCP",
-                        )
-                        obj.delete()
+                        # Wrap logging and deletion in transaction for atomicity
+                        with transaction.atomic():
+                            _log_action(
+                                user=user,
+                                obj=obj,
+                                action_flag=DELETION,
+                                change_message="Bulk deleted via MCP",
+                            )
+                            obj.delete()
                         results["success"].append({"index": i, "id": obj_id, "deleted": True})
                     except model.DoesNotExist:
                         results["errors"].append(
