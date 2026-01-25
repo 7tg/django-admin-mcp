@@ -160,6 +160,11 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 3. **Exclusion wins over inclusion**: If a field is in both `mcp_fields` and `mcp_exclude_fields`, it's excluded
 4. **No configuration = all fields**: If no field configuration is provided, all model fields are exposed
 
+!!! note "Auto-generated fields"
+    Django's `model_to_dict()` automatically excludes fields with `auto_now_add=True` (like `created_at`)
+    from serialization. These fields are not editable and Django doesn't include them by default.
+    Regular date fields like `expires_at` and `last_used_at` are included normally.
+
 #### Example: Protecting Sensitive Data
 
 ```python
@@ -183,8 +188,12 @@ When listing or getting tokens via MCP, sensitive fields are automatically filte
   "name": "Production API Token",
   "user": 1,
   "is_active": true,
-  "expires_at": "2026-04-24T16:48:36Z"
+  "expires_at": "2026-04-24T16:48:36Z",
+  "last_used_at": null,
+  "groups": [],
+  "permissions": []
   // token_key, token_hash, and salt are NOT included
+  // created_at is also not included (auto_now_add fields are excluded by Django's model_to_dict)
 }
 ```
 

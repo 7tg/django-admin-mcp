@@ -25,7 +25,8 @@ class MCPAdminMixin:
 
         @admin.register(MyModel)
         class MyModelAdmin(MCPAdminMixin, admin.ModelAdmin):
-            pass
+            mcp_expose = True  # Enable MCP tools for this model
+            mcp_exclude_fields = ['password', 'secret']  # Exclude sensitive fields
 
     This will automatically register MCP tools for:
     - list_<model_name>: List all instances
@@ -33,7 +34,23 @@ class MCPAdminMixin:
     - create_<model_name>: Create a new instance
     - update_<model_name>: Update an existing instance
     - delete_<model_name>: Delete an instance
+
+    Attributes:
+        mcp_expose (bool): Set to True to expose direct MCP tools for this model.
+            If False or not set, model is discoverable but no direct tools are created.
+        mcp_fields (list[str] | None): List of field names to include in serialization.
+            Takes precedence over Django admin's 'fields' attribute.
+            If not set, falls back to 'fields' or includes all fields.
+        mcp_exclude_fields (list[str] | None): List of field names to exclude from serialization.
+            Takes precedence over Django admin's 'exclude' attribute.
+            Use this to prevent sensitive data exposure (e.g., passwords, tokens).
+            If not set, falls back to 'exclude' or excludes nothing.
     """
+
+    # Type annotations for MCP-specific attributes (set by subclasses)
+    mcp_expose: bool
+    mcp_fields: list[str] | None
+    mcp_exclude_fields: list[str] | None
 
     # Class-level registry to track registered models
     _registered_models: dict[str, dict[str, Any]] = {}
