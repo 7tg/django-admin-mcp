@@ -1,7 +1,7 @@
 # django-admin-mcp
 
 [![Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/7tg/django-admin-mcp)
-[![PyPI version](https://badge.fury.io/py/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
+[![PyPI version](https://img.shields.io/pypi/v/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
 [![Python versions](https://img.shields.io/pypi/pyversions/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
 [![Django](https://img.shields.io/badge/django-3.2%20%7C%204.x%20%7C%205.x-092E20.svg?logo=django)](https://www.djangoproject.com/)
