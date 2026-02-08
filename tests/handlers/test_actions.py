@@ -7,6 +7,7 @@ import uuid
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.contrib import admin as django_admin
 from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import AnonymousUser, User
 from django.contrib.contenttypes.models import ContentType
@@ -104,6 +105,65 @@ class TestHandleActions:
 @pytest.mark.django_db(transaction=True)
 class TestHandleAction:
     """Tests for handle_action function."""
+
+    @pytest.mark.asyncio
+    async def test_listed_string_action_can_be_executed(self):
+        """Test that string-referenced method actions can be listed and executed.
+
+        Reproduces https://github.com/7tg/django-admin-mcp/issues/69
+        Django supports actions as strings referencing methods on the ModelAdmin.
+        These are listed by handle_actions but fail to execute via handle_action.
+        """
+        uid = unique_id()
+        user = await create_superuser(uid)
+        author = await create_author(
+            name=f"Action Test {uid}",
+            email=f"action_{uid}@example.com",
+        )
+        request = create_mock_request(user)
+
+        @sync_to_async
+        def add_string_action():
+            author_admin = django_admin.site._registry[Author]
+            admin_class = author_admin.__class__
+            original_actions = getattr(author_admin, "actions", [])
+
+            # Add a method to the admin class and reference it by string
+            # This is the standard Django pattern for admin actions
+            def set_status_disabled(modeladmin, request, queryset):
+                return f"Disabled {queryset.count()} items"
+
+            set_status_disabled.short_description = "Set status disabled"
+            admin_class.set_status_disabled = set_status_disabled
+            author_admin.actions = list(original_actions or []) + ["set_status_disabled"]
+            return author_admin, admin_class, original_actions
+
+        @sync_to_async
+        def restore(admin_instance, admin_class, original):
+            admin_instance.actions = original
+            if hasattr(admin_class, "set_status_disabled"):
+                delattr(admin_class, "set_status_disabled")
+
+        admin_instance, admin_class, original = await add_string_action()
+        try:
+            # List actions — set_status_disabled should appear
+            list_result = await handle_actions("author", {}, request)
+            listed = json.loads(list_result[0].text)
+            action_names = [a["name"] for a in listed["actions"]]
+            assert "set_status_disabled" in action_names, f"set_status_disabled not in listed actions: {action_names}"
+
+            # Execute that same action — currently fails with "Action not found"
+            exec_result = await handle_action(
+                "author",
+                {"action": "set_status_disabled", "ids": [author.pk]},
+                request,
+            )
+            parsed = json.loads(exec_result[0].text)
+            assert "error" not in parsed, f"Action listed but not executable: {parsed}"
+            assert parsed["success"] is True
+            assert parsed["action"] == "set_status_disabled"
+        finally:
+            await restore(admin_instance, admin_class, original)
 
     @pytest.mark.asyncio
     async def test_executes_delete_selected_action(self):
