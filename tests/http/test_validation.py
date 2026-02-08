@@ -30,7 +30,7 @@ class TestPydanticValidation:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "invalid/method"}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
@@ -49,7 +49,7 @@ class TestPydanticValidation:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/call"}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
@@ -72,7 +72,7 @@ class TestPydanticValidation:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps(
                 {"method": "tools/call", "params": {"name": "find_models", "arguments": {"query": "article"}}}
             ),
@@ -94,7 +94,7 @@ class TestPydanticValidation:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/call", "params": {"name": "find_models"}}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
@@ -114,7 +114,7 @@ class TestPydanticValidation:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/list", "extra_field": "should be ignored"}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},

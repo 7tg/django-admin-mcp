@@ -86,7 +86,7 @@ class TestMCPToken:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
@@ -122,7 +122,7 @@ class TestMCPExpose:
 
             client = AsyncClient()
             response = await client.post(
-                "/api/mcp/",
+                "/api/",
                 data=json.dumps({"method": "tools/list"}),
                 content_type="application/json",
                 headers={"Authorization": f"Bearer {token.plaintext_token}"},
