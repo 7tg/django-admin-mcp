@@ -1,8 +1,8 @@
-# CRUD Operations
+# 📝 CRUD Operations
 
 Django Admin MCP provides full CRUD (Create, Read, Update, Delete) operations for exposed models.
 
-## list_\<model\>
+## 📋 list_\<model\>
 
 Lists model instances with support for pagination, filtering, search, and ordering.
 
@@ -10,11 +10,11 @@ Lists model instances with support for pagination, filtering, search, and orderi
 
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `limit` | integer | Maximum results to return | 25 |
+| `limit` | integer | Maximum results to return | 100 |
 | `offset` | integer | Number of results to skip | 0 |
-| `search` | string | Search query (uses `search_fields`) | - |
-| `ordering` | string | Field to order by | Model default |
-| `filters` | object | Field filters | - |
+| `search` | string | Search query (uses `search_fields`) | — |
+| `order_by` | array | Fields to order by (prefix with `-` for descending) | Model default |
+| `filters` | object | Field filters | — |
 
 ### Examples
 
@@ -62,7 +62,7 @@ Lists model instances with support for pagination, filtering, search, and orderi
   "method": "tools/call",
   "name": "list_article",
   "arguments": {
-    "ordering": "-created_at"
+    "order_by": ["-created_at"]
   }
 }
 ```
@@ -95,7 +95,7 @@ Lists model instances with support for pagination, filtering, search, and orderi
     }
   ],
   "count": 1,
-  "total": 42
+  "total_count": 42
 }
 ```
 
@@ -103,11 +103,11 @@ Lists model instances with support for pagination, filtering, search, and orderi
 |-------|-------------|
 | `results` | Array of model instances |
 | `count` | Number of results in this page |
-| `total` | Total number of matching records |
+| `total_count` | Total number of matching records |
 
 ---
 
-## get_\<model\>
+## 🔎 get_\<model\>
 
 Retrieves a single model instance by ID.
 
@@ -167,7 +167,7 @@ Retrieves a single model instance by ID.
 
 ---
 
-## create_\<model\>
+## ➕ create_\<model\>
 
 Creates a new model instance with validation.
 
@@ -215,8 +215,15 @@ Creates a new model instance with validation.
 
 ```json
 {
+  "success": true,
   "id": 43,
-  "message": "Article created successfully"
+  "object": {
+    "id": 43,
+    "title": "New Article",
+    "content": "Article content here...",
+    "author": 5,
+    "published": false
+  }
 }
 ```
 
@@ -227,7 +234,8 @@ If validation fails:
 ```json
 {
   "error": "Validation failed",
-  "errors": {
+  "code": "validation_error",
+  "validation_errors": {
     "title": ["This field is required."],
     "author_id": ["Select a valid choice."]
   }
@@ -236,7 +244,7 @@ If validation fails:
 
 ---
 
-## update_\<model\>
+## ✏️ update_\<model\>
 
 Updates an existing model instance.
 
@@ -285,13 +293,19 @@ Updates an existing model instance.
 
 ```json
 {
-  "message": "Article updated successfully"
+  "success": true,
+  "object": {
+    "id": 42,
+    "title": "Updated Title",
+    "content": "Updated content...",
+    "published": true
+  }
 }
 ```
 
-### Readonly Fields
+### 🔒 Readonly Fields
 
-Attempts to update readonly fields are silently ignored:
+Attempts to update readonly fields return an error:
 
 ```python
 class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
@@ -300,19 +314,14 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 ```json
 {
-  "id": 42,
-  "data": {
-    "created_at": "2020-01-01T00:00:00Z",
-    "title": "New Title"
-  }
+  "error": "Cannot update readonly fields: created_at",
+  "readonly_fields": ["created_at"]
 }
 ```
 
-Only `title` will be updated; `created_at` is ignored.
-
 ---
 
-## delete_\<model\>
+## 🗑️ delete_\<model\>
 
 Deletes a model instance.
 
@@ -338,7 +347,8 @@ Deletes a model instance.
 
 ```json
 {
-  "message": "Article deleted successfully"
+  "success": true,
+  "message": "article deleted successfully"
 }
 ```
 
@@ -347,7 +357,7 @@ Deletes a model instance.
 
 ---
 
-## Foreign Key Handling
+## 🔗 Foreign Key Handling
 
 Foreign keys can be specified in two ways:
 
@@ -371,7 +381,7 @@ Both are normalized internally to use the correct database column.
 
 ---
 
-## Many-to-Many Handling
+## 🔗 Many-to-Many Handling
 
 Many-to-many relationships accept arrays of IDs:
 
@@ -384,7 +394,7 @@ Many-to-many relationships accept arrays of IDs:
 
 ---
 
-## Error Handling
+## ❌ Error Handling
 
 ### Not Found
 
@@ -408,12 +418,12 @@ Many-to-many relationships accept arrays of IDs:
 
 ```json
 {
-  "content": [{"type": "text", "text": "{\"error\": \"Validation failed\", \"errors\": {...}}"}],
+  "content": [{"type": "text", "text": "{\"error\": \"Validation failed\", \"code\": \"validation_error\", \"validation_errors\": {...}}"}],
   "isError": true
 }
 ```
 
-## Next Steps
+## 🔗 Next Steps
 
-- [Admin Actions](actions.md) - Execute admin actions
-- [Model Introspection](introspection.md) - Discover model schemas
+- [Admin Actions](actions.md) — Execute admin actions
+- [Model Introspection](introspection.md) — Discover model schemas

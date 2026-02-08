@@ -1,8 +1,8 @@
-# Quick Start
+# 🚀 Quick Start
 
 Get Django Admin MCP working in 5 minutes. This guide assumes you've already [installed](installation.md) the package.
 
-## Step 1: Expose Your Models
+## 1️⃣ Expose Your Models
 
 Add the `MCPAdminMixin` to any ModelAdmin class. Set `mcp_expose = True` to expose CRUD tools:
 
@@ -26,7 +26,7 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
 !!! tip "Two-Level Exposure"
     Models with just `MCPAdminMixin` are discoverable via `find_models` but don't expose direct CRUD tools. Set `mcp_expose = True` to expose the full tool set.
 
-## Step 2: Create an API Token
+## 2️⃣ Create an API Token
 
 1. Go to Django admin: `http://localhost:8000/admin/`
 2. Navigate to **Django Admin MCP > MCP Tokens**
@@ -36,12 +36,12 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
     - **User**: Select a user (for audit logging)
     - **Groups/Permissions**: Assign appropriate permissions
 5. Click **Save**
-6. Copy the generated token
+6. Copy the generated token (displayed only once after creation)
 
 !!! warning "Token Security"
-    Tokens without permissions have no access (principle of least privilege). Make sure to assign the necessary permissions for the models you want to access.
+    The token is only displayed once after creation — store it securely. Tokens without permissions have no access (principle of least privilege). Make sure to assign the necessary permissions for the models you want to access.
 
-## Step 3: Configure Your MCP Client
+## 3️⃣ Configure Your MCP Client
 
 Add the MCP server configuration to your MCP client. Create or edit the configuration file:
 
@@ -77,7 +77,7 @@ Add the MCP server configuration to your MCP client. Create or edit the configur
 
 Replace `YOUR_TOKEN_HERE` with the token you created in Step 2.
 
-## Step 4: Start Using It
+## 4️⃣ Start Using It
 
 Restart your MCP client to load the new configuration. Then start interacting:
 
@@ -97,8 +97,8 @@ Agent: [calls create_article with title="Getting Started with Django"]
 Created article #15: "Getting Started with Django"
 ```
 
-## What's Next?
+## 🔗 What's Next?
 
-- [Exposing Models](../guide/exposing-models.md) - Learn about model exposure options
-- [Token Management](../guide/tokens.md) - Understand token configuration
-- [Tools Reference](../tools/overview.md) - Explore all available tools
+- [Exposing Models](../guide/exposing-models.md) — Learn about model exposure options
+- [Token Management](../guide/tokens.md) — Understand token configuration
+- [Tools Reference](../tools/overview.md) — Explore all available tools

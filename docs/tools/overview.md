@@ -1,19 +1,19 @@
-# Tools Overview
+# 🛠️ Tools Overview
 
 Django Admin MCP generates tools dynamically based on your exposed models. This page provides an overview of all available tools.
 
-## Tool Categories
+## 📂 Tool Categories
 
-Tools are organized into five categories:
+Tools are organized into four categories:
 
 | Category | Tools | Description |
 |----------|-------|-------------|
-| **CRUD** | `list_*`, `get_*`, `create_*`, `update_*`, `delete_*` | Basic data operations |
-| **Actions** | `actions_*`, `action_*`, `bulk_*` | Admin actions and bulk operations |
-| **Introspection** | `describe_*`, `find_models` | Model discovery and schema |
-| **Relationships** | `related_*`, `history_*`, `autocomplete_*` | Related data and history |
+| **📝 CRUD** | `list_*`, `get_*`, `create_*`, `update_*`, `delete_*` | Basic data operations |
+| **⚡ Actions** | `actions_*`, `action_*`, `bulk_*` | Admin actions and bulk operations |
+| **🔍 Introspection** | `describe_*`, `find_models` | Model discovery and schema |
+| **🔗 Relationships** | `related_*`, `history_*`, `autocomplete_*` | Related data and history |
 
-## Tool Naming Convention
+## 📛 Tool Naming Convention
 
 Tools follow a consistent naming pattern:
 
@@ -23,19 +23,19 @@ Tools follow a consistent naming pattern:
 
 For example, for an `Article` model:
 
-- `list_article` - List articles
-- `get_article` - Get a single article
-- `create_article` - Create an article
-- `update_article` - Update an article
-- `delete_article` - Delete an article
+- `list_article` — List articles
+- `get_article` — Get a single article
+- `create_article` — Create an article
+- `update_article` — Update an article
+- `delete_article` — Delete an article
 
-## Global Tools
+## 🌐 Global Tools
 
 One tool is available regardless of model configuration:
 
-### find_models
+### 🔍 find_models
 
-Discovers all registered models and their available tools.
+Discovers all registered models and their available tools. Results are filtered by the token's `view` permission.
 
 ```json
 {
@@ -47,29 +47,37 @@ Discovers all registered models and their available tools.
 
 Optional parameter:
 
-- `query` (string): Filter models by name
+- `query` (string) — Filter models by name
 
 Response:
 
 ```json
 {
+  "count": 2,
   "models": [
     {
-      "name": "article",
+      "model_name": "article",
       "verbose_name": "Article",
+      "verbose_name_plural": "Articles",
       "app_label": "blog",
-      "tools_exposed": true,
-      "tools": ["list_article", "get_article", "create_article", ...]
+      "tools_exposed": true
+    },
+    {
+      "model_name": "author",
+      "verbose_name": "Author",
+      "verbose_name_plural": "Authors",
+      "app_label": "blog",
+      "tools_exposed": false
     }
   ]
 }
 ```
 
-## Per-Model Tools
+## 📦 Per-Model Tools
 
 For each model with `mcp_expose = True`, 12 tools are generated:
 
-### CRUD Operations (5 tools)
+### 📝 CRUD Operations (5 tools)
 
 | Tool | Permission | Description |
 |------|------------|-------------|
@@ -81,17 +89,17 @@ For each model with `mcp_expose = True`, 12 tools are generated:
 
 See [CRUD Operations](crud.md) for details.
 
-### Admin Actions (3 tools)
+### ⚡ Admin Actions (3 tools)
 
 | Tool | Permission | Description |
 |------|------------|-------------|
 | `actions_<model>` | view | List available admin actions |
-| `action_<model>` | varies | Execute an admin action |
+| `action_<model>` | change | Execute an admin action |
 | `bulk_<model>` | varies | Bulk create/update/delete |
 
 See [Admin Actions](actions.md) for details.
 
-### Introspection (1 tool)
+### 🔍 Introspection (1 tool)
 
 | Tool | Permission | Description |
 |------|------------|-------------|
@@ -99,7 +107,7 @@ See [Admin Actions](actions.md) for details.
 
 See [Model Introspection](introspection.md) for details.
 
-### Relationships (3 tools)
+### 🔗 Relationships (3 tools)
 
 | Tool | Permission | Description |
 |------|------------|-------------|
@@ -109,7 +117,7 @@ See [Model Introspection](introspection.md) for details.
 
 See [Relationships](relationships.md) for details.
 
-## Tool Schema
+## 📐 Tool Schema
 
 Each tool has a JSON Schema defining its input parameters:
 
@@ -123,7 +131,7 @@ Each tool has a JSON Schema defining its input parameters:
       "limit": {
         "type": "integer",
         "description": "Maximum number of results",
-        "default": 25
+        "default": 100
       },
       "offset": {
         "type": "integer",
@@ -134,9 +142,9 @@ Each tool has a JSON Schema defining its input parameters:
         "type": "string",
         "description": "Search query"
       },
-      "ordering": {
-        "type": "string",
-        "description": "Field to order by (prefix with - for descending)"
+      "order_by": {
+        "type": "array",
+        "description": "Fields to order by (prefix with - for descending)"
       },
       "filters": {
         "type": "object",
@@ -147,7 +155,7 @@ Each tool has a JSON Schema defining its input parameters:
 }
 ```
 
-## Response Format
+## 📤 Response Format
 
 All tools return responses in MCP TextContent format:
 
@@ -176,7 +184,7 @@ Error responses include `isError: true`:
 }
 ```
 
-## Permission Requirements
+## 🔒 Permission Requirements
 
 Each tool requires specific Django permissions:
 
@@ -186,11 +194,11 @@ Each tool requires specific Django permissions:
 | Create | `<app>.add_<model>` |
 | Update | `<app>.change_<model>` |
 | Delete | `<app>.delete_<model>` |
-| Actions | Varies by action |
+| Actions | `<app>.change_<model>` |
 
-## Next Steps
+## 🔗 Next Steps
 
-- [CRUD Operations](crud.md) - Basic data operations
-- [Admin Actions](actions.md) - Actions and bulk operations
-- [Model Introspection](introspection.md) - Schema discovery
-- [Relationships](relationships.md) - Related data access
+- [CRUD Operations](crud.md) — Basic data operations
+- [Admin Actions](actions.md) — Actions and bulk operations
+- [Model Introspection](introspection.md) — Schema discovery
+- [Relationships](relationships.md) — Related data access

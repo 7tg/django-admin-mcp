@@ -1,23 +1,23 @@
-# Contributing
+# 🤝 Contributing
 
 Thank you for your interest in contributing to Django Admin MCP! This guide will help you get started.
 
-## Development Setup
+## 🛠️ Development Setup
 
-### Prerequisites
+### 📋 Prerequisites
 
 - Python 3.10 or higher
 - Git
 - uv, pip, or another Python package manager
 
-### Clone the Repository
+### 📥 Clone the Repository
 
 ```bash
 git clone https://github.com/7tg/django-admin-mcp.git
 cd django-admin-mcp
 ```
 
-### Install Dependencies
+### 📦 Install Dependencies
 
 **Using uv (recommended):**
 
@@ -31,7 +31,7 @@ uv sync --all-extras
 pip install -e ".[dev]"
 ```
 
-### Set Up Pre-commit Hooks
+### 🔧 Set Up Pre-commit Hooks
 
 ```bash
 pre-commit install
@@ -41,22 +41,22 @@ This ensures code quality checks run before each commit.
 
 ---
 
-## Running Tests
+## 🧪 Running Tests
 
-### Run All Tests
+### ▶️ Run All Tests
 
 ```bash
 pytest
 ```
 
-### Run with Coverage
+### 📊 Run with Coverage
 
 ```bash
 pytest --cov=django_admin_mcp --cov-report=html
 open htmlcov/index.html
 ```
 
-### Run Specific Tests
+### 🎯 Run Specific Tests
 
 ```bash
 # Run a specific test file
@@ -69,7 +69,7 @@ pytest tests/test_crud.py::test_list_articles
 pytest -k "test_create"
 ```
 
-### Test Against Multiple Django Versions
+### 🔄 Test Against Multiple Django Versions
 
 The CI runs tests against Django 3.2, 4.0, 4.1, 4.2, and 5.0. To test locally:
 
@@ -81,9 +81,9 @@ pytest
 
 ---
 
-## Code Quality
+## ✅ Code Quality
 
-### Linting
+### 🔍 Linting
 
 We use Ruff for linting:
 
@@ -97,19 +97,19 @@ Auto-fix issues:
 ruff check --fix .
 ```
 
-### Formatting
+### 🎨 Formatting
 
 ```bash
 ruff format .
 ```
 
-### Type Checking
+### 🏷️ Type Checking
 
 ```bash
 mypy django_admin_mcp
 ```
 
-### All Checks
+### 🔄 All Checks
 
 Run all checks at once:
 
@@ -119,7 +119,7 @@ pre-commit run --all-files
 
 ---
 
-## Project Structure
+## 📂 Project Structure
 
 ```
 django-admin-mcp/
@@ -135,7 +135,8 @@ django-admin-mcp/
 │   │   ├── crud.py          # CRUD operations
 │   │   ├── actions.py       # Admin actions
 │   │   ├── meta.py          # Model introspection
-│   │   └── relations.py     # Relationships
+│   │   ├── relations.py     # Relationships
+│   │   └── decorators.py    # Permission decorators
 │   ├── protocol/             # MCP protocol
 │   │   ├── types.py         # Pydantic models
 │   │   ├── jsonrpc.py       # JSON-RPC handling
@@ -150,9 +151,9 @@ django-admin-mcp/
 
 ---
 
-## Making Changes
+## 🔄 Making Changes
 
-### Branching Strategy
+### 🌿 Branching Strategy
 
 1. Fork the repository
 2. Create a feature branch from `main`:
@@ -162,7 +163,7 @@ django-admin-mcp/
 3. Make your changes
 4. Push and create a pull request
 
-### Commit Messages
+### 💬 Commit Messages
 
 Use clear, descriptive commit messages:
 
@@ -174,7 +175,7 @@ Add support for custom field serializers
 - Update tests for new functionality
 ```
 
-### Pull Request Guidelines
+### 📝 Pull Request Guidelines
 
 - Include a clear description of changes
 - Add tests for new functionality
@@ -184,9 +185,9 @@ Add support for custom field serializers
 
 ---
 
-## Adding Features
+## ➕ Adding Features
 
-### Adding a New Handler
+### 🔧 Adding a New Handler
 
 1. Create or update handler in `handlers/`:
 
@@ -213,7 +214,7 @@ Add support for custom field serializers
 
 4. Write tests in `tests/`
 
-### Adding a New Tool
+### 🛠️ Adding a New Tool
 
 1. Define the tool schema in `tools/registry.py`
 2. Implement the handler
@@ -222,9 +223,9 @@ Add support for custom field serializers
 
 ---
 
-## Testing Guidelines
+## 🧪 Testing Guidelines
 
-### Test Structure
+### 📐 Test Structure
 
 ```python
 import pytest
@@ -244,14 +245,14 @@ class TestListHandler:
         assert len(data["results"]) == 5
 ```
 
-### Test Categories
+### 📂 Test Categories
 
-- **Unit tests**: Test individual functions/methods
-- **Integration tests**: Test handler + database
-- **Permission tests**: Test authorization logic
-- **Edge case tests**: Test error handling
+- **Unit tests** — Test individual functions/methods
+- **Integration tests** — Test handler + database
+- **Permission tests** — Test authorization logic
+- **Edge case tests** — Test error handling
 
-### Fixtures
+### 🏭 Fixtures
 
 Use factory_boy for test data:
 
@@ -263,9 +264,9 @@ def article_factory():
 
 ---
 
-## Documentation
+## 📖 Documentation
 
-### Building Docs Locally
+### 🔧 Building Docs Locally
 
 ```bash
 pip install mkdocs mkdocs-material
@@ -274,17 +275,17 @@ mkdocs serve
 
 Visit `http://localhost:8000` to preview.
 
-### Documentation Structure
+### 📂 Documentation Structure
 
-- `docs/getting-started/` - Installation and setup
-- `docs/guide/` - User guides
-- `docs/tools/` - Tool reference
-- `docs/examples/` - Examples and use cases
-- `docs/reference/` - API and settings reference
+- `docs/getting-started/` — Installation and setup
+- `docs/guide/` — User guides
+- `docs/tools/` — Tool reference
+- `docs/examples/` — Examples and use cases
+- `docs/reference/` — API and settings reference
 
 ---
 
-## Release Process
+## 🚀 Release Process
 
 Releases are managed by maintainers:
 
@@ -295,14 +296,14 @@ Releases are managed by maintainers:
 
 ---
 
-## Getting Help
+## 💬 Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/7tg/django-admin-mcp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/7tg/django-admin-mcp/discussions)
+- **Issues** — [GitHub Issues](https://github.com/7tg/django-admin-mcp/issues)
+- **Discussions** — [GitHub Discussions](https://github.com/7tg/django-admin-mcp/discussions)
 
 ---
 
-## Code of Conduct
+## 🤝 Code of Conduct
 
 Be respectful and constructive. We're all here to build something great together.
 

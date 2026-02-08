@@ -1,10 +1,10 @@
-# Settings Reference
+# ⚙️ Settings Reference
 
 Django Admin MCP configuration options and Django settings.
 
-## Django Settings
+## 🏗️ Django Settings
 
-### Required Settings
+### 📦 Required Settings
 
 Add `django_admin_mcp` to installed apps:
 
@@ -23,7 +23,7 @@ INSTALLED_APPS = [
 ]
 ```
 
-### URL Configuration
+### 🔗 URL Configuration
 
 Include the MCP URLs:
 
@@ -46,11 +46,11 @@ path('admin-api/', include('django_admin_mcp.urls')),
 
 ---
 
-## ModelAdmin Options
+## 🛠️ ModelAdmin Options
 
 Configure each ModelAdmin with these options:
 
-### mcp_expose
+### 🔓 mcp_expose
 
 Enable full tool exposure:
 
@@ -66,7 +66,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 Default: `False`
 
-### Standard Django Options
+### 📋 Standard Django Options
 
 These Django admin options affect MCP behavior:
 
@@ -102,7 +102,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 #### readonly_fields
 
-Fields excluded from create/update:
+Attempts to update these fields return an error:
 
 ```python
 class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
@@ -136,7 +136,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 #### inlines
 
-Inline models included in `get_*` responses:
+Inline models included in `get_*` responses (when `include_inlines: true`):
 
 ```python
 class CommentInline(admin.TabularInline):
@@ -150,30 +150,34 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 ---
 
-## Token Settings
+## 🔑 Token Settings
 
 Token behavior is configured per-token in Django admin:
 
-### Fields
+### 📋 Fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `name` | CharField | Required | Descriptive identifier |
-| `token` | CharField | Auto-generated | 64-character token string |
+| `token_key` | CharField | Auto-generated | Public key for O(1) lookup |
+| `token_hash` | CharField | Auto-generated | SHA-256 hash of the secret |
+| `salt` | CharField | Auto-generated | Per-token salt for hashing |
 | `user` | ForeignKey | Required | Associated user for audit |
 | `is_active` | Boolean | `True` | Enable/disable token |
 | `expires_at` | DateTime | 90 days | Expiration date |
 | `groups` | M2M | Empty | Groups for permissions |
 | `permissions` | M2M | Empty | Direct permissions |
 
-### Token Expiration
+Token format: `mcp_<key>.<secret>` — the key is stored in plaintext for lookup, the secret is hashed with a per-token salt.
+
+### ⏰ Token Expiration
 
 Default expiration is 90 days from creation. Options:
 
-- **Set date**: Token expires at specified datetime
-- **Leave blank**: Token never expires
+- **Set date** — Token expires at specified datetime
+- **Leave blank** — Token never expires
 
-### Permission Sources
+### 🔒 Permission Sources
 
 Tokens derive permissions from:
 
@@ -185,16 +189,16 @@ Tokens derive permissions from:
 
 ---
 
-## Environment Configuration
+## 🌍 Environment Configuration
 
-### Development
+### 🧪 Development
 
 ```python title="settings.py"
 DEBUG = True
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 ```
 
-### Production
+### 🚀 Production
 
 ```python title="settings.py"
 DEBUG = False
@@ -205,7 +209,7 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 ---
 
-## Database Configuration
+## 🗄️ Database Configuration
 
 Django Admin MCP uses Django's database configuration:
 
@@ -230,7 +234,7 @@ python manage.py migrate django_admin_mcp
 
 ---
 
-## Logging Configuration
+## 📊 Logging Configuration
 
 Enable logging for debugging:
 
@@ -254,20 +258,13 @@ LOGGING = {
 
 ---
 
-## Security Settings
+## 🔒 Security Settings
 
-### CSRF
+### 🛡️ CSRF
 
-The MCP endpoint is CSRF-exempt (uses token auth instead):
+The MCP endpoint is CSRF-exempt (uses token auth instead). This is automatically applied via `@csrf_exempt` on the view.
 
-```python
-# Automatically applied in views.py
-@csrf_exempt
-class MCPHTTPView(View):
-    ...
-```
-
-### CORS
+### 🌐 CORS
 
 For browser access, configure CORS:
 
@@ -291,7 +288,7 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_ALL_ORIGINS = True
 ```
 
-### HTTPS
+### 🔐 HTTPS
 
 Always use HTTPS in production:
 
@@ -303,7 +300,7 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 ---
 
-## Middleware Order
+## 📦 Middleware Order
 
 Ensure proper middleware ordering:
 

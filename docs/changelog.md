@@ -1,4 +1,4 @@
-# Changelog
+# 📋 Changelog
 
 All notable changes to Django Admin MCP are documented here.
 
@@ -12,6 +12,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Getting started guides
 - Tool reference documentation
 - Example conversations and use cases
+
+## [0.2.1] - 2025
+
+### Changed
+- Restrict model lookups to MCPAdminMixin registry only
+- Remove redundant `str()` calls in `_get_action_info`
+
+## [0.2.0] - 2025
+
+### Added
+- 🔐 Hashed token authentication with `mcp_<key>.<secret>` format
+- 🔑 O(1) token lookup via indexed `token_key` field
+- 🛡️ Constant-time secret comparison to prevent timing attacks
+- 📝 `require_registered_model` and `require_permission` decorators
+- 📦 Bulk create support (`handle_bulk_create`)
+- 🔒 `mcp_fields` and `mcp_exclude_fields` for field filtering
+
+### Changed
+- Split `handle_bulk` into `handle_bulk_create`, `handle_bulk_update`, `handle_bulk_delete`
+- Extracted permission decorators to `handlers/decorators.py`
+
+### Security
+- Token secret is now hashed with per-token salt (SHA-256)
+- Token format changed to `mcp_<key>.<secret>` for structured authentication
 
 ## [0.1.0] - 2024-01-15
 
@@ -35,15 +59,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## Version History
+## 📊 Version History
 
-| Version | Release Date | Python | Django |
-|---------|--------------|--------|--------|
-| 0.1.0 | 2024-01-15 | 3.10+ | 3.2+ |
+| Version | Python | Django |
+|---------|--------|--------|
+| 0.2.1 | 3.10+ | 3.2+ |
+| 0.2.0 | 3.10+ | 3.2+ |
+| 0.1.0 | 3.10+ | 3.2+ |
 
 ---
 
-## Upgrade Guide
+## ⬆️ Upgrade Guide
+
+### From 0.1.x to 0.2.x
+
+Token format has changed. You must:
+
+1. Update the package:
+   ```bash
+   pip install --upgrade django-admin-mcp
+   ```
+
+2. Run migrations:
+   ```bash
+   python manage.py migrate django_admin_mcp
+   ```
+
+3. Recreate all tokens (token format changed to `mcp_<key>.<secret>`)
 
 ### From Pre-release to 0.1.0
 
@@ -63,7 +105,7 @@ If you were using a pre-release version:
 
 ---
 
-## Deprecation Policy
+## 📌 Deprecation Policy
 
 - Features are deprecated for at least one minor version before removal
 - Deprecated features will emit warnings

@@ -1,12 +1,12 @@
-# Client Setup
+# 🖥️ Client Setup
 
 This guide covers configuring MCP clients to connect to Django Admin MCP.
 
-## MCP Client
+## 🤖 MCP Client
 
 Any MCP-compatible client can interact with Django Admin MCP.
 
-### Configuration File Locations
+### 📁 Configuration File Locations
 
 MCP clients typically look for configuration in these locations:
 
@@ -15,7 +15,7 @@ MCP clients typically look for configuration in these locations:
 | `.mcp.json` | Project | Highest |
 | `~/.claude/claude_desktop_config.json` | Global | Lower |
 
-### Project Configuration
+### 📂 Project Configuration
 
 Create `.mcp.json` in your project root:
 
@@ -35,7 +35,7 @@ Create `.mcp.json` in your project root:
 !!! tip "Project-Specific Tokens"
     Use project configuration for project-specific tokens. Add `.mcp.json` to `.gitignore` to avoid committing tokens.
 
-### Global Configuration
+### 🌐 Global Configuration
 
 For a single Django project across all sessions:
 
@@ -52,7 +52,7 @@ For a single Django project across all sessions:
 }
 ```
 
-### Multiple Servers
+### 🔗 Multiple Servers
 
 Configure multiple Django projects:
 
@@ -75,7 +75,7 @@ Configure multiple Django projects:
 }
 ```
 
-### Applying Configuration
+### 🔄 Applying Configuration
 
 After editing the configuration:
 
@@ -83,7 +83,7 @@ After editing the configuration:
 2. The MCP server should connect automatically
 3. Tools will be available for use
 
-### Verifying Connection
+### ✅ Verifying Connection
 
 Ask the agent to list available tools:
 
@@ -97,11 +97,11 @@ I have access to the following Django admin tools:
 ...
 ```
 
-## Other MCP Clients
+## 🛠️ Other MCP Clients
 
 Django Admin MCP works with any MCP-compatible client that supports HTTP transport.
 
-### Generic HTTP Client
+### 🌐 Generic HTTP Client
 
 Test with curl:
 
@@ -123,7 +123,7 @@ curl -X POST http://localhost:8000/mcp/ \
   }'
 ```
 
-### Python Client
+### 🐍 Python Client
 
 Using the `requests` library:
 
@@ -159,7 +159,7 @@ response = requests.post(
 result = response.json()
 ```
 
-### JavaScript/TypeScript Client
+### 📜 JavaScript/TypeScript Client
 
 ```typescript
 const BASE_URL = "http://localhost:8000/mcp/";
@@ -185,9 +185,9 @@ async function callTool(name: string, args: object = {}) {
 const articles = await callTool("list_article", { limit: 10 });
 ```
 
-## Environment-Specific Setup
+## 🌍 Environment-Specific Setup
 
-### Development
+### 🧪 Development
 
 ```json title=".mcp.json"
 {
@@ -202,7 +202,7 @@ const articles = await callTool("list_article", { limit: 10 });
 }
 ```
 
-### Staging/Production
+### 🚀 Staging/Production
 
 ```json title=".mcp.json"
 {
@@ -220,9 +220,9 @@ const articles = await callTool("list_article", { limit: 10 });
 !!! warning "Production Security"
     Always use HTTPS in production to protect tokens in transit.
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
-### Connection Refused
+### ❌ Connection Refused
 
 ```
 Error: Connection refused
@@ -232,7 +232,7 @@ Error: Connection refused
 - Check the URL and port are correct
 - Ensure no firewall is blocking the connection
 
-### Authentication Failed
+### 🔐 Authentication Failed
 
 ```
 {"error": "Invalid or missing authentication token"}
@@ -242,7 +242,7 @@ Error: Connection refused
 - Check the token is active (`is_active=True`)
 - Ensure the token hasn't expired
 
-### Permission Denied
+### 🚫 Permission Denied
 
 ```
 {"error": "Permission denied: blog.view_article"}
@@ -251,7 +251,7 @@ Error: Connection refused
 - Token lacks required permissions
 - Add the permission to the token or its groups
 
-### No Tools Available
+### 📭 No Tools Available
 
 If `tools/list` returns an empty list:
 
@@ -259,7 +259,7 @@ If `tools/list` returns an empty list:
 - No models have `mcp_expose = True`
 - Check your admin configuration
 
-## Next Steps
+## 🔗 Next Steps
 
-- [Tools Overview](../tools/overview.md) - Learn about available tools
-- [Examples](../examples/conversations.md) - See example interactions
+- [Tools Overview](../tools/overview.md) — Learn about available tools
+- [Examples](../examples/conversations.md) — See example interactions

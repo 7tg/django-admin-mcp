@@ -1,8 +1,8 @@
-# Use Cases
+# 🎯 Use Cases
 
 This page explores real-world scenarios where Django Admin MCP shines.
 
-## Content Management
+## 📰 Content Management
 
 ### Blog Administration
 
@@ -46,7 +46,7 @@ Agent: [lists articles filtered by author and date]
 
 ---
 
-## E-commerce Operations
+## 🛒 E-commerce Operations
 
 ### Order Management
 
@@ -87,7 +87,7 @@ Agent: [analyzes sales data]
 
 ---
 
-## User Administration
+## 👤 User Administration
 
 ### Account Management
 
@@ -123,7 +123,7 @@ Agent: [displays audit log]
 
 ---
 
-## Data Analysis
+## 📊 Data Analysis
 
 ### Report Generation
 
@@ -155,7 +155,7 @@ Agent: [aggregates monthly data, presents trend]
 
 ---
 
-## Automation Workflows
+## 🤖 Automation Workflows
 
 ### Scheduled Tasks
 
@@ -187,7 +187,7 @@ Agent: [bulk updates users with sync timestamp]
 
 ---
 
-## Development & Testing
+## 🧪 Development & Testing
 
 ### Data Seeding
 
@@ -223,7 +223,7 @@ Agent: [queries audit logs]
 
 ---
 
-## Customer Support
+## 🎧 Customer Support
 
 ### Ticket Resolution
 
@@ -259,9 +259,9 @@ Agent: [updates ticket with internal comment]
 
 ---
 
-## Best Practices
+## 💡 Best Practices
 
-### Use Filters Effectively
+### 🔍 Use Filters Effectively
 
 Instead of fetching all records:
 
@@ -273,18 +273,18 @@ list_article(limit=1000)
 list_article(filters={"published": true, "author_id": 5})
 ```
 
-### Leverage Autocomplete
+### 🔎 Leverage Autocomplete
 
 When creating records with foreign keys:
 
 ```
 # Find the right author first
-autocomplete_author(search="jane")
+autocomplete_author(term="jane")
 # Then create with the ID
 create_article(data={"author_id": 5, ...})
 ```
 
-### Use Bulk Operations
+### 📦 Use Bulk Operations
 
 For multiple updates:
 
@@ -295,10 +295,14 @@ update_article(id=2, data={"status": "archived"})
 update_article(id=3, data={"status": "archived"})
 
 # Fast: bulk update
-bulk_article(operation="update", ids=[1, 2, 3], data={"status": "archived"})
+bulk_article(operation="update", items=[
+  {"id": 1, "data": {"status": "archived"}},
+  {"id": 2, "data": {"status": "archived"}},
+  {"id": 3, "data": {"status": "archived"}}
+])
 ```
 
-### Check History for Auditing
+### 📜 Check History for Auditing
 
 Before making critical changes:
 
@@ -311,17 +315,17 @@ update_article(id=42, data={...})
 
 ---
 
-## Integration Tips
+## 🔗 Integration Tips
 
-### Combine with Other MCP Servers
+### 🤝 Combine with Other MCP Servers
 
 Django Admin MCP works alongside other MCP servers:
 
-- **File System MCP**: Export data to files
-- **Database MCP**: Run complex SQL queries
-- **Git MCP**: Track configuration changes
+- **File System MCP** — Export data to files
+- **Database MCP** — Run complex SQL queries
+- **Git MCP** — Track configuration changes
 
-### Build Custom Workflows
+### 🔄 Build Custom Workflows
 
 Chain operations for complex workflows:
 

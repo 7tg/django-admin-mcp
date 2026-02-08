@@ -1,8 +1,8 @@
-# Admin Actions
+# ⚡ Admin Actions
 
 Django Admin MCP exposes Django admin actions through the MCP protocol, enabling execution of custom actions and bulk operations.
 
-## actions_\<model\>
+## 📋 actions_\<model\>
 
 Lists all available admin actions for a model.
 
@@ -47,9 +47,9 @@ None required.
 
 ---
 
-## action_\<model\>
+## ▶️ action_\<model\>
 
-Executes an admin action on selected records.
+Executes an admin action on selected records. Requires `change` permission.
 
 ### Parameters
 
@@ -94,7 +94,7 @@ Executes an admin action on selected records.
 }
 ```
 
-### Defining Custom Actions
+### 🔧 Defining Custom Actions
 
 In your Django admin:
 
@@ -120,21 +120,20 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 ---
 
-## bulk_\<model\>
+## 📦 bulk_\<model\>
 
-Performs bulk operations on multiple records.
+Performs bulk operations on multiple records. Uses the `items` parameter for all operations.
 
 ### Parameters
 
 | Parameter | Type | Description | Required |
 |-----------|------|-------------|----------|
 | `operation` | string | One of: `create`, `update`, `delete` | Yes |
-| `ids` | array | Record IDs (for update/delete) | Varies |
-| `data` | object/array | Data for create/update | Varies |
+| `items` | array | Items to process (format varies by operation) | Yes |
 
-### Bulk Create
+### 📦 Bulk Create
 
-Create multiple records at once:
+Create multiple records at once. Each item in `items` is a data object:
 
 ```json
 {
@@ -142,7 +141,7 @@ Create multiple records at once:
   "name": "bulk_article",
   "arguments": {
     "operation": "create",
-    "data": [
+    "items": [
       {"title": "Article 1", "author_id": 5},
       {"title": "Article 2", "author_id": 5},
       {"title": "Article 3", "author_id": 5}
@@ -151,18 +150,9 @@ Create multiple records at once:
 }
 ```
 
-Response:
+### ✏️ Bulk Update
 
-```json
-{
-  "created": 3,
-  "ids": [44, 45, 46]
-}
-```
-
-### Bulk Update
-
-Update multiple records with the same values:
+Update multiple records. Each item in `items` contains an `id` and `data`:
 
 ```json
 {
@@ -170,26 +160,18 @@ Update multiple records with the same values:
   "name": "bulk_article",
   "arguments": {
     "operation": "update",
-    "ids": [10, 11, 12, 13, 14, 15],
-    "data": {
-      "status": "archived",
-      "archived_at": "2024-01-15T00:00:00Z"
-    }
+    "items": [
+      {"id": 10, "data": {"status": "archived"}},
+      {"id": 11, "data": {"status": "archived"}},
+      {"id": 12, "data": {"status": "archived"}}
+    ]
   }
 }
 ```
 
-Response:
+### 🗑️ Bulk Delete
 
-```json
-{
-  "updated": 6
-}
-```
-
-### Bulk Delete
-
-Delete multiple records:
+Delete multiple records. `items` is an array of IDs:
 
 ```json
 {
@@ -197,48 +179,48 @@ Delete multiple records:
   "name": "bulk_article",
   "arguments": {
     "operation": "delete",
-    "ids": [100, 101, 102]
+    "items": [100, 101, 102]
   }
 }
 ```
 
-Response:
+### 📤 Bulk Response Format
+
+All bulk operations return a standardized response:
 
 ```json
 {
-  "deleted": 3
+  "operation": "create",
+  "total_items": 3,
+  "success_count": 2,
+  "error_count": 1,
+  "results": {
+    "success": [
+      {"index": 0, "id": 44, "created": true},
+      {"index": 1, "id": 45, "created": true}
+    ],
+    "errors": [
+      {"index": 2, "error": "Validation failed", "validation_errors": {"title": ["This field is required."]}}
+    ]
+  }
 }
 ```
 
 ---
 
-## Permission Requirements
+## 🔒 Permission Requirements
 
 | Operation | Required Permission |
 |-----------|---------------------|
 | `actions_*` (list) | `view_<model>` |
-| `action_*` (execute) | Varies by action |
+| `action_*` (execute) | `change_<model>` |
 | `bulk_*` create | `add_<model>` |
 | `bulk_*` update | `change_<model>` |
 | `bulk_*` delete | `delete_<model>` |
 
-### Action-Specific Permissions
-
-Actions can require additional permissions. The default Django `delete_selected` action requires `delete_<model>` permission.
-
-For custom permissions on actions:
-
-```python title="admin.py"
-@admin.action(description='Feature selected articles')
-def feature_articles(modeladmin, request, queryset):
-    if not request.user.has_perm('blog.feature_article'):
-        raise PermissionDenied("Cannot feature articles")
-    queryset.update(featured=True)
-```
-
 ---
 
-## Error Handling
+## ❌ Error Handling
 
 ### Unknown Action
 
@@ -267,26 +249,11 @@ def feature_articles(modeladmin, request, queryset):
 }
 ```
 
-### Partial Failure (Bulk Create)
-
-```json
-{
-  "error": "Bulk create failed",
-  "details": {
-    "created": 2,
-    "failed": 1,
-    "errors": [
-      {"index": 2, "error": {"title": ["This field is required."]}}
-    ]
-  }
-}
-```
-
 ---
 
-## Best Practices
+## 💡 Best Practices
 
-### Use Actions for Business Logic
+### ⚡ Use Actions for Business Logic
 
 Actions should encapsulate business logic:
 
@@ -303,26 +270,26 @@ def publish_and_notify(modeladmin, request, queryset):
     return f"Published {queryset.count()} articles and sent notifications"
 ```
 
-### Prefer Bulk Operations for Data Changes
+### 📦 Prefer Bulk Operations for Data Changes
 
 For simple data changes, use `bulk_*` instead of actions:
 
 ```
 # Instead of a custom "archive all" action:
-bulk_article(operation="update", ids=[...], data={"status": "archived"})
+bulk_article(operation="update", items=[{"id": 1, "data": {"status": "archived"}}, ...])
 ```
 
-### Validate Before Bulk Operations
+### ✅ Validate Before Bulk Operations
 
 Use `list_*` to verify records before bulk operations:
 
 ```
 1. list_article(filters={"status": "draft", "created_at__lt": "2023-01-01"})
 2. Review the results
-3. bulk_article(operation="delete", ids=[...])
+3. bulk_article(operation="delete", items=[15, 18, ...])
 ```
 
-## Next Steps
+## 🔗 Next Steps
 
-- [Model Introspection](introspection.md) - Discover model schemas
-- [Relationships](relationships.md) - Access related data
+- [Model Introspection](introspection.md) — Discover model schemas
+- [Relationships](relationships.md) — Access related data

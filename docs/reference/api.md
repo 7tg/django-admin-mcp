@@ -1,8 +1,8 @@
-# HTTP API Reference
+# 🌐 HTTP API Reference
 
 Django Admin MCP exposes a single HTTP endpoint for the MCP protocol.
 
-## Endpoint
+## 📡 Endpoint
 
 ```
 POST /mcp/
@@ -10,12 +10,12 @@ POST /mcp/
 
 All operations are performed via POST requests to this endpoint.
 
-## Authentication
+## 🔐 Authentication
 
 All requests require Bearer token authentication:
 
 ```http
-Authorization: Bearer YOUR_TOKEN_HERE
+Authorization: Bearer mcp_yourkey.yoursecret
 ```
 
 Tokens are created in Django admin at `/admin/django_admin_mcp/mcptoken/`.
@@ -24,13 +24,11 @@ Tokens are created in Django admin at `/admin/django_admin_mcp/mcptoken/`.
 
 | Status | Response | Cause |
 |--------|----------|-------|
-| 401 | `{"error": "Invalid or missing authentication token"}` | Missing or invalid token |
-| 401 | `{"error": "Token has expired"}` | Token past expiration date |
-| 401 | `{"error": "Token is inactive"}` | Token disabled |
+| 401 | `{"error": "Invalid or missing authentication token"}` | Missing, invalid, expired, or inactive token |
 
 ---
 
-## Request Format
+## 📤 Request Format
 
 All requests use JSON with this structure:
 
@@ -50,9 +48,9 @@ Content-Type: application/json
 
 ---
 
-## Methods
+## 🔧 Methods
 
-### tools/list
+### 📋 tools/list
 
 Lists all available MCP tools.
 
@@ -92,7 +90,7 @@ curl -X POST http://localhost:8000/mcp/ \
           "limit": {"type": "integer"},
           "offset": {"type": "integer"},
           "search": {"type": "string"},
-          "ordering": {"type": "string"},
+          "order_by": {"type": "array"},
           "filters": {"type": "object"}
         }
       }
@@ -101,7 +99,7 @@ curl -X POST http://localhost:8000/mcp/ \
 }
 ```
 
-### tools/call
+### ▶️ tools/call
 
 Executes a specific tool.
 
@@ -125,7 +123,7 @@ curl -X POST http://localhost:8000/mcp/ \
   "content": [
     {
       "type": "text",
-      "text": "{\"results\": [...], \"count\": 10, \"total\": 42}"
+      "text": "{\"results\": [...], \"count\": 10, \"total_count\": 42}"
     }
   ]
 }
@@ -133,9 +131,9 @@ curl -X POST http://localhost:8000/mcp/ \
 
 ---
 
-## Response Format
+## 📤 Response Format
 
-### Success Response
+### ✅ Success Response
 
 ```json
 {
@@ -150,7 +148,7 @@ curl -X POST http://localhost:8000/mcp/ \
 
 The `text` field contains JSON-encoded data specific to each tool.
 
-### Error Response
+### ❌ Error Response
 
 ```json
 {
@@ -166,7 +164,7 @@ The `text` field contains JSON-encoded data specific to each tool.
 
 ---
 
-## HTTP Status Codes
+## 📊 HTTP Status Codes
 
 | Code | Meaning |
 |------|---------|
@@ -178,9 +176,9 @@ The `text` field contains JSON-encoded data specific to each tool.
 
 ---
 
-## Example Requests
+## 📝 Example Requests
 
-### List Tools
+### 📋 List Tools
 
 ```bash
 curl -X POST http://localhost:8000/mcp/ \
@@ -189,7 +187,7 @@ curl -X POST http://localhost:8000/mcp/ \
   -d '{"method": "tools/list"}'
 ```
 
-### Find Models
+### 🔍 Find Models
 
 ```bash
 curl -X POST http://localhost:8000/mcp/ \
@@ -202,7 +200,7 @@ curl -X POST http://localhost:8000/mcp/ \
   }'
 ```
 
-### List Articles
+### 📋 List Articles
 
 ```bash
 curl -X POST http://localhost:8000/mcp/ \
@@ -214,13 +212,13 @@ curl -X POST http://localhost:8000/mcp/ \
     "arguments": {
       "limit": 10,
       "offset": 0,
-      "ordering": "-created_at",
+      "order_by": ["-created_at"],
       "filters": {"published": true}
     }
   }'
 ```
 
-### Get Article
+### 🔎 Get Article
 
 ```bash
 curl -X POST http://localhost:8000/mcp/ \
@@ -233,7 +231,7 @@ curl -X POST http://localhost:8000/mcp/ \
   }'
 ```
 
-### Create Article
+### ➕ Create Article
 
 ```bash
 curl -X POST http://localhost:8000/mcp/ \
@@ -252,7 +250,7 @@ curl -X POST http://localhost:8000/mcp/ \
   }'
 ```
 
-### Update Article
+### ✏️ Update Article
 
 ```bash
 curl -X POST http://localhost:8000/mcp/ \
@@ -268,7 +266,7 @@ curl -X POST http://localhost:8000/mcp/ \
   }'
 ```
 
-### Delete Article
+### 🗑️ Delete Article
 
 ```bash
 curl -X POST http://localhost:8000/mcp/ \
@@ -281,7 +279,7 @@ curl -X POST http://localhost:8000/mcp/ \
   }'
 ```
 
-### Execute Action
+### ⚡ Execute Action
 
 ```bash
 curl -X POST http://localhost:8000/mcp/ \
@@ -297,7 +295,7 @@ curl -X POST http://localhost:8000/mcp/ \
   }'
 ```
 
-### Bulk Update
+### 📦 Bulk Update
 
 ```bash
 curl -X POST http://localhost:8000/mcp/ \
@@ -308,15 +306,18 @@ curl -X POST http://localhost:8000/mcp/ \
     "name": "bulk_article",
     "arguments": {
       "operation": "update",
-      "ids": [10, 11, 12],
-      "data": {"status": "archived"}
+      "items": [
+        {"id": 10, "data": {"status": "archived"}},
+        {"id": 11, "data": {"status": "archived"}},
+        {"id": 12, "data": {"status": "archived"}}
+      ]
     }
   }'
 ```
 
 ---
 
-## Health Check
+## 💚 Health Check
 
 A separate endpoint provides health status:
 
@@ -337,17 +338,17 @@ This endpoint does not require authentication.
 
 ---
 
-## Rate Limiting
+## 🚦 Rate Limiting
 
 Django Admin MCP does not implement rate limiting by default. Implement rate limiting at the web server or Django level if needed:
 
-- **nginx**: Use `limit_req` directive
-- **Django**: Use `django-ratelimit` package
-- **Cloudflare**: Use rate limiting rules
+- **nginx** — Use `limit_req` directive
+- **Django** — Use `django-ratelimit` package
+- **Cloudflare** — Use rate limiting rules
 
 ---
 
-## CORS
+## 🔒 CORS
 
 If accessing from browsers, configure CORS headers:
 

@@ -1,8 +1,8 @@
-# Example Conversations
+# 💬 Example Conversations
 
 This page shows real-world example conversations between users and agents using Django Admin MCP.
 
-## Model Discovery
+## 🔍 Model Discovery
 
 ### Exploring Available Models
 
@@ -54,7 +54,7 @@ The admin is configured with:
 
 ---
 
-## CRUD Operations
+## 📝 CRUD Operations
 
 ### Listing Records
 
@@ -106,7 +106,7 @@ Agent: I'll create that article. Who should be the author?
 
 User: Jane Doe
 
-Agent: [calls autocomplete_author with search="Jane Doe"]
+Agent: [calls autocomplete_author with term="Jane Doe"]
 [calls create_article with data={"title": "Introduction to Python", "author_id": 5}]
 
 Created article #43: "Introduction to Python"
@@ -150,7 +150,7 @@ Deleted article #43 "Introduction to Python".
 
 ---
 
-## Admin Actions
+## ⚡ Admin Actions
 
 ### Listing Available Actions
 
@@ -186,15 +186,21 @@ All three articles are now live.
 
 ---
 
-## Bulk Operations
+## 📦 Bulk Operations
 
 ### Bulk Update
 
 ```
 User: Set status to "archived" for articles 10 through 15
 
-Agent: [calls bulk_article with operation="update", ids=[10, 11, 12, 13, 14, 15],
-data={"status": "archived"}]
+Agent: [calls bulk_article with operation="update", items=[
+  {"id": 10, "data": {"status": "archived"}},
+  {"id": 11, "data": {"status": "archived"}},
+  {"id": 12, "data": {"status": "archived"}},
+  {"id": 13, "data": {"status": "archived"}},
+  {"id": 14, "data": {"status": "archived"}},
+  {"id": 15, "data": {"status": "archived"}}
+]]
 
 Updated 6 articles:
 - Articles 10-15 now have status "archived"
@@ -219,14 +225,14 @@ Do you want me to delete all 12 articles?
 
 User: Yes, delete them all
 
-Agent: [calls bulk_article with operation="delete", ids=[15, 18, ...]]
+Agent: [calls bulk_article with operation="delete", items=[15, 18, ...]]
 
 Deleted 12 draft articles from 2023.
 ```
 
 ---
 
-## Exploring Relationships
+## 🔗 Exploring Relationships
 
 ### Getting Related Objects
 
@@ -256,15 +262,15 @@ Change history for article #42:
 
 | Date | User | Action | Changes |
 |------|------|--------|---------|
-| Jan 15, 2:30 PM | admin | Change | Changed title and content |
-| Jan 15, 10:00 AM | admin | Add | Created article |
+| Jan 15, 2:30 PM | admin | Changed | Changed title and content |
+| Jan 15, 10:00 AM | admin | Created | Created via MCP |
 
 The article was created on Jan 15 and modified once.
 ```
 
 ---
 
-## Complex Workflows
+## 🔄 Complex Workflows
 
 ### Finding and Updating Multiple Related Records
 
@@ -272,7 +278,7 @@ The article was created on Jan 15 and modified once.
 User: Find all articles by Jane Doe and add the "featured" category to them
 
 Agent: [calls list_article with filters={"author__name": "Jane Doe"}]
-[calls autocomplete_category with search="featured"]
+[calls autocomplete_category with term="featured"]
 
 Found 15 articles by Jane Doe and the "featured" category (ID: 7).
 
@@ -311,14 +317,14 @@ Would you like me to archive these or take another action?
 
 ---
 
-## Error Handling Examples
+## ❌ Error Handling Examples
 
 ### Permission Denied
 
 ```
 User: Delete all articles
 
-Agent: [calls bulk_article with operation="delete", ids=[...]]
+Agent: [calls bulk_article with operation="delete", items=[...]]
 
 I can't delete articles - the API token doesn't have delete permission.
 

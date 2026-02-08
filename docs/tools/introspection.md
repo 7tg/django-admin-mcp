@@ -1,10 +1,10 @@
-# Model Introspection
+# 🔍 Model Introspection
 
 Django Admin MCP provides tools to discover models and inspect their structure programmatically.
 
-## find_models
+## 🌐 find_models
 
-Discovers all registered models and their available tools.
+Discovers all registered models. Results are filtered by the token's `view` permission.
 
 ### Parameters
 
@@ -40,35 +40,21 @@ Discovers all registered models and their available tools.
 
 ```json
 {
+  "count": 2,
   "models": [
     {
-      "name": "article",
+      "model_name": "article",
       "verbose_name": "Article",
       "verbose_name_plural": "Articles",
       "app_label": "blog",
-      "tools_exposed": true,
-      "tools": [
-        "list_article",
-        "get_article",
-        "create_article",
-        "update_article",
-        "delete_article",
-        "describe_article",
-        "actions_article",
-        "action_article",
-        "bulk_article",
-        "related_article",
-        "history_article",
-        "autocomplete_article"
-      ]
+      "tools_exposed": true
     },
     {
-      "name": "author",
+      "model_name": "author",
       "verbose_name": "Author",
       "verbose_name_plural": "Authors",
       "app_label": "blog",
-      "tools_exposed": false,
-      "tools": []
+      "tools_exposed": false
     }
   ]
 }
@@ -78,16 +64,16 @@ Discovers all registered models and their available tools.
 
 | Field | Description |
 |-------|-------------|
-| `name` | Model name (lowercase) |
+| `count` | Number of models returned |
+| `model_name` | Model name (lowercase) |
 | `verbose_name` | Human-readable singular name |
 | `verbose_name_plural` | Human-readable plural name |
 | `app_label` | Django app containing the model |
 | `tools_exposed` | Whether CRUD tools are available |
-| `tools` | List of available tool names |
 
 ---
 
-## describe_\<model\>
+## 📐 describe_\<model\>
 
 Returns detailed field definitions and metadata for a model.
 
@@ -109,8 +95,9 @@ None required.
 
 ```json
 {
-  "model": "article",
+  "model_name": "article",
   "verbose_name": "Article",
+  "verbose_name_plural": "Articles",
   "app_label": "blog",
   "fields": [
     {
@@ -177,7 +164,7 @@ None required.
       "description": "Last update timestamp"
     }
   ],
-  "relations": {
+  "relationships": {
     "forward": [
       {
         "name": "author",
@@ -199,23 +186,16 @@ None required.
       }
     ]
   },
-  "admin": {
+  "admin_config": {
     "list_display": ["title", "author", "published", "created_at"],
     "search_fields": ["title", "content"],
     "ordering": ["-created_at"],
     "readonly_fields": ["created_at", "updated_at"]
-  },
-  "inlines": [
-    {
-      "model": "comment",
-      "verbose_name": "Comment",
-      "fk_field": "article"
-    }
-  ]
+  }
 }
 ```
 
-### Field Properties
+### 📋 Field Properties
 
 Each field includes relevant properties:
 
@@ -231,7 +211,7 @@ Each field includes relevant properties:
 | `default` | Default value |
 | `description` | Field help text or verbose name |
 
-### Field Types
+### 🏷️ Field Types
 
 Common field types returned:
 
@@ -257,9 +237,9 @@ Common field types returned:
 
 ---
 
-## Use Cases
+## 💡 Use Cases
 
-### Schema Discovery
+### 🔎 Schema Discovery
 
 Before creating records, discover required fields:
 
@@ -271,7 +251,7 @@ describe_article() -> fields with required=true
 create_article(data={"title": "...", "author_id": 5})
 ```
 
-### Dynamic Form Generation
+### 🖥️ Dynamic Form Generation
 
 Use field metadata to generate forms:
 
@@ -289,13 +269,13 @@ for (const field of description.fields) {
 }
 ```
 
-### Relationship Mapping
+### 🔗 Relationship Mapping
 
 Discover how models are connected:
 
 ```json
 {
-  "relations": {
+  "relationships": {
     "forward": [
       {"name": "author", "related_model": "blog.author"}
     ],
@@ -306,13 +286,13 @@ Discover how models are connected:
 }
 ```
 
-### Understanding Admin Configuration
+### ⚙️ Understanding Admin Configuration
 
 See how the admin is configured:
 
 ```json
 {
-  "admin": {
+  "admin_config": {
     "list_display": ["title", "author", "published"],
     "search_fields": ["title", "content"],
     "ordering": ["-created_at"]
@@ -322,14 +302,14 @@ See how the admin is configured:
 
 ---
 
-## Permission Requirements
+## 🔒 Permission Requirements
 
 | Tool | Required Permission |
 |------|---------------------|
-| `find_models` | None (always available) |
+| `find_models` | Filters results by `view_<model>` |
 | `describe_*` | `view_<model>` |
 
-## Next Steps
+## 🔗 Next Steps
 
-- [Relationships](relationships.md) - Access related data
-- [CRUD Operations](crud.md) - Work with data
+- [Relationships](relationships.md) — Access related data
+- [CRUD Operations](crud.md) — Work with data

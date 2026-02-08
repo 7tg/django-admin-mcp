@@ -1,8 +1,8 @@
-# Relationships
+# 🔗 Relationships
 
 Django Admin MCP provides tools for traversing relationships, viewing change history, and autocomplete functionality.
 
-## related_\<model\>
+## 🔗 related_\<model\>
 
 Fetches related objects through foreign key, many-to-many, or reverse relations.
 
@@ -12,7 +12,7 @@ Fetches related objects through foreign key, many-to-many, or reverse relations.
 |-----------|------|-------------|----------|
 | `id` | integer | Instance primary key | Yes |
 | `relation` | string | Relation name to traverse | Yes |
-| `limit` | integer | Maximum results | No (default: 25) |
+| `limit` | integer | Maximum results | No (default: 100) |
 | `offset` | integer | Results to skip | No (default: 0) |
 
 ### Examples
@@ -64,7 +64,7 @@ Response:
     {"id": 3, "name": "Web Development"}
   ],
   "count": 3,
-  "total": 3
+  "total_count": 3
 }
 ```
 
@@ -91,17 +91,17 @@ Response:
     {"id": 2, "text": "Very helpful", "created_at": "2024-01-15T11:00:00Z"}
   ],
   "count": 2,
-  "total": 8
+  "total_count": 8
 }
 ```
 
-### Discovering Relations
+### 🔍 Discovering Relations
 
 Use `describe_*` to find available relations:
 
 ```json
 {
-  "relations": {
+  "relationships": {
     "forward": [
       {"name": "author", "type": "ForeignKey"},
       {"name": "categories", "type": "ManyToManyField"}
@@ -115,7 +115,7 @@ Use `describe_*` to find available relations:
 
 ---
 
-## history_\<model\>
+## 📜 history_\<model\>
 
 Views the Django admin change history (LogEntry records) for an instance.
 
@@ -124,7 +124,7 @@ Views the Django admin change history (LogEntry records) for an instance.
 | Parameter | Type | Description | Required |
 |-----------|------|-------------|----------|
 | `id` | integer | Instance primary key | Yes |
-| `limit` | integer | Maximum results | No (default: 25) |
+| `limit` | integer | Maximum results | No (default: 50) |
 
 ### Example
 
@@ -143,34 +143,42 @@ Views the Django admin change history (LogEntry records) for an instance.
 
 ```json
 {
-  "entries": [
+  "model": "article",
+  "object_id": 42,
+  "current_repr": "Getting Started with Django",
+  "count": 2,
+  "history": [
     {
+      "action": "changed",
+      "action_flag": 2,
       "action_time": "2024-01-15T14:30:00Z",
       "user": "admin",
-      "action": "change",
-      "message": "Changed title and content."
+      "user_id": 1,
+      "change_message": "Changed title and content.",
+      "object_repr": "Getting Started with Django"
     },
     {
+      "action": "created",
+      "action_flag": 1,
       "action_time": "2024-01-15T10:00:00Z",
       "user": "admin",
-      "action": "add",
-      "message": "Added article."
+      "user_id": 1,
+      "change_message": "Created via MCP",
+      "object_repr": "Getting Started with Django"
     }
-  ],
-  "count": 2,
-  "total": 2
+  ]
 }
 ```
 
-### Action Types
+### 🏷️ Action Types
 
 | Action | Description |
 |--------|-------------|
-| `add` | Record was created |
-| `change` | Record was modified |
-| `delete` | Record was deleted |
+| `created` | Record was created |
+| `changed` | Record was modified |
+| `deleted` | Record was deleted |
 
-### History Requirements
+### 📋 History Requirements
 
 History is recorded when:
 
@@ -183,7 +191,7 @@ History is recorded when:
 
 ---
 
-## autocomplete_\<model\>
+## 🔎 autocomplete_\<model\>
 
 Provides search suggestions for foreign key and many-to-many fields.
 
@@ -191,7 +199,7 @@ Provides search suggestions for foreign key and many-to-many fields.
 
 | Parameter | Type | Description | Required |
 |-----------|------|-------------|----------|
-| `search` | string | Search query | Yes |
+| `term` | string | Search term | Yes |
 | `limit` | integer | Maximum results | No (default: 10) |
 
 ### Example
@@ -201,7 +209,7 @@ Provides search suggestions for foreign key and many-to-many fields.
   "method": "tools/call",
   "name": "autocomplete_author",
   "arguments": {
-    "search": "jane"
+    "term": "jane"
   }
 }
 ```
@@ -218,7 +226,7 @@ Provides search suggestions for foreign key and many-to-many fields.
 }
 ```
 
-### Requirements
+### ⚙️ Requirements
 
 Autocomplete requires `search_fields` to be defined:
 
@@ -228,25 +236,25 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
     search_fields = ['name', 'email']  # Required for autocomplete
 ```
 
-### Use Cases
+### 💡 Use Cases
 
 **Finding authors when creating articles:**
 
 ```
-1. autocomplete_author(search="john") -> [{"id": 3, "text": "John Doe"}]
+1. autocomplete_author(term="john") -> [{"id": 3, "text": "John Doe"}]
 2. create_article(data={"title": "...", "author_id": 3})
 ```
 
 **Finding categories:**
 
 ```
-1. autocomplete_category(search="python") -> [{"id": 1, "text": "Python"}]
+1. autocomplete_category(term="python") -> [{"id": 1, "text": "Python"}]
 2. update_article(id=42, data={"categories": [1, 2, 3]})
 ```
 
 ---
 
-## Traversing Deep Relationships
+## 🔄 Traversing Deep Relationships
 
 For complex queries, chain multiple calls:
 
@@ -268,7 +276,7 @@ For complex queries, chain multiple calls:
 
 ---
 
-## Permission Requirements
+## 🔒 Permission Requirements
 
 | Tool | Required Permission |
 |------|---------------------|
@@ -278,7 +286,7 @@ For complex queries, chain multiple calls:
 
 ---
 
-## Error Handling
+## ❌ Error Handling
 
 ### Unknown Relation
 
@@ -307,7 +315,7 @@ For complex queries, chain multiple calls:
 }
 ```
 
-## Next Steps
+## 🔗 Next Steps
 
-- [CRUD Operations](crud.md) - Basic data operations
-- [Examples](../examples/conversations.md) - See real conversations
+- [CRUD Operations](crud.md) — Basic data operations
+- [Examples](../examples/conversations.md) — See real conversations

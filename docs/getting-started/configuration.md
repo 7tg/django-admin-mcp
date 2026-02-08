@@ -1,8 +1,8 @@
-# Configuration
+# ⚙️ Configuration
 
 Django Admin MCP is designed to work with minimal configuration. This page covers all available configuration options.
 
-## URL Configuration
+## 🔗 URL Configuration
 
 The MCP endpoint URL is configurable when including the URLs:
 
@@ -18,7 +18,7 @@ urlpatterns = [
 ]
 ```
 
-## Model Admin Configuration
+## 🛠️ Model Admin Configuration
 
 Each ModelAdmin class with `MCPAdminMixin` can be configured independently:
 
@@ -53,7 +53,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     # Fields shown in list responses
     list_display = ['title', 'author', 'published', 'created_at']
 
-    # Affects create/update validation
+    # Attempts to update these fields return an error
     readonly_fields = ['created_at', 'updated_at']
 
     # Used by autocomplete_* tool
@@ -74,19 +74,23 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     actions = [mark_as_published]
 ```
 
-## Token Configuration
+## 🔑 Token Configuration
 
 Tokens are configured in Django admin. Each token has:
 
 | Field | Description | Default |
 |-------|-------------|---------|
 | `name` | Descriptive name for the token | Required |
-| `token` | Auto-generated unique token | Auto-generated |
-| `user` | Associated Django user (for audit) | Required |
+| `token_key` | Public key for O(1) lookup (auto-generated) | Auto-generated |
+| `token_hash` | SHA-256 hash of the secret (auto-generated) | Auto-generated |
+| `salt` | Per-token salt for hashing (auto-generated) | Auto-generated |
+| `user` | Associated Django user (for audit logging) | Required |
 | `is_active` | Enable/disable the token | `True` |
 | `expires_at` | Token expiration date | 90 days from creation |
 | `groups` | Django groups for permissions | Empty |
 | `permissions` | Direct permission assignments | Empty |
+
+Token format: `mcp_<key>.<secret>` — the key is stored in plaintext for lookup, the secret is hashed with a per-token salt.
 
 ### Token Expiry
 
@@ -99,13 +103,13 @@ By default, tokens expire 90 days after creation. You can:
 
 Tokens derive permissions from:
 
-1. **Direct permissions** - Assigned directly to the token
-2. **Group permissions** - From groups assigned to the token
+1. **Direct permissions** — assigned directly to the token
+2. **Group permissions** — from groups assigned to the token
 
 !!! note "User Permissions Not Inherited"
     Token permissions are independent of the associated user's permissions. This allows creating limited-access tokens even for superusers.
 
-## Environment-Specific Configuration
+## 🌍 Environment-Specific Configuration
 
 For different environments, use Django settings:
 
@@ -119,7 +123,7 @@ DEBUG = True
 
 The MCP endpoint works over both HTTP and HTTPS. In production, always use HTTPS to protect tokens in transit.
 
-## CORS Configuration
+## 🔒 CORS Configuration
 
 If calling the MCP endpoint from a browser (uncommon), configure CORS:
 
@@ -139,8 +143,8 @@ CORS_ALLOWED_ORIGINS = [
 ]
 ```
 
-## Next Steps
+## 🔗 Next Steps
 
-- [Exposing Models](../guide/exposing-models.md) - Detailed model exposure guide
-- [Token Management](../guide/tokens.md) - Token lifecycle management
-- [Permissions](../guide/permissions.md) - Permission system details
+- [Exposing Models](../guide/exposing-models.md) — Detailed model exposure guide
+- [Token Management](../guide/tokens.md) — Token lifecycle management
+- [Permissions](../guide/permissions.md) — Permission system details

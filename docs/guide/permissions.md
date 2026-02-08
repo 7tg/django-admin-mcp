@@ -1,10 +1,10 @@
-# Permissions
+# 🔒 Permissions
 
 Django Admin MCP integrates with Django's permission system. Every operation checks permissions before execution.
 
-## How Permissions Work
+## 🔍 How Permissions Work
 
-### Permission Requirements by Operation
+### 📋 Permission Requirements by Operation
 
 | Operation | Required Permission |
 |-----------|---------------------|
@@ -15,14 +15,16 @@ Django Admin MCP integrates with Django's permission system. Every operation che
 | `update_*` | `change_<model>` |
 | `delete_*` | `delete_<model>` |
 | `actions_*` | `view_<model>` |
-| `action_*` | Varies by action |
-| `bulk_*` | Varies by operation |
+| `action_*` | `change_<model>` |
+| `bulk_*` create | `add_<model>` |
+| `bulk_*` update | `change_<model>` |
+| `bulk_*` delete | `delete_<model>` |
 | `related_*` | `view_<model>` |
 | `history_*` | `view_<model>` |
 | `autocomplete_*` | `view_<model>` |
-| `find_models` | None (lists available models) |
+| `find_models` | Filters results by `view_<model>` |
 
-### Permission Checking Flow
+### 🔄 Permission Checking Flow
 
 ```
 Request with Token
@@ -36,11 +38,11 @@ Tool Permission Check
     Failure → Return Error
 ```
 
-## Permission Sources
+## 📦 Permission Sources
 
 Tokens derive permissions from two sources:
 
-### 1. Direct Permissions
+### 1️⃣ Direct Permissions
 
 Permissions assigned directly to the token:
 
@@ -52,7 +54,7 @@ token.permissions.add(
 )
 ```
 
-### 2. Group Permissions
+### 2️⃣ Group Permissions
 
 Permissions inherited from assigned groups:
 
@@ -64,7 +66,7 @@ token.groups.add(Group.objects.get(name='Editors'))
 !!! important "User Permissions Not Inherited"
     The associated user's permissions are NOT inherited by the token. This is by design, allowing limited-access tokens for any user, including superusers.
 
-## Django Admin Permissions
+## 🏗️ Django Admin Permissions
 
 Django automatically creates four permissions per model:
 
@@ -82,7 +84,7 @@ Example for an `Article` model in the `blog` app:
 - `blog.change_article`
 - `blog.delete_article`
 
-## Creating Permission Groups
+## 👥 Creating Permission Groups
 
 Organize permissions into reusable groups:
 
@@ -109,7 +111,7 @@ editors.permissions.add(
 )
 ```
 
-## Permission Error Responses
+## ❌ Permission Error Responses
 
 When a permission check fails, the tool returns an error:
 
@@ -125,9 +127,9 @@ When a permission check fails, the tool returns an error:
 }
 ```
 
-## Best Practices
+## 💡 Best Practices
 
-### Read-Only Tokens
+### 👁️ Read-Only Tokens
 
 For monitoring or exploration:
 
@@ -138,7 +140,7 @@ readonly_token.permissions.add(
 )
 ```
 
-### Model-Specific Tokens
+### 🎯 Model-Specific Tokens
 
 For single-purpose integrations:
 
@@ -151,7 +153,7 @@ article_token.permissions.add(
 )
 ```
 
-### Admin-Level Tokens
+### 🔑 Admin-Level Tokens
 
 For full administrative access:
 
@@ -164,7 +166,7 @@ admin_token.permissions.add(
 )
 ```
 
-### Audit Permissions
+### 📊 Audit Permissions
 
 Review token permissions regularly:
 
@@ -176,7 +178,7 @@ for token in MCPToken.objects.filter(is_active=True):
         print(f"  - {perm}")
 ```
 
-## Custom Permissions
+## 🔧 Custom Permissions
 
 You can create custom permissions for admin actions:
 
@@ -204,7 +206,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     actions = [publish]
 ```
 
-## Next Steps
+## 🔗 Next Steps
 
-- [Client Setup](client-setup.md) - Configure MCP clients
-- [Tools Reference](../tools/overview.md) - Explore tool capabilities
+- [Client Setup](client-setup.md) — Configure MCP clients
+- [Tools Reference](../tools/overview.md) — Explore tool capabilities
