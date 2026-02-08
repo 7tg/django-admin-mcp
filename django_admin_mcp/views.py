@@ -7,6 +7,7 @@ Provides HTTP interface for MCP protocol with token-based authentication.
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.db import DatabaseError
 from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -93,7 +94,7 @@ def authenticate_token(request):
 
         token.mark_used()
         return token
-    except Exception:
+    except (DatabaseError, ValueError):
         return None
 
 
