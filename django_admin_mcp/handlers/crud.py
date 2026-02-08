@@ -21,6 +21,7 @@ from django_admin_mcp.handlers.base import (
     get_admin_form_class,
     json_response,
     normalize_fk_fields,
+    safe_error_message,
     serialize_instance,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
@@ -311,7 +312,7 @@ def _update_inlines(
                     {
                         "model": inline_model_name,
                         "id": item.get("id"),
-                        "error": str(e),
+                        "error": safe_error_message(e),
                     }
                 )
 
@@ -427,7 +428,7 @@ async def handle_list(
 
         return [TextContent(text=response.model_dump_json(indent=2))]
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response({"error": safe_error_message(e)})
 
 
 @require_registered_model
@@ -496,7 +497,7 @@ async def handle_get(
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response({"error": safe_error_message(e)})
 
 
 @require_registered_model
@@ -583,7 +584,7 @@ async def handle_create(
 
         return [TextContent(text=response.model_dump_json(indent=2))]
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response({"error": safe_error_message(e)})
 
 
 @require_registered_model
@@ -714,7 +715,7 @@ async def handle_update(
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response({"error": safe_error_message(e)})
 
 
 @require_registered_model
@@ -778,4 +779,4 @@ async def handle_delete(
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response({"error": safe_error_message(e)})

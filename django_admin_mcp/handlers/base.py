@@ -5,17 +5,23 @@ This module provides shared utilities extracted from the mixin module
 for use across handler implementations.
 """
 
+import logging
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.contrib.admin.sites import site
-from django.db import models
+from django.core.exceptions import FieldError
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, OperationalError, models
 from django.forms import ModelForm
 from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
 from pydantic import TypeAdapter
 
 from django_admin_mcp.protocol.types import TextContent
+
+logger = logging.getLogger("django_admin_mcp")
 
 # Pydantic TypeAdapter for JSON serialization - reused across all json_response calls
 _JSON_ADAPTER = TypeAdapter(dict[str, Any])
@@ -52,6 +58,36 @@ def json_response(data: dict) -> list[TextContent]:
     # Use Pydantic TypeAdapter for JSON serialization with better type safety
     json_bytes = _JSON_ADAPTER.dump_json(data, by_alias=True)
     return [TextContent(text=json_bytes.decode("utf-8"))]
+
+
+def safe_error_message(exc: Exception) -> str:
+    """Return a client-safe error message, logging the real error server-side."""
+    logger.exception("Handler error: %s", exc)
+
+    if isinstance(exc, DjangoValidationError):
+        return "Validation error"
+    if isinstance(exc, IntegrityError):
+        return "Data integrity error: a constraint was violated"
+    if isinstance(exc, FieldError):
+        return "Invalid field in request"
+    if isinstance(exc, OperationalError):
+        return "A database error occurred"
+    if isinstance(exc, ValueError | TypeError):
+        return "Invalid input data"
+    return "An internal error occurred"
+
+
+def sanitize_pydantic_errors(errors: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+    """Strip internal details from Pydantic validation errors."""
+    sanitized = []
+    for error in errors:
+        sanitized.append(
+            {
+                "field": ".".join(str(loc) for loc in error.get("loc", [])),
+                "message": error.get("msg", "Invalid value"),
+            }
+        )
+    return sanitized
 
 
 def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | None]:

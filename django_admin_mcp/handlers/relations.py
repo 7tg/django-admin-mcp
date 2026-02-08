@@ -13,6 +13,7 @@ from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
     json_response,
+    safe_error_message,
     serialize_instance,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
@@ -304,4 +305,4 @@ async def handle_autocomplete(
         result = await search_autocomplete()
         return json_response(result)
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response({"error": safe_error_message(e)})
