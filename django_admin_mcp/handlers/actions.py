@@ -8,7 +8,6 @@ extracted from the mixin module.
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django.contrib.admin import actions as admin_module_actions
 from django.db import transaction
 from django.http import HttpRequest
 from pydantic import TypeAdapter
@@ -24,22 +23,24 @@ from django_admin_mcp.handlers.decorators import require_permission, require_reg
 from django_admin_mcp.protocol.types import TextContent
 
 
-def _get_action_info(action) -> dict[str, Any]:
-    """
-    Extract information about a ModelAdmin action.
+def _get_admin_actions(model_admin, request):
+    """Get resolved actions dict from ModelAdmin, handling missing user.
 
-    Args:
-        action: A ModelAdmin action (callable or string).
-
-    Returns:
-        Dictionary with 'name' and 'description' keys.
+    Uses Django's get_actions() which resolves string-referenced methods,
+    includes globally-registered actions, and filters by permissions.
+    When request.user is None, temporarily sets AnonymousUser to satisfy
+    Django's permission filtering.
     """
-    action_str = str(action)
-    if callable(action):
-        name = getattr(action, "__name__", action_str)
-        description = getattr(action, "short_description", name.replace("_", " ").title())
-        return {"name": name, "description": description}
-    return {"name": action_str, "description": action_str}
+    user = getattr(request, "user", None)
+    if user is None:
+        from django.contrib.auth.models import AnonymousUser  # noqa: PLC0415
+
+        request.user = AnonymousUser()
+        try:
+            return model_admin.get_actions(request)
+        finally:
+            request.user = None
+    return model_admin.get_actions(request)
 
 
 def _log_action(user, obj, action_flag: int, change_message: str = ""):
@@ -102,23 +103,9 @@ async def handle_actions(
         actions_info = []
 
         if model_admin:
-            # Get actions from admin
-            admin_actions = getattr(model_admin, "actions", []) or []
-
-            for action in admin_actions:
-                action_info = _get_action_info(action)
-                actions_info.append(action_info)
-
-            # Add built-in delete_selected if not disabled
-            if admin_actions is not None:  # None means actions are disabled
-                # Check if delete_selected is available
-                if hasattr(admin_module_actions, "delete_selected"):
-                    actions_info.append(
-                        {
-                            "name": "delete_selected",
-                            "description": "Delete selected items",
-                        }
-                    )
+            actions_dict = _get_admin_actions(model_admin, request)
+            for name, (_func, name, description) in actions_dict.items():
+                actions_info.append({"name": name, "description": str(description)})
 
         return json_response(
             {
@@ -174,7 +161,7 @@ async def handle_action(
             if count == 0:
                 return {"error": "No objects found with the provided IDs"}
 
-            # Handle built-in delete_selected
+            # Handle built-in delete_selected directly (it renders HTML in Django)
             if action_name == "delete_selected":
                 deleted_count = queryset.count()
                 queryset.delete()
@@ -185,20 +172,19 @@ async def handle_action(
                     "message": f"Deleted {deleted_count} {model._meta.verbose_name_plural}",
                 }
 
-            # Find custom action in admin
+            # Look up custom action via Django's get_actions
             if model_admin:
-                admin_actions = getattr(model_admin, "actions", []) or []
-                for action in admin_actions:
-                    if callable(action) and getattr(action, "__name__", "") == action_name:
-                        # Execute the action
-                        result = action(model_admin, request, queryset)
-                        return {
-                            "success": True,
-                            "action": action_name,
-                            "affected_count": count,
-                            "message": f"Executed {action_name} on {count} objects",
-                            "result": str(result) if result else None,
-                        }
+                actions_dict = _get_admin_actions(model_admin, request)
+                if action_name in actions_dict:
+                    func, name, description = actions_dict[action_name]
+                    result = func(model_admin, request, queryset)
+                    return {
+                        "success": True,
+                        "action": action_name,
+                        "affected_count": count,
+                        "message": f"Executed {action_name} on {count} objects",
+                        "result": str(result) if result else None,
+                    }
 
             return {"error": f"Action '{action_name}' not found"}
 

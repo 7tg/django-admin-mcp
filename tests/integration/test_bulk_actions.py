@@ -6,6 +6,7 @@ import asyncio
 import json
 
 import pytest
+from django.contrib.auth.models import User
 
 from django_admin_mcp import MCPAdminMixin
 from tests.models import Author
@@ -17,13 +18,17 @@ class TestActionsAndBulk:
     """Test suite for actions and bulk operations."""
 
     async def test_list_actions(self):
-        """Test listing available actions for a model."""
-        result = await MCPAdminMixin.handle_tool_call("actions_author", {})
+        """Test listing available actions for a model with authenticated user."""
+        user = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: User.objects.create_superuser("action_admin", "admin@test.com", "pass"),
+        )
+        result = await MCPAdminMixin.handle_tool_call("actions_author", {}, user=user)
         response = json.loads(result[0].text)
 
         assert response["model"] == "author"
         assert "actions" in response
-        # delete_selected should be available by default
+        # delete_selected should be available for authenticated users
         action_names = [a["name"] for a in response["actions"]]
         assert "delete_selected" in action_names
 

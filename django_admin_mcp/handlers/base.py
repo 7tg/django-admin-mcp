@@ -40,7 +40,7 @@ class MCPRequest(HttpRequest):
         self.user = user
         self.method = "GET"
         self.path = "/"
-        self.META = {}
+        self.META = {"SCRIPT_NAME": ""}
         self.GET = {}
         self.POST = {}
 
