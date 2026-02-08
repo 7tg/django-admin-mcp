@@ -7,14 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- URL path duplication when mounting at custom path (e.g., `path("mcp/", ...)` produced `/mcp/mcp/` instead of `/mcp/`) ([#68](https://github.com/7tg/django-admin-mcp/issues/68))
+## [0.3.0] - 2026-02-08
 
 ### Added
-- Comprehensive MkDocs Material documentation
-- Getting started guides
-- Tool reference documentation
-- Example conversations and use cases
+- `non_atomic_requests` decorator to async views for `ATOMIC_REQUESTS` compatibility ([#72](https://github.com/7tg/django-admin-mcp/issues/72))
+- `require_registered_model` and `require_permission` decorators for handler authorization
+- Comprehensive MkDocs Material documentation with getting started guides, tool reference, and example conversations
+
+### Changed
+- Use Django's `get_actions()` to resolve admin actions for listing and execution ([#73](https://github.com/7tg/django-admin-mcp/issues/73))
+- Replace `json` module with Pydantic `TypeAdapter` across all handlers ([#53](https://github.com/7tg/django-admin-mcp/issues/53), [#54](https://github.com/7tg/django-admin-mcp/issues/54), [#55](https://github.com/7tg/django-admin-mcp/issues/55), [#56](https://github.com/7tg/django-admin-mcp/issues/56))
+- Wrap CRUD and bulk operations in `transaction.atomic()` for data integrity ([#57](https://github.com/7tg/django-admin-mcp/issues/57))
+- Apply `require_registered_model` and `require_permission` decorators to CRUD, relations, and meta handlers
+- Narrow broad exception handling in `authenticate_token`
+
+### Fixed
+- URL path duplication when mounting at custom path (e.g., `path("mcp/", ...)` produced `/mcp/mcp/`) ([#68](https://github.com/7tg/django-admin-mcp/issues/68), [#71](https://github.com/7tg/django-admin-mcp/issues/71))
+
+### Security
+- Sanitize error responses to prevent internal detail leakage ([#70](https://github.com/7tg/django-admin-mcp/issues/70))
+- Add permission checks to `handle_history()`, `handle_related()`, `handle_autocomplete()`, `handle_describe()`, and `handle_find_models()`
+- Inline permission checks to prevent privilege escalation
+- Add field filtering to `serialize_instance()` to prevent sensitive data exposure ([#58](https://github.com/7tg/django-admin-mcp/issues/58))
 
 ## [0.2.1] - 2025
 
@@ -66,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Python | Django |
 |---------|--------|--------|
+| 0.3.0 | 3.10+ | 3.2+ |
 | 0.2.1 | 3.10+ | 3.2+ |
 | 0.2.0 | 3.10+ | 3.2+ |
 | 0.1.0 | 3.10+ | 3.2+ |
