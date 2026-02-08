@@ -17,10 +17,10 @@ from django_admin_mcp.handlers.base import (
     async_check_permission,
     format_form_errors,
     get_admin_form_class,
-    get_model_admin,
     json_response,
     normalize_fk_fields,
 )
+from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -90,10 +90,15 @@ def _log_action(user, obj, action_flag: int, change_message: str = ""):
     )
 
 
+@require_registered_model
+@require_permission("view")
 async def handle_actions(
     model_name: str,
     arguments: dict[str, Any],
     request: HttpRequest,
+    *,
+    model,
+    model_admin,
 ) -> list[TextContent]:
     """
     List available admin actions for a model.
@@ -106,20 +111,13 @@ async def handle_actions(
         model_name: The name of the model to list actions for.
         arguments: Dictionary of arguments (currently unused).
         request: HttpRequest with user for permission checking.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing available actions.
     """
     try:
-        model, model_admin = get_model_admin(model_name)
-
-        if model is None:
-            return json_response({"error": f"Model {model_name} not registered"})
-
-        # Check view permission
-        if not await async_check_permission(request, model_admin, "view"):
-            return _permission_error("view", model_name)
-
         actions_info = []
 
         if model_admin:
@@ -148,14 +146,19 @@ async def handle_actions(
                 "actions": actions_info,
             }
         )
-    except Exception as e:
+    except (LookupError, AttributeError, TypeError) as e:
         return json_response({"error": str(e)})
 
 
+@require_registered_model
+@require_permission("change")
 async def handle_action(
     model_name: str,
     arguments: dict[str, Any],
     request: HttpRequest,
+    *,
+    model,
+    model_admin,
 ) -> list[TextContent]:
     """
     Execute an admin action on selected objects.
@@ -166,20 +169,13 @@ async def handle_action(
             - action: str action name
             - ids: list of primary keys to act on
         request: HttpRequest with user for permission checking and action execution.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing action result.
     """
     try:
-        model, model_admin = get_model_admin(model_name)
-
-        if model is None:
-            return json_response({"error": f"Model {model_name} not registered"})
-
-        # Check change permission (actions typically modify data)
-        if not await async_check_permission(request, model_admin, "change"):
-            return _permission_error("change", model_name)
-
         action_name = arguments.get("action")
         ids = arguments.get("ids", [])
 
@@ -231,10 +227,14 @@ async def handle_action(
         return json_response({"error": str(e)})
 
 
+@require_registered_model
 async def handle_bulk(
     model_name: str,
     arguments: dict[str, Any],
     request: HttpRequest,
+    *,
+    model,
+    model_admin,
 ) -> list[TextContent]:
     """
     Bulk create/update/delete operations with form validation.
@@ -248,16 +248,13 @@ async def handle_bulk(
             - operation: 'create' | 'update' | 'delete'
             - items: list of dicts (data for create/update, or ids for delete)
         request: HttpRequest with user for permission checking.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing operation results.
     """
     try:
-        model, model_admin = get_model_admin(model_name)
-
-        if model is None:
-            return json_response({"error": f"Model {model_name} not registered"})
-
         operation = arguments.get("operation")
         items = arguments.get("items", [])
 
