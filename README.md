@@ -14,23 +14,27 @@
 [![License](https://img.shields.io/pypi/l/django-admin-mcp.svg)](https://github.com/7tg/django-admin-mcp/blob/main/LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://7tg.github.io/django-admin-mcp/)
 
-Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add a mixin to your ModelAdmin classes and get instant access to CRUD operations, admin actions, model history, and more.
+Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add a mixin to your `ModelAdmin` classes and get instant access to CRUD operations, admin actions, model history, and more.
 
-## Features
+---
 
-- **Zero dependencies** beyond Django and Pydantic
-- **Token authentication** - secure Bearer token auth with configurable expiry
-- **Django admin permissions** - respects existing view/add/change/delete permissions
-- **Field filtering** - control which fields are exposed via `mcp_fields` and `mcp_exclude_fields`
-- **Full CRUD** - list, get, create, update, delete operations
-- **Admin actions** - execute registered Django admin actions
-- **Bulk operations** - update or delete multiple records at once
-- **Model introspection** - describe model fields and relationships
-- **Related objects** - traverse foreign keys and reverse relations
-- **Change history** - access Django admin's history log
-- **Autocomplete** - search suggestions for foreign key fields
+## ✨ Features
 
-## Installation
+- 📦 **Zero dependencies** — only Django and Pydantic required
+- 🔐 **Token authentication** — secure Bearer token auth with configurable expiry
+- 🛡️ **Django admin permissions** — respects existing view/add/change/delete permissions
+- 🔒 **Field filtering** — control which fields are exposed via `mcp_fields` and `mcp_exclude_fields`
+- 📝 **Full CRUD** — list, get, create, update, delete operations
+- ⚡ **Admin actions** — execute registered Django admin actions
+- 📦 **Bulk operations** — create, update, or delete multiple records at once
+- 🔍 **Model introspection** — describe model fields and relationships
+- 🔗 **Related objects** — traverse foreign keys and reverse relations
+- 📜 **Change history** — access Django admin's history log
+- 🔎 **Autocomplete** — search suggestions for foreign key fields
+
+---
+
+## 📥 Installation
 
 ```bash
 pip install django-admin-mcp
@@ -60,11 +64,13 @@ Run migrations to create the token model:
 python manage.py migrate django_admin_mcp
 ```
 
-## Quick Start
+---
 
-### 1. Expose your models
+## 🚀 Quick Start
 
-Add the mixin to any ModelAdmin. Set `mcp_expose = True` to expose direct tools:
+### 1️⃣ Expose Your Models
+
+Add the mixin to any `ModelAdmin`. Set `mcp_expose = True` to expose direct tools:
 
 ```python
 from django.contrib import admin
@@ -81,7 +87,7 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
     pass  # Discoverable via find_models, no direct tools
 ```
 
-#### Protecting Sensitive Fields
+#### 🔒 Protecting Sensitive Fields
 
 Use `mcp_exclude_fields` to prevent sensitive data exposure:
 
@@ -93,11 +99,11 @@ class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_exclude_fields = ['password', 'security_token']
 ```
 
-### 2. Create an API token
+### 2️⃣ Create an API Token
 
 Go to Django admin at `/admin/django_admin_mcp/mcptoken/` and create a token. Tokens can optionally be tied to users, groups, or have direct permissions assigned.
 
-### 3. Configure Your MCP Client
+### 3️⃣ Configure Your MCP Client
 
 Add to your MCP client settings (`~/.claude/claude_desktop_config.json` or project `.mcp.json`):
 
@@ -114,7 +120,7 @@ Add to your MCP client settings (`~/.claude/claude_desktop_config.json` or proje
 }
 ```
 
-### 4. Use with Your Agent
+### 4️⃣ Use with Your Agent
 
 Once configured, the agent can use the tools directly:
 
@@ -129,11 +135,13 @@ User: Get article #42 and update its title to "New Title"
 Agent: [calls get_article with id=42, then update_article]
 ```
 
-## Available Tools
+---
+
+## 🛠️ Available Tools
 
 For each exposed model (e.g., `Article`), the following tools are generated:
 
-### CRUD Operations
+### 📝 CRUD Operations
 
 | Tool | Description |
 |------|-------------|
@@ -143,22 +151,22 @@ For each exposed model (e.g., `Article`), the following tools are generated:
 | `update_article` | Update an existing article by `id` |
 | `delete_article` | Delete an article by `id` |
 
-### Model Introspection
+### 🔍 Model Introspection
 
 | Tool | Description |
 |------|-------------|
 | `find_models` | Discover all exposed models and their available tools |
 | `describe_article` | Get field definitions, types, and constraints |
 
-### Admin Actions
+### ⚡ Admin Actions
 
 | Tool | Description |
 |------|-------------|
 | `actions_article` | List available admin actions for the model |
 | `action_article` | Execute an admin action on selected records |
-| `bulk_article` | Bulk update or delete multiple records |
+| `bulk_article` | Bulk create, update, or delete multiple records |
 
-### Relationships
+### 🔗 Relationships
 
 | Tool | Description |
 |------|-------------|
@@ -166,7 +174,9 @@ For each exposed model (e.g., `Article`), the following tools are generated:
 | `history_article` | View Django admin change history |
 | `autocomplete_article` | Search suggestions for autocomplete fields |
 
-## HTTP Protocol Reference
+---
+
+## 🌐 HTTP Protocol Reference
 
 For custom integrations, the MCP endpoint accepts POST requests:
 
@@ -184,9 +194,11 @@ curl -X POST http://localhost:8000/mcp/ \
   -d '{"method": "tools/call", "name": "list_article", "arguments": {"limit": 10}}'
 ```
 
-## Example Conversations
+---
 
-### CRUD Operations
+## 💬 Example Conversations
+
+### 📝 CRUD Operations
 
 ```
 User: Create a new article titled "Getting Started with Django"
@@ -206,7 +218,7 @@ Agent: [calls delete_article with id=15]
 Deleted article #15.
 ```
 
-### Admin Actions
+### ⚡ Admin Actions
 
 ```
 User: Mark articles 1, 2, and 3 as published
@@ -215,7 +227,7 @@ Agent: [calls action_article with action="mark_as_published", ids=[1,2,3]]
 Marked 3 articles as published.
 ```
 
-### Bulk Operations
+### 📦 Bulk Operations
 
 ```
 User: Set status to "archived" for articles 10-15
@@ -229,7 +241,7 @@ Agent: [calls list_article to find drafts, then bulk_article with operation="del
 Deleted 12 draft articles.
 ```
 
-### Exploring Relationships
+### 🔗 Exploring Relationships
 
 ```
 User: Show me all comments on article 42
@@ -245,7 +257,7 @@ Change history for article #42:
 - 2024-01-10: Created (admin)
 ```
 
-### Model Discovery
+### 🔍 Model Discovery
 
 ```
 User: What can I manage through MCP?
@@ -268,9 +280,11 @@ Article fields:
 - created_at (DateTimeField, auto)
 ```
 
-## Security
+---
 
-### Two-Level Exposure
+## 🔐 Security
+
+### 🏗️ Two-Level Exposure
 
 Models with `MCPAdminMixin` are automatically discoverable via the `find_models` tool, allowing the agent to see what's available. To expose full CRUD tools directly, set `mcp_expose = True`:
 
@@ -284,39 +298,43 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
 ```
 
-### Token Authentication
+### 🔑 Token Authentication
 
-- Tokens are created in Django admin
-- Tokens can be associated with a user, groups, or have direct permissions
-- Tokens without any permissions have no access (principle of least privilege)
-- Token expiry is configurable (default: 90 days)
-- Revoke tokens by deleting them in admin
+- 🎫 Tokens are created in Django admin
+- 👤 Tokens can be associated with a user, groups, or have direct permissions
+- 🚫 Tokens without any permissions have no access (principle of least privilege)
+- ⏰ Token expiry is configurable (default: 90 days)
+- 🗑️ Revoke tokens by deleting them in admin
 
-### Permission Checking
+### 🛡️ Permission Checking
 
 All operations respect Django admin permissions:
 
-- `list_*` and `get_*` require **view** permission
-- `create_*` requires **add** permission
-- `update_*` requires **change** permission
-- `delete_*` requires **delete** permission
+| Operation | Required Permission |
+|-----------|-------------------|
+| `list_*` / `get_*` | 👁️ **view** |
+| `create_*` | ➕ **add** |
+| `update_*` | ✏️ **change** |
+| `delete_*` | 🗑️ **delete** |
 
-If a user lacks permission, the operation returns an error.
+If a token lacks permission, the operation returns an error.
 
-## Requirements
+---
 
-- Python >= 3.10
-- Django >= 3.2
-- Pydantic >= 2.0
+## 📋 Requirements
 
-## Supported Django Versions
+| Dependency | Version |
+|-----------|---------|
+| 🐍 Python | >= 3.10 |
+| 🌐 Django | >= 3.2 |
+| 📐 Pydantic | >= 2.0 |
 
-- Django 3.2
-- Django 4.0
-- Django 4.1
-- Django 4.2
-- Django 5.0
+### ✅ Supported Django Versions
 
-## License
+Django 3.2 · 4.0 · 4.1 · 4.2 · 5.0
+
+---
+
+## 📄 License
 
 GPL-3.0-or-later
