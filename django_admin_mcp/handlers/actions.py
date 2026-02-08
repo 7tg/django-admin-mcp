@@ -14,7 +14,6 @@ from django.http import HttpRequest
 from pydantic import TypeAdapter
 
 from django_admin_mcp.handlers.base import (
-    async_check_permission,
     format_form_errors,
     get_admin_form_class,
     json_response,
@@ -40,25 +39,6 @@ def _get_action_info(action) -> dict[str, Any]:
         description = getattr(action, "short_description", name.replace("_", " ").title())
         return {"name": name, "description": description}
     return {"name": action_str, "description": action_str}
-
-
-def _permission_error(operation: str, model_name: str) -> list[TextContent]:
-    """
-    Return a permission denied error response.
-
-    Args:
-        operation: The operation that was denied.
-        model_name: The model name the operation was attempted on.
-
-    Returns:
-        List containing a TextContent with error JSON.
-    """
-    return json_response(
-        {
-            "error": f"Permission denied: cannot {operation} {model_name}",
-            "code": "permission_denied",
-        }
-    )
 
 
 def _log_action(user, obj, action_flag: int, change_message: str = ""):
@@ -227,6 +207,187 @@ async def handle_action(
         return json_response({"error": str(e)})
 
 
+def _get_bulk_user(request):
+    """Extract authenticated user from request for audit logging."""
+    user = request.user if hasattr(request, "user") else None
+    if user and not user.is_authenticated:
+        user = None
+    return user
+
+
+def _bulk_response(operation, items, results):
+    """Build standardized bulk operation response."""
+    return json_response(
+        {
+            "operation": operation,
+            "total_items": len(items),
+            "success_count": len(results["success"]),
+            "error_count": len(results["errors"]),
+            "results": results,
+        }
+    )
+
+
+@require_registered_model
+@require_permission("add")
+async def handle_bulk_create(
+    model_name: str,
+    arguments: dict[str, Any],
+    request: HttpRequest,
+    *,
+    model,
+    model_admin,
+) -> list[TextContent]:
+    """Bulk create operations with form validation."""
+
+    @sync_to_async
+    def execute():
+        from django.contrib.admin.models import ADDITION  # noqa: PLC0415
+
+        items = arguments.get("items", [])
+        user = _get_bulk_user(request)
+        results: dict[str, list] = {"success": [], "errors": []}
+        form_class = get_admin_form_class(model, model_admin, request, obj=None)
+
+        for i, item_data in enumerate(items):
+            try:
+                normalized_data = normalize_fk_fields(model, item_data)
+                form = form_class(data=normalized_data)
+                if not form.is_valid():
+                    results["errors"].append(
+                        {
+                            "index": i,
+                            "error": "Validation failed",
+                            "validation_errors": format_form_errors(form.errors),
+                        }
+                    )
+                    continue
+
+                with transaction.atomic():
+                    obj = form.save()
+                    _log_action(user=user, obj=obj, action_flag=ADDITION, change_message="Bulk created via MCP")
+                results["success"].append({"index": i, "id": obj.pk, "created": True})
+            except Exception as e:
+                results["errors"].append({"index": i, "error": str(e)})
+
+        return items, results
+
+    items, results = await execute()
+    return _bulk_response("create", items, results)
+
+
+@require_registered_model
+@require_permission("change")
+async def handle_bulk_update(
+    model_name: str,
+    arguments: dict[str, Any],
+    request: HttpRequest,
+    *,
+    model,
+    model_admin,
+) -> list[TextContent]:
+    """Bulk update operations with form validation."""
+
+    @sync_to_async
+    def execute():
+        from django.contrib.admin.models import CHANGE  # noqa: PLC0415
+        from django.forms.models import model_to_dict  # noqa: PLC0415
+
+        items = arguments.get("items", [])
+        user = _get_bulk_user(request)
+        results: dict[str, list] = {"success": [], "errors": []}
+        data_adapter = TypeAdapter(dict[str, Any])
+
+        for i, item in enumerate(items):
+            try:
+                obj_id = item.get("id")
+                data = item.get("data", {})
+                if not obj_id:
+                    results["errors"].append({"index": i, "error": "id is required for update"})
+                    continue
+
+                obj = model.objects.get(pk=obj_id)
+
+                normalized_data = normalize_fk_fields(model, data)
+                form_class = get_admin_form_class(model, model_admin, request, obj=obj)
+
+                existing_data = model_to_dict(obj)
+                merged_data = {**existing_data, **normalized_data}
+
+                form = form_class(data=merged_data, instance=obj)
+                if not form.is_valid():
+                    results["errors"].append(
+                        {
+                            "index": i,
+                            "error": "Validation failed",
+                            "validation_errors": format_form_errors(form.errors),
+                        }
+                    )
+                    continue
+
+                with transaction.atomic():
+                    obj = form.save()
+                    serialized_data = data_adapter.dump_json(data, fallback=str).decode()
+                    max_length = 500
+                    if len(serialized_data) > max_length:
+                        serialized_data = serialized_data[:max_length] + '... (truncated)"'
+                    _log_action(
+                        user=user,
+                        obj=obj,
+                        action_flag=CHANGE,
+                        change_message=f"Bulk updated via MCP: {serialized_data}",
+                    )
+                results["success"].append({"index": i, "id": obj_id, "updated": True})
+            except model.DoesNotExist:
+                results["errors"].append({"index": i, "error": f"Object with id {obj_id} not found"})
+            except Exception as e:
+                results["errors"].append({"index": i, "error": str(e)})
+
+        return items, results
+
+    items, results = await execute()
+    return _bulk_response("update", items, results)
+
+
+@require_registered_model
+@require_permission("delete")
+async def handle_bulk_delete(
+    model_name: str,
+    arguments: dict[str, Any],
+    request: HttpRequest,
+    *,
+    model,
+    model_admin,
+) -> list[TextContent]:
+    """Bulk delete operations."""
+
+    @sync_to_async
+    def execute():
+        from django.contrib.admin.models import DELETION  # noqa: PLC0415
+
+        items = arguments.get("items", [])
+        user = _get_bulk_user(request)
+        results: dict[str, list] = {"success": [], "errors": []}
+        ids = items if isinstance(items, list) else []
+
+        for i, obj_id in enumerate(ids):
+            try:
+                obj = model.objects.get(pk=obj_id)
+                with transaction.atomic():
+                    _log_action(user=user, obj=obj, action_flag=DELETION, change_message="Bulk deleted via MCP")
+                    obj.delete()
+                results["success"].append({"index": i, "id": obj_id, "deleted": True})
+            except model.DoesNotExist:
+                results["errors"].append({"index": i, "error": f"Object with id {obj_id} not found"})
+            except Exception as e:
+                results["errors"].append({"index": i, "error": str(e)})
+
+        return items, results
+
+    items, results = await execute()
+    return _bulk_response("delete", items, results)
+
+
 @require_registered_model
 async def handle_bulk(
     model_name: str,
@@ -237,10 +398,10 @@ async def handle_bulk(
     model_admin,
 ) -> list[TextContent]:
     """
-    Bulk create/update/delete operations with form validation.
+    Bulk create/update/delete operations dispatcher.
 
-    Uses Django admin's form system for validation when ModelAdmin is available.
-    Falls back to auto-generated ModelForm otherwise.
+    Routes to handle_bulk_create, handle_bulk_update, or handle_bulk_delete
+    based on the operation argument.
 
     Args:
         model_name: The name of the model to perform bulk operations on.
@@ -254,167 +415,19 @@ async def handle_bulk(
     Returns:
         List of TextContent with JSON response containing operation results.
     """
-    try:
-        operation = arguments.get("operation")
-        items = arguments.get("items", [])
+    operation = arguments.get("operation")
 
-        if not operation:
-            return json_response({"error": "operation parameter is required"})
+    if not operation:
+        return json_response({"error": "operation parameter is required"})
 
-        if operation not in ["create", "update", "delete"]:
-            return json_response({"error": "operation must be 'create', 'update', or 'delete'"})
+    handlers = {
+        "create": handle_bulk_create,
+        "update": handle_bulk_update,
+        "delete": handle_bulk_delete,
+    }
 
-        # Check permission for the bulk operation
-        permission_map = {
-            "create": "add",
-            "update": "change",
-            "delete": "delete",
-        }
-        required_permission = permission_map.get(operation)
-        if required_permission and not await async_check_permission(request, model_admin, required_permission):
-            return _permission_error(required_permission, model_name)
+    handler = handlers.get(operation)
+    if not handler:
+        return json_response({"error": "operation must be 'create', 'update', or 'delete'"})
 
-        user = request.user if hasattr(request, "user") else None
-        # Don't use AnonymousUser for logging
-        if user and not user.is_authenticated:
-            user = None
-
-        @sync_to_async
-        def execute_bulk():
-            # Deferred import: Django models require app registry to be ready
-            from django.contrib.admin.models import ADDITION, CHANGE, DELETION  # noqa: PLC0415
-            from django.forms.models import model_to_dict  # noqa: PLC0415
-
-            results = {"success": [], "errors": []}
-
-            if operation == "create":
-                # Get form class for create operations
-                form_class = get_admin_form_class(model, model_admin, request, obj=None)
-
-                for i, item_data in enumerate(items):
-                    try:
-                        # Normalize FK field names
-                        normalized_data = normalize_fk_fields(model, item_data)
-                        form = form_class(data=normalized_data)
-                        if not form.is_valid():
-                            results["errors"].append(
-                                {
-                                    "index": i,
-                                    "error": "Validation failed",
-                                    "validation_errors": format_form_errors(form.errors),
-                                }
-                            )
-                            continue
-
-                        # Wrap save and logging in transaction for atomicity
-                        with transaction.atomic():
-                            obj = form.save()
-                            _log_action(
-                                user=user,
-                                obj=obj,
-                                action_flag=ADDITION,
-                                change_message="Bulk created via MCP",
-                            )
-                        results["success"].append({"index": i, "id": obj.pk, "created": True})
-                    except Exception as e:
-                        results["errors"].append({"index": i, "error": str(e)})
-
-            elif operation == "update":
-                # Create TypeAdapter once for efficiency
-                data_adapter = TypeAdapter(dict[str, Any])
-
-                for i, item in enumerate(items):
-                    try:
-                        obj_id = item.get("id")
-                        data = item.get("data", {})
-                        if not obj_id:
-                            results["errors"].append({"index": i, "error": "id is required for update"})
-                            continue
-
-                        obj = model.objects.get(pk=obj_id)
-
-                        # Normalize FK field names
-                        normalized_data = normalize_fk_fields(model, data)
-
-                        # Get form class for this instance
-                        form_class = get_admin_form_class(model, model_admin, request, obj=obj)
-
-                        # Merge existing data with updates
-                        existing_data = model_to_dict(obj)
-                        merged_data = {**existing_data, **normalized_data}
-
-                        form = form_class(data=merged_data, instance=obj)
-                        if not form.is_valid():
-                            results["errors"].append(
-                                {
-                                    "index": i,
-                                    "error": "Validation failed",
-                                    "validation_errors": format_form_errors(form.errors),
-                                }
-                            )
-                            continue
-
-                        # Wrap save and logging in transaction for atomicity
-                        with transaction.atomic():
-                            obj = form.save()
-                            # Serialize data using Pydantic TypeAdapter
-                            serialized_data = data_adapter.dump_json(data, fallback=str).decode()
-                            # Truncate to keep change messages concise
-                            # Note: Truncation may result in invalid JSON, but preserves logging capability
-                            max_length = 500
-                            if len(serialized_data) > max_length:
-                                serialized_data = serialized_data[:max_length] + '... (truncated)"'
-                            _log_action(
-                                user=user,
-                                obj=obj,
-                                action_flag=CHANGE,
-                                change_message=f"Bulk updated via MCP: {serialized_data}",
-                            )
-                        results["success"].append({"index": i, "id": obj_id, "updated": True})
-                    except model.DoesNotExist:
-                        results["errors"].append(
-                            {
-                                "index": i,
-                                "error": f"Object with id {obj_id} not found",
-                            }
-                        )
-                    except Exception as e:
-                        results["errors"].append({"index": i, "error": str(e)})
-
-            elif operation == "delete":
-                ids = items if isinstance(items, list) else []
-                for i, obj_id in enumerate(ids):
-                    try:
-                        obj = model.objects.get(pk=obj_id)
-                        # Wrap logging and deletion in transaction for atomicity
-                        with transaction.atomic():
-                            _log_action(
-                                user=user,
-                                obj=obj,
-                                action_flag=DELETION,
-                                change_message="Bulk deleted via MCP",
-                            )
-                            obj.delete()
-                        results["success"].append({"index": i, "id": obj_id, "deleted": True})
-                    except model.DoesNotExist:
-                        results["errors"].append(
-                            {
-                                "index": i,
-                                "error": f"Object with id {obj_id} not found",
-                            }
-                        )
-                    except Exception as e:
-                        results["errors"].append({"index": i, "error": str(e)})
-
-            return {
-                "operation": operation,
-                "total_items": len(items),
-                "success_count": len(results["success"]),
-                "error_count": len(results["errors"]),
-                "results": results,
-            }
-
-        result = await execute_bulk()
-        return json_response(result)
-    except Exception as e:
-        return json_response({"error": str(e)})
+    return await handler(model_name, arguments, request)
