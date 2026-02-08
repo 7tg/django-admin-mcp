@@ -14,9 +14,9 @@ from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
     async_check_permission,
-    get_model_admin,
     json_response,
 )
+from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -107,10 +107,15 @@ def _model_matches_query(query: str | None, model_name: str, verbose_name: str) 
     return query_lower in model_name.lower() or query_lower in verbose_name.lower()
 
 
+@require_registered_model
+@require_permission("view")
 async def handle_describe(
     model_name: str,
     arguments: dict[str, Any],
     request: HttpRequest,
+    *,
+    model,
+    model_admin,
 ) -> list[TextContent]:
     """
     Get model metadata/schema.
@@ -125,25 +130,13 @@ async def handle_describe(
         model_name: The name of the model to describe.
         arguments: Handler arguments (currently unused for describe).
         request: HttpRequest for permission checking.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List containing TextContent with JSON-serialized model metadata.
     """
     try:
-        model, model_admin = get_model_admin(model_name)
-
-        if model is None:
-            return json_response({"error": f"Model '{model_name}' not found"})
-
-        # Check view permission
-        if not await async_check_permission(request, model_admin, "view"):
-            return json_response(
-                {
-                    "error": f"Permission denied: cannot view {model_name}",
-                    "code": "permission_denied",
-                }
-            )
-
         # Collect field metadata
         fields = []
         relationships = []

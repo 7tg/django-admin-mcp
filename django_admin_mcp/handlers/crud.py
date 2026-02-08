@@ -16,15 +16,14 @@ from django.http import HttpRequest
 from pydantic import TypeAdapter
 
 from django_admin_mcp.handlers.base import (
-    async_check_permission,
     check_inline_permission,
     format_form_errors,
     get_admin_form_class,
-    get_model_admin,
     json_response,
     normalize_fk_fields,
     serialize_instance,
 )
+from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
 
 
@@ -348,7 +347,11 @@ def _log_action(user: Any, obj: models.Model, action_flag: int, change_message: 
     )
 
 
-async def handle_list(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
+@require_registered_model
+@require_permission("view")
+async def handle_list(
+    model_name: str, arguments: dict[str, Any], request: HttpRequest, *, model, model_admin
+) -> list[TextContent]:
     """
     List model instances with filtering, search, ordering.
 
@@ -361,24 +364,12 @@ async def handle_list(model_name: str, arguments: dict[str, Any], request: HttpR
             - search: str search term
             - order_by: list of field names (prefix with - for descending)
         request: HttpRequest with user for permission checking.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing count, total_count, results.
     """
-    model, model_admin = get_model_admin(model_name)
-
-    if model is None:
-        return json_response({"error": f"Model '{model_name}' not found"})
-
-    # Check view permission
-    if not await async_check_permission(request, model_admin, "view"):
-        return json_response(
-            {
-                "error": f"Permission denied: cannot view {model_name}",
-                "code": "permission_denied",
-            }
-        )
-
     try:
         limit = arguments.get("limit", 100)
         offset = arguments.get("offset", 0)
@@ -439,7 +430,11 @@ async def handle_list(model_name: str, arguments: dict[str, Any], request: HttpR
         return json_response({"error": str(e)})
 
 
-async def handle_get(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
+@require_registered_model
+@require_permission("view")
+async def handle_get(
+    model_name: str, arguments: dict[str, Any], request: HttpRequest, *, model, model_admin
+) -> list[TextContent]:
     """
     Get single model instance by id.
 
@@ -450,24 +445,12 @@ async def handle_get(model_name: str, arguments: dict[str, Any], request: HttpRe
             - include_inlines: bool (default False) - Include inline related objects
             - include_related: bool (default False) - Include reverse FK/M2M objects
         request: HttpRequest with user for permission checking.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing the object data.
     """
-    model, model_admin = get_model_admin(model_name)
-
-    if model is None:
-        return json_response({"error": f"Model '{model_name}' not found"})
-
-    # Check view permission
-    if not await async_check_permission(request, model_admin, "view"):
-        return json_response(
-            {
-                "error": f"Permission denied: cannot view {model_name}",
-                "code": "permission_denied",
-            }
-        )
-
     try:
         obj_id = arguments.get("id")
         include_inlines = arguments.get("include_inlines", False)
@@ -516,7 +499,11 @@ async def handle_get(model_name: str, arguments: dict[str, Any], request: HttpRe
         return json_response({"error": str(e)})
 
 
-async def handle_create(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
+@require_registered_model
+@require_permission("add")
+async def handle_create(
+    model_name: str, arguments: dict[str, Any], request: HttpRequest, *, model, model_admin
+) -> list[TextContent]:
     """
     Create new model instance with form validation.
 
@@ -528,26 +515,14 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
         arguments: Dictionary containing:
             - data: dict of field:value pairs for the new instance
         request: HttpRequest with user for permission checking and logging.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing:
         - On success: success, id, object
         - On validation error: error, code, validation_errors
     """
-    model, model_admin = get_model_admin(model_name)
-
-    if model is None:
-        return json_response({"error": f"Model '{model_name}' not found"})
-
-    # Check add permission
-    if not await async_check_permission(request, model_admin, "add"):
-        return json_response(
-            {
-                "error": f"Permission denied: cannot add {model_name}",
-                "code": "permission_denied",
-            }
-        )
-
     try:
         data = arguments.get("data", {})
         user = getattr(request, "user", None)
@@ -611,7 +586,11 @@ async def handle_create(model_name: str, arguments: dict[str, Any], request: Htt
         return json_response({"error": str(e)})
 
 
-async def handle_update(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
+@require_registered_model
+@require_permission("change")
+async def handle_update(
+    model_name: str, arguments: dict[str, Any], request: HttpRequest, *, model, model_admin
+) -> list[TextContent]:
     """
     Update model instance with form validation.
 
@@ -625,26 +604,14 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
             - data: dict of field:value pairs to update
             - inlines: optional dict for inline updates
         request: HttpRequest with user for permission checking and logging.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing:
         - On success: success, object, (optional) inlines
         - On validation error: error, code, validation_errors
     """
-    model, model_admin = get_model_admin(model_name)
-
-    if model is None:
-        return json_response({"error": f"Model '{model_name}' not found"})
-
-    # Check change permission
-    if not await async_check_permission(request, model_admin, "change"):
-        return json_response(
-            {
-                "error": f"Permission denied: cannot change {model_name}",
-                "code": "permission_denied",
-            }
-        )
-
     try:
         obj_id = arguments.get("id")
         data = arguments.get("data", {})
@@ -750,7 +717,11 @@ async def handle_update(model_name: str, arguments: dict[str, Any], request: Htt
         return json_response({"error": str(e)})
 
 
-async def handle_delete(model_name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:
+@require_registered_model
+@require_permission("delete")
+async def handle_delete(
+    model_name: str, arguments: dict[str, Any], request: HttpRequest, *, model, model_admin
+) -> list[TextContent]:
     """
     Delete model instance.
 
@@ -759,24 +730,12 @@ async def handle_delete(model_name: str, arguments: dict[str, Any], request: Htt
         arguments: Dictionary containing:
             - id: int or str (primary key) - Required
         request: HttpRequest with user for permission checking and logging.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing success and message.
     """
-    model, model_admin = get_model_admin(model_name)
-
-    if model is None:
-        return json_response({"error": f"Model '{model_name}' not found"})
-
-    # Check delete permission
-    if not await async_check_permission(request, model_admin, "delete"):
-        return json_response(
-            {
-                "error": f"Permission denied: cannot delete {model_name}",
-                "code": "permission_denied",
-            }
-        )
-
     try:
         obj_id = arguments.get("id")
 

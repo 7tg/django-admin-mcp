@@ -12,18 +12,22 @@ from django.db.models import Q
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
-    async_check_permission,
-    get_model_admin,
     json_response,
     serialize_instance,
 )
+from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.protocol.types import TextContent
 
 
+@require_registered_model
+@require_permission("view")
 async def handle_related(
     model_name: str,
     arguments: dict[str, Any],
     request: HttpRequest,
+    *,
+    model,
+    model_admin,
 ) -> list[TextContent]:
     """
     Fetch related objects for a model instance.
@@ -39,6 +43,8 @@ async def handle_related(
             - limit: int (default 100, max items for many relations)
             - offset: int (default 0, pagination offset)
         request: HttpRequest with user set for permission checking.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing:
@@ -47,20 +53,6 @@ async def handle_related(
         - For simple values: relation, type, value
         - For errors: error message
     """
-    model, model_admin = get_model_admin(model_name)
-
-    if model is None:
-        return json_response({"error": f"Model '{model_name}' not found"})
-
-    # Check view permission
-    if not await async_check_permission(request, model_admin, "view"):
-        return json_response(
-            {
-                "error": f"Permission denied: cannot view {model_name}",
-                "code": "permission_denied",
-            }
-        )
-
     obj_id = arguments.get("id")
     relation = arguments.get("relation")
     limit = arguments.get("limit", 100)
@@ -123,10 +115,15 @@ async def handle_related(
     return json_response(result)
 
 
+@require_registered_model
+@require_permission("view")
 async def handle_history(
     model_name: str,
     arguments: dict[str, Any],
     request: HttpRequest,
+    *,
+    model,
+    model_admin,
 ) -> list[TextContent]:
     """
     Get change history for a model instance from Django's LogEntry.
@@ -139,6 +136,8 @@ async def handle_history(
             - id: int or str (primary key of the instance)
             - limit: int (default 50, max history entries to return)
         request: HttpRequest with user set for permission checking.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing:
@@ -149,20 +148,6 @@ async def handle_history(
         - history: list of history entries with action, time, user, etc.
         - For errors: error message
     """
-    model, model_admin = get_model_admin(model_name)
-
-    if model is None:
-        return json_response({"error": f"Model '{model_name}' not found"})
-
-    # Check view permission
-    if not await async_check_permission(request, model_admin, "view"):
-        return json_response(
-            {
-                "error": f"Permission denied: cannot view {model_name}",
-                "code": "permission_denied",
-            }
-        )
-
     obj_id = arguments.get("id")
     limit = arguments.get("limit", 50)
 
@@ -227,10 +212,15 @@ async def handle_history(
     return json_response(result)
 
 
+@require_registered_model
+@require_permission("view")
 async def handle_autocomplete(
     model_name: str,
     arguments: dict[str, Any],
     request: HttpRequest,
+    *,
+    model,
+    model_admin,
 ) -> list[TextContent]:
     """
     Search for autocomplete suggestions.
@@ -245,6 +235,8 @@ async def handle_autocomplete(
             - term: str (search term to match)
             - limit: int (default 10, max suggestions to return)
         request: HttpRequest with user set for permission checking.
+        model: Resolved Django model class (injected by decorator).
+        model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing:
@@ -254,20 +246,6 @@ async def handle_autocomplete(
         - results: list of {id, text} objects for autocomplete
         - For errors: error message
     """
-    model, model_admin = get_model_admin(model_name)
-
-    if model is None:
-        return json_response({"error": f"Model '{model_name}' not found"})
-
-    # Check view permission
-    if not await async_check_permission(request, model_admin, "view"):
-        return json_response(
-            {
-                "error": f"Permission denied: cannot view {model_name}",
-                "code": "permission_denied",
-            }
-        )
-
     term = arguments.get("term", "")
     limit = arguments.get("limit", 10)
 

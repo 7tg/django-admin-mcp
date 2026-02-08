@@ -14,7 +14,7 @@ def require_registered_model(fn):
     async def wrapper(model_name, arguments, request):
         model, model_admin = get_model_admin(model_name)
         if model is None:
-            return json_response({"error": f"Model {model_name} not registered"})
+            return json_response({"error": f"Model '{model_name}' not found"})
         return await fn(model_name, arguments, request, model=model, model_admin=model_admin)
 
     return wrapper

@@ -61,10 +61,10 @@ class TestRequireRegisteredModel:
 
     @pytest.mark.asyncio
     async def test_returns_error_for_unregistered_model(self):
-        """Decorator returns a JSON error when model is not registered."""
+        """Decorator returns a JSON error when model is not found."""
         result = await dummy_handler("nonexistent_model", {}, create_mock_request())
         parsed = json.loads(result[0].text)
-        assert parsed == {"error": "Model nonexistent_model not registered"}
+        assert parsed == {"error": "Model 'nonexistent_model' not found"}
 
     @pytest.mark.asyncio
     async def test_injects_model_and_model_admin_for_registered_model(self):
@@ -134,4 +134,4 @@ class TestRequirePermission:
         # Unregistered model - should get model error, not permission error
         result = await view_handler("nonexistent", {}, request)
         parsed = json.loads(result[0].text)
-        assert "not registered" in parsed["error"]
+        assert "not found" in parsed["error"]

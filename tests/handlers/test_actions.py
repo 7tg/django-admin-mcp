@@ -89,7 +89,7 @@ class TestHandleActions:
         result = await handle_actions("nonexistent", {}, request)
         parsed = json.loads(result[0].text)
         assert "error" in parsed
-        assert "not registered" in parsed["error"]
+        assert "not found" in parsed["error"]
 
     @pytest.mark.asyncio
     async def test_permission_denied_for_anonymous_user(self):
@@ -206,7 +206,7 @@ class TestHandleAction:
         )
         parsed = json.loads(result[0].text)
         assert "error" in parsed
-        assert "not registered" in parsed["error"]
+        assert "not found" in parsed["error"]
 
     @pytest.mark.asyncio
     async def test_permission_denied_for_anonymous_user(self):
@@ -501,7 +501,7 @@ class TestHandleBulk:
         )
         parsed = json.loads(result[0].text)
         assert "error" in parsed
-        assert "not registered" in parsed["error"]
+        assert "not found" in parsed["error"]
 
     @pytest.mark.asyncio
     async def test_permission_denied_for_anonymous_user(self):
