@@ -8,7 +8,6 @@ This module provides handlers for model metadata and discovery operations:
 
 from typing import Any
 
-from django.contrib.admin.sites import site
 from django.db import models
 from django.http import HttpRequest
 
@@ -229,24 +228,20 @@ async def handle_find_models(
             - app_label, tools_exposed
     """
     try:
+        from django_admin_mcp.mixin import MCPAdminMixin  # noqa: PLC0415
+
         query = arguments.get("query", "")
 
-        # Collect candidate models first (sync operation)
+        # Collect candidate models from MCPAdminMixin registry
         candidates = []
-        for model, model_admin in site._registry.items():
-            model_name_lower = model._meta.model_name or ""
+        for model_name_lower, info in MCPAdminMixin._registered_models.items():
+            model = info["model"]
+            model_admin = info.get("admin")
             verbose_name = str(model._meta.verbose_name)
             verbose_name_plural = str(model._meta.verbose_name_plural)
 
             # Filter by query if provided
             if not _model_matches_query(query, model_name_lower, verbose_name):
-                continue
-
-            # Check if model has tools exposed
-            has_tools_exposed = getattr(model_admin, "mcp_expose", False)
-
-            # Only include exposed models
-            if not has_tools_exposed:
                 continue
 
             candidates.append(
@@ -256,7 +251,7 @@ async def handle_find_models(
                     "verbose_name": verbose_name,
                     "verbose_name_plural": verbose_name_plural,
                     "app_label": model._meta.app_label,
-                    "tools_exposed": has_tools_exposed,
+                    "tools_exposed": True,
                 }
             )
 

@@ -58,8 +58,8 @@ def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | N
     """
     Find ModelAdmin by model name.
 
-    First checks MCPAdminMixin._registered_models (for runtime registrations),
-    then falls back to admin.site._registry (for @admin.register() decorated classes).
+    Looks up the model in MCPAdminMixin._registered_models (populated at
+    runtime when MCPAdminMixin-based admins are instantiated).
 
     Args:
         model_name: The lowercase model name to search for.
@@ -74,11 +74,6 @@ def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | N
     if model_name in MCPAdminMixin._registered_models:
         info = MCPAdminMixin._registered_models[model_name]
         return info["model"], info.get("admin")
-
-    # Fall back to Django admin site registry
-    for model, model_admin in site._registry.items():
-        if model._meta.model_name == model_name:
-            return model, model_admin
 
     return None, None
 
@@ -153,21 +148,18 @@ async def async_check_permission(request: HttpRequest, model_admin: Any, action:
 
 def get_exposed_models() -> list[tuple[str, Any]]:
     """
-    Get all models with mcp_expose=True attribute on their ModelAdmin.
-
-    Searches through admin.site._registry for ModelAdmin classes
-    that have the mcp_expose attribute set to True.
+    Get all models registered via MCPAdminMixin that have mcp_expose=True.
 
     Returns:
         List of (model_name, model_admin) tuples for exposed models.
     """
-    exposed: list[tuple[str, Any]] = []
-    for model, model_admin in site._registry.items():
-        if getattr(model_admin, "mcp_expose", False):
-            model_name = model._meta.model_name
-            if model_name is not None:
-                exposed.append((model_name, model_admin))
-    return exposed
+    from django_admin_mcp.mixin import MCPAdminMixin  # noqa: PLC0415
+
+    return [
+        (name, info.get("admin"))
+        for name, info in MCPAdminMixin._registered_models.items()
+        if getattr(info.get("admin"), "mcp_expose", False)
+    ]
 
 
 def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
