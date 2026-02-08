@@ -7,7 +7,7 @@ Provides HTTP interface for MCP protocol with token-based authentication.
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -100,6 +100,7 @@ def authenticate_token(request):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
+@method_decorator(transaction.non_atomic_requests, name="dispatch")
 class MCPHTTPView(View):
     """
     HTTP view for MCP protocol.
@@ -190,6 +191,7 @@ def mcp_health(request):
     return JsonResponse({"status": "ok", "service": "django-admin-mcp"})
 
 
+@transaction.non_atomic_requests
 async def mcp_endpoint(request):
     """Main MCP HTTP endpoint."""
     if request.method != "POST":

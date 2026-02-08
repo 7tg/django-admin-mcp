@@ -8,8 +8,10 @@ from unittest.mock import AsyncMock, patch
 import django
 import pytest
 from asgiref.sync import sync_to_async
+from django.db import DEFAULT_DB_ALIAS
 from django.test import AsyncClient
 
+from django_admin_mcp.views import MCPHTTPView, mcp_endpoint
 from tests.factories import MCPTokenFactory
 
 # AsyncClient headers= parameter requires Django 4.2+
@@ -152,3 +154,18 @@ class TestFunctionBasedViewEdgeCases:
         # Response is now JSON-RPC wrapped
         assert "result" in data
         assert "content" in data["result"]
+
+
+class TestAtomicRequestsCompatibility:
+    """Test that MCP views are marked as non-atomic for ATOMIC_REQUESTS compatibility."""
+
+    def test_mcp_endpoint_has_non_atomic_requests_attribute(self):
+        """Test mcp_endpoint is decorated with non_atomic_requests."""
+        non_atomic = getattr(mcp_endpoint, "_non_atomic_requests", set())
+        assert DEFAULT_DB_ALIAS in non_atomic
+
+    def test_mcp_http_view_has_non_atomic_requests_attribute(self):
+        """Test MCPHTTPView dispatch is decorated with non_atomic_requests."""
+        view_func = MCPHTTPView.as_view()
+        non_atomic = getattr(view_func, "_non_atomic_requests", set())
+        assert DEFAULT_DB_ALIAS in non_atomic
