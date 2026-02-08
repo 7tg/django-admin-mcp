@@ -4,6 +4,7 @@ Tests for edge cases and error paths to achieve 100% coverage.
 
 import asyncio
 import json
+from unittest.mock import patch
 
 import pytest
 from django.contrib import admin
@@ -587,3 +588,104 @@ class TestEdgeCasesAndErrors:
         )
         response = json.loads(result[0].text)
         assert len(response["results"]) >= 2
+
+    async def test_autocomplete_exception_returns_safe_error(self):
+        """Test that autocomplete exception handler returns sanitized error."""
+        # Patch model.objects.all() to raise inside the sync function
+        with patch.object(
+            Author.objects,
+            "all",
+            side_effect=RuntimeError("internal db details"),
+        ):
+            result = await MCPAdminMixin.handle_tool_call("autocomplete_author", {"term": "test"})
+            response = json.loads(result[0].text)
+            assert response["error"] == "An internal error occurred"
+            assert "internal db details" not in response["error"]
+
+    async def test_describe_exception_returns_safe_error(self):
+        """Test that describe exception handler returns sanitized error."""
+        original_get_fields = Author._meta.get_fields
+
+        def broken_get_fields(**kwargs):
+            raise RuntimeError("schema leak")
+
+        Author._meta.get_fields = broken_get_fields
+        try:
+            result = await MCPAdminMixin.handle_tool_call("describe_author", {})
+            response = json.loads(result[0].text)
+            assert response["error"] == "An internal error occurred"
+            assert "schema leak" not in response["error"]
+        finally:
+            Author._meta.get_fields = original_get_fields
+
+    async def test_find_models_exception_returns_safe_error(self):
+        """Test that find_models exception handler returns sanitized error."""
+        with patch(
+            "django_admin_mcp.handlers.meta.async_check_permission",
+            side_effect=RuntimeError("permission system failure"),
+        ):
+            result = await MCPAdminMixin.handle_tool_call("find_models", {})
+            response = json.loads(result[0].text)
+            assert response["error"] == "An internal error occurred"
+            assert "permission system failure" not in response["error"]
+
+    async def test_bulk_create_exception_returns_safe_error(self):
+        """Test that bulk create exception handler returns sanitized error."""
+        # Patch transaction.atomic to raise after form.save()
+        with patch(
+            "django_admin_mcp.handlers.actions.transaction.atomic",
+            side_effect=RuntimeError("db connection lost"),
+        ):
+            result = await MCPAdminMixin.handle_tool_call(
+                "bulk_author",
+                {
+                    "operation": "create",
+                    "items": [{"name": "Test", "email": "bulkcreate@test.com"}],
+                },
+            )
+            response = json.loads(result[0].text)
+            assert response["error_count"] >= 1
+            error_msg = response["results"]["errors"][0]["error"]
+            assert "db connection lost" not in error_msg
+
+    async def test_bulk_update_exception_returns_safe_error(self):
+        """Test that bulk update exception handler returns sanitized error."""
+        author = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: Author.objects.create(name="BulkUpErr", email="bulkuperr@test.com"),
+        )
+        with patch(
+            "django_admin_mcp.handlers.actions.get_admin_form_class",
+            side_effect=RuntimeError("unexpected form error"),
+        ):
+            result = await MCPAdminMixin.handle_tool_call(
+                "bulk_author",
+                {
+                    "operation": "update",
+                    "items": [{"id": author.id, "data": {"name": "Updated"}}],
+                },
+            )
+            response = json.loads(result[0].text)
+            assert response["error_count"] >= 1
+            error_msg = response["results"]["errors"][0]["error"]
+            assert "unexpected form error" not in error_msg
+
+    async def test_bulk_delete_exception_returns_safe_error(self):
+        """Test that bulk delete exception handler returns sanitized error."""
+        author = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: Author.objects.create(name="BulkDelErr", email="bulkdelerr@test.com"),
+        )
+        with patch.object(
+            Author,
+            "delete",
+            side_effect=RuntimeError("cascade failure details"),
+        ):
+            result = await MCPAdminMixin.handle_tool_call(
+                "bulk_author",
+                {"operation": "delete", "items": [author.id]},
+            )
+            response = json.loads(result[0].text)
+            assert response["error_count"] >= 1
+            error_msg = response["results"]["errors"][0]["error"]
+            assert "cascade failure" not in error_msg

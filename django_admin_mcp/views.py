@@ -15,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
+from django_admin_mcp.handlers.base import sanitize_pydantic_errors
 from django_admin_mcp.models import MCPToken
 from django_admin_mcp.protocol import (
     InitializeResponse,
@@ -127,14 +128,18 @@ class MCPHTTPView(View):
             try:
                 _ = ToolsListRequest.model_validate_json(request.body)
             except ValidationError as e:
-                return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
+                return JsonResponse(
+                    {"error": "Invalid request", "details": sanitize_pydantic_errors(e.errors())}, status=400
+                )
             return await self.handle_list_tools(request)
         elif method == "tools/call":
             # Validate with ToolsCallRequest using raw body
             try:
                 request_obj = ToolsCallRequest.model_validate_json(request.body)
             except ValidationError as e:
-                return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
+                return JsonResponse(
+                    {"error": "Invalid request", "details": sanitize_pydantic_errors(e.errors())}, status=400
+                )
             return await self.handle_call_tool(request, request_obj, token=token)
         else:
             return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
@@ -224,7 +229,9 @@ async def mcp_endpoint(request):
         try:
             _ = ToolsListRequest.model_validate_json(request.body)
         except ValidationError as e:
-            return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Invalid request", "details": sanitize_pydantic_errors(e.errors())}, status=400
+            )
         return await handle_list_tools_request(request, body.id)
     elif method == "tools/call":
         # Extract params from JSON-RPC structure
@@ -234,7 +241,9 @@ async def mcp_endpoint(request):
         try:
             request_obj = ToolsCallRequest.model_validate(call_data)
         except ValidationError as e:
-            return JsonResponse({"error": "Invalid request", "details": e.errors()}, status=400)
+            return JsonResponse(
+                {"error": "Invalid request", "details": sanitize_pydantic_errors(e.errors())}, status=400
+            )
         return await handle_call_tool_request(request, request_obj, token=token, request_id=body.id)
     else:
         return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
@@ -283,7 +292,7 @@ async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token
                 error=JsonRpcError(
                     code=-32000,
                     message="Invalid JSON in tool result",
-                    data={"validation_errors": e.errors()},
+                    data={"validation_errors": sanitize_pydantic_errors(e.errors())},
                 ),
             )
             return JsonResponse(error_response.model_dump(), status=500)

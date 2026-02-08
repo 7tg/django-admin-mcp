@@ -3,11 +3,15 @@ Tests for django_admin_mcp.handlers.base utilities.
 """
 
 import json
+import logging
 import uuid
 from datetime import datetime
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, User
+from django.core.exceptions import FieldError
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, OperationalError
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers import (
@@ -19,7 +23,7 @@ from django_admin_mcp.handlers import (
     json_response,
     serialize_instance,
 )
-from django_admin_mcp.handlers.base import MCPRequest
+from django_admin_mcp.handlers.base import MCPRequest, safe_error_message, sanitize_pydantic_errors
 from django_admin_mcp.protocol.types import TextContent
 from tests.models import Article, Author
 
@@ -212,3 +216,93 @@ class TestGetModelName:
         """Test that get_model_name returns lowercase model name."""
         result = get_model_name(Author)
         assert result == "author"
+
+
+class TestSafeErrorMessage:
+    """Tests for safe_error_message function."""
+
+    def test_integrity_error_returns_generic_message(self):
+        exc = IntegrityError('duplicate key value violates unique constraint "auth_user_username_key"')
+        result = safe_error_message(exc)
+        assert result == "Data integrity error: a constraint was violated"
+        assert "auth_user" not in result
+        assert "username" not in result
+
+    def test_field_error_returns_generic_message(self):
+        exc = FieldError("Cannot resolve keyword 'foo' into field. Choices are: id, name, email")
+        result = safe_error_message(exc)
+        assert result == "Invalid field in request"
+        assert "foo" not in result
+        assert "Choices" not in result
+
+    def test_operational_error_returns_generic_message(self):
+        exc = OperationalError(
+            'could not connect to server: Connection refused\n\tIs the server running on host "10.0.0.1"'
+        )
+        result = safe_error_message(exc)
+        assert result == "A database error occurred"
+        assert "10.0.0.1" not in result
+
+    def test_validation_error_returns_generic_message(self):
+        exc = DjangoValidationError("This field is required.")
+        result = safe_error_message(exc)
+        assert result == "Validation error"
+
+    def test_value_error_returns_generic_message(self):
+        exc = ValueError("invalid literal for int() with base 10: 'abc'")
+        result = safe_error_message(exc)
+        assert result == "Invalid input data"
+        assert "int()" not in result
+
+    def test_type_error_returns_generic_message(self):
+        exc = TypeError("expected str, got NoneType")
+        result = safe_error_message(exc)
+        assert result == "Invalid input data"
+        assert "NoneType" not in result
+
+    def test_unknown_exception_returns_generic_message(self):
+        exc = RuntimeError("something unexpected at /app/secret/path.py:42")
+        result = safe_error_message(exc)
+        assert result == "An internal error occurred"
+        assert "/app/secret" not in result
+
+    def test_logs_real_exception(self, caplog):
+        with caplog.at_level(logging.ERROR, logger="django_admin_mcp"):
+            exc = RuntimeError("detailed internal info")
+            safe_error_message(exc)
+
+        assert "detailed internal info" in caplog.text
+
+
+class TestSanitizePydanticErrors:
+    """Tests for sanitize_pydantic_errors function."""
+
+    def test_strips_input_and_ctx_fields(self):
+        raw_errors = [
+            {
+                "type": "string_type",
+                "loc": ("body", "name"),
+                "msg": "Input should be a valid string",
+                "input": {"secret": "value"},
+                "ctx": {"error": "internal detail"},
+                "url": "https://errors.pydantic.dev/...",
+            }
+        ]
+        result = sanitize_pydantic_errors(raw_errors)
+        assert len(result) == 1
+        assert result[0] == {
+            "field": "body.name",
+            "message": "Input should be a valid string",
+        }
+        assert "input" not in str(result)
+        assert "ctx" not in str(result)
+        assert "url" not in str(result)
+
+    def test_handles_empty_errors(self):
+        result = sanitize_pydantic_errors([])
+        assert result == []
+
+    def test_handles_missing_fields(self):
+        raw_errors = [{"msg": "some error"}]
+        result = sanitize_pydantic_errors(raw_errors)
+        assert result == [{"field": "", "message": "some error"}]

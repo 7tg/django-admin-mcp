@@ -18,6 +18,7 @@ from django_admin_mcp.handlers.base import (
     get_admin_form_class,
     json_response,
     normalize_fk_fields,
+    safe_error_message,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.protocol.types import TextContent
@@ -127,7 +128,7 @@ async def handle_actions(
             }
         )
     except (LookupError, AttributeError, TypeError) as e:
-        return json_response({"error": str(e)})
+        return json_response({"error": safe_error_message(e)})
 
 
 @require_registered_model
@@ -204,7 +205,7 @@ async def handle_action(
         result = await execute_action()
         return json_response(result)
     except Exception as e:
-        return json_response({"error": str(e)})
+        return json_response({"error": safe_error_message(e)})
 
 
 def _get_bulk_user(request):
@@ -268,7 +269,7 @@ async def handle_bulk_create(
                     _log_action(user=user, obj=obj, action_flag=ADDITION, change_message="Bulk created via MCP")
                 results["success"].append({"index": i, "id": obj.pk, "created": True})
             except Exception as e:
-                results["errors"].append({"index": i, "error": str(e)})
+                results["errors"].append({"index": i, "error": safe_error_message(e)})
 
         return items, results
 
@@ -341,7 +342,7 @@ async def handle_bulk_update(
             except model.DoesNotExist:
                 results["errors"].append({"index": i, "error": f"Object with id {obj_id} not found"})
             except Exception as e:
-                results["errors"].append({"index": i, "error": str(e)})
+                results["errors"].append({"index": i, "error": safe_error_message(e)})
 
         return items, results
 
@@ -380,7 +381,7 @@ async def handle_bulk_delete(
             except model.DoesNotExist:
                 results["errors"].append({"index": i, "error": f"Object with id {obj_id} not found"})
             except Exception as e:
-                results["errors"].append({"index": i, "error": str(e)})
+                results["errors"].append({"index": i, "error": safe_error_message(e)})
 
         return items, results
 
