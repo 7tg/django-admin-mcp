@@ -11,6 +11,7 @@
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://docs.pydantic.dev)
 [![Typed: mypy](https://img.shields.io/badge/typed-mypy-blue.svg)](https://mypy-lang.org/)
+[![Django Packages](https://img.shields.io/badge/Django%20Packages-django--admin--mcp-8c3c26.svg)](https://djangopackages.org/packages/p/django-admin-mcp/)
 [![License](https://img.shields.io/pypi/l/django-admin-mcp.svg)](https://github.com/7tg/django-admin-mcp/blob/main/LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://7tg.github.io/django-admin-mcp/)
 
