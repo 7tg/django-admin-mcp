@@ -34,11 +34,12 @@ def _get_action_info(action) -> dict[str, Any]:
     Returns:
         Dictionary with 'name' and 'description' keys.
     """
+    action_str = str(action)
     if callable(action):
-        name = getattr(action, "__name__", str(action))
+        name = getattr(action, "__name__", action_str)
         description = getattr(action, "short_description", name.replace("_", " ").title())
-        return {"name": name, "description": str(description)}
-    return {"name": str(action), "description": str(action)}
+        return {"name": name, "description": description}
+    return {"name": action_str, "description": action_str}
 
 
 def _permission_error(operation: str, model_name: str) -> list[TextContent]:
