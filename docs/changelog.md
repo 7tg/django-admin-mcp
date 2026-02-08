@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- URL path duplication when mounting at custom path (e.g., `path("mcp/", ...)` produced `/mcp/mcp/` instead of `/mcp/`) ([#68](https://github.com/7tg/django-admin-mcp/issues/68))
+
 ### Added
 - Comprehensive MkDocs Material documentation
 - Getting started guides

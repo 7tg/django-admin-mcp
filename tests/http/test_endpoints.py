@@ -37,7 +37,7 @@ class TestHTTPInterface:
         """Test MCP endpoint rejects requests without token."""
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
         )
@@ -52,7 +52,7 @@ class TestHTTPInterface:
         """Test MCP endpoint rejects requests with invalid token."""
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
             headers={"Authorization": "Bearer invalid-token"},
@@ -71,7 +71,7 @@ class TestHTTPInterface:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
@@ -99,7 +99,7 @@ class TestHTTPInterface:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
@@ -119,7 +119,7 @@ class TestHTTPInterface:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/list"}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},

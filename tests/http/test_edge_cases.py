@@ -36,7 +36,7 @@ class TestEmptyToolResult:
 
             client = AsyncClient()
             response = await client.post(
-                "/api/mcp/",
+                "/api/",
                 data=json.dumps({"method": "tools/call", "params": {"name": "test_tool", "arguments": {}}}),
                 content_type="application/json",
                 headers={"Authorization": f"Bearer {token.plaintext_token}"},
@@ -59,7 +59,7 @@ class TestFunctionBasedViewEdgeCases:
         client = AsyncClient()
 
         # Try GET request
-        response = await client.get("/api/mcp/")
+        response = await client.get("/api/")
         assert response.status_code == 405
         data = json.loads(response.content)
         assert "error" in data
@@ -74,7 +74,7 @@ class TestFunctionBasedViewEdgeCases:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data="invalid json {",
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
@@ -94,7 +94,7 @@ class TestFunctionBasedViewEdgeCases:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "unknown/method"}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
@@ -114,7 +114,7 @@ class TestFunctionBasedViewEdgeCases:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps(
                 {
                     "method": "tools/call",
@@ -141,7 +141,7 @@ class TestFunctionBasedViewEdgeCases:
 
         client = AsyncClient()
         response = await client.post(
-            "/api/mcp/",
+            "/api/",
             data=json.dumps({"method": "tools/call", "params": {"name": "find_models", "arguments": {}}}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
