@@ -4,6 +4,7 @@ Tests for django_admin_mcp.handlers.crud CRUD operation handlers.
 
 import json
 import uuid
+from unittest.mock import patch
 
 import pytest
 from asgiref.sync import sync_to_async
@@ -870,6 +871,121 @@ class TestInlinePermissions:
                 username=f"user_inline_{uid}",
                 email=f"user_inline_{uid}@example.com",
                 password="user",
+            )
+            return create_mock_request(user)
+
+        return await create_user()
+
+
+class TestSaveModelIntegration:
+    """Tests that CRUD handlers call ModelAdmin.save_model() and delete_model()."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.django_db
+    async def test_create_calls_save_model(self):
+        """Test that handle_create calls ModelAdmin.save_model() with change=False."""
+        uid = unique_id()
+        request = await self._create_superuser_request(uid)
+        author_admin = self._get_author_admin()
+        original_save_model = author_admin.save_model
+
+        with patch.object(author_admin, "save_model", wraps=original_save_model) as mock_save:
+            result = await handle_create(
+                "author",
+                {"data": {"name": f"SaveModel Author {uid}", "email": f"savemodel_{uid}@example.com"}},
+                request,
+            )
+
+            data = json.loads(result[0].text)
+            assert data["success"] is True
+            mock_save.assert_called_once()
+            # Verify change=False for create
+            # save_model(request, obj, form, change) - but `self` is consumed by the bound method
+            _, call_kwargs = mock_save.call_args
+            # Arguments may be positional or keyword; check both
+            if "change" in call_kwargs:
+                assert call_kwargs["change"] is False
+            else:
+                # Positional args: (request, obj, form, change)
+                assert mock_save.call_args[0][-1] is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.django_db
+    async def test_update_calls_save_model(self):
+        """Test that handle_update calls ModelAdmin.save_model() with change=True."""
+        uid = unique_id()
+        author = await self._create_author(uid)
+        request = await self._create_superuser_request(uid)
+        author_admin = self._get_author_admin()
+        original_save_model = author_admin.save_model
+
+        with patch.object(author_admin, "save_model", wraps=original_save_model) as mock_save:
+            result = await handle_update(
+                "author",
+                {"id": author.pk, "data": {"name": f"Updated SaveModel Author {uid}"}},
+                request,
+            )
+
+            data = json.loads(result[0].text)
+            assert data["success"] is True
+            mock_save.assert_called_once()
+            # Verify change=True for update
+            _, call_kwargs = mock_save.call_args
+            if "change" in call_kwargs:
+                assert call_kwargs["change"] is True
+            else:
+                assert mock_save.call_args[0][-1] is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.django_db
+    async def test_delete_calls_delete_model(self):
+        """Test that handle_delete calls ModelAdmin.delete_model()."""
+        uid = unique_id()
+        author = await self._create_author(uid)
+        author_pk = author.pk
+        request = await self._create_superuser_request(uid)
+        author_admin = self._get_author_admin()
+        original_delete_model = author_admin.delete_model
+
+        with patch.object(author_admin, "delete_model", wraps=original_delete_model) as mock_delete:
+            result = await handle_delete("author", {"id": author_pk}, request)
+
+            data = json.loads(result[0].text)
+            assert data["success"] is True
+            mock_delete.assert_called_once()
+
+        # Verify object is deleted
+        @sync_to_async
+        def check_deleted():
+            return not Author.objects.filter(pk=author_pk).exists()
+
+        is_deleted = await check_deleted()
+        assert is_deleted
+
+    def _get_author_admin(self):
+        """Get the registered AuthorAdmin instance."""
+        from django.contrib import admin  # noqa: PLC0415
+
+        return admin.site._registry[Author]
+
+    async def _create_author(self, uid):
+        """Helper to create an author."""
+
+        @sync_to_async
+        def create():
+            return Author.objects.create(name=f"Test Author {uid}", email=f"test_sm_{uid}@example.com")
+
+        return await create()
+
+    async def _create_superuser_request(self, uid):
+        """Helper to create a request with superuser."""
+
+        @sync_to_async
+        def create_user():
+            user = User.objects.create_superuser(
+                username=f"admin_sm_{uid}",
+                email=f"admin_sm_{uid}@example.com",
+                password="admin",
             )
             return create_mock_request(user)
 
