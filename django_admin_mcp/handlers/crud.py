@@ -551,7 +551,13 @@ async def handle_create(
             # Wrap save and logging in transaction for atomicity
             with transaction.atomic():
                 # Save the form to create the object
-                obj = form.save()
+                # Use ModelAdmin.save_model() when available for the standard Django admin pipeline
+                if model_admin is not None:
+                    obj = form.save(commit=False)
+                    model_admin.save_model(request, obj, form, change=False)
+                    form.save_m2m()
+                else:
+                    obj = form.save()
 
                 # Log the action - use Pydantic for serialization (truncated for log size)
                 data_json = _serialize_data_for_log(data)
@@ -670,7 +676,13 @@ async def handle_update(
             # Wrap save, inline updates, and logging in transaction for atomicity
             with transaction.atomic():
                 # Save the form to update the object
-                obj = form.save()
+                # Use ModelAdmin.save_model() when available for the standard Django admin pipeline
+                if model_admin is not None:
+                    obj = form.save(commit=False)
+                    model_admin.save_model(request, obj, form, change=True)
+                    form.save_m2m()
+                else:
+                    obj = form.save()
 
                 # Handle inlines if provided
                 inlines_result = {}
@@ -765,7 +777,11 @@ async def handle_delete(
                     change_message="Deleted via MCP",
                 )
 
-                obj.delete()
+                # Use ModelAdmin.delete_model() when available for the standard Django admin pipeline
+                if model_admin is not None:
+                    model_admin.delete_model(request, obj)
+                else:
+                    obj.delete()
             return obj_repr
 
         await delete_object()
