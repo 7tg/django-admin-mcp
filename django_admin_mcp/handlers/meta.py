@@ -71,8 +71,9 @@ def _get_field_metadata(field) -> dict[str, Any]:
         metadata["related_app"] = field.related_model._meta.app_label
 
     if hasattr(field, "remote_field") and field.remote_field:
-        if hasattr(field.remote_field, "on_delete"):
-            metadata["on_delete"] = field.remote_field.on_delete.__name__
+        on_delete = getattr(field.remote_field, "on_delete", None)
+        if on_delete is not None:
+            metadata["on_delete"] = on_delete.__name__
 
     # Primary key
     if getattr(field, "primary_key", False):
