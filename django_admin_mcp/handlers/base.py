@@ -242,8 +242,11 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
     serialized = {}
     for key, value in obj_dict.items():
         if isinstance(value, models.Model):
-            # Related object - convert to string
-            serialized[key] = str(value)
+            # Related object - convert to PK
+            serialized[key] = value.pk
+        elif isinstance(value, list | models.QuerySet):
+            # M2M fields - convert to list of PKs
+            serialized[key] = [item.pk if isinstance(item, models.Model) else item for item in value]
         else:
             serialized[key] = value
 
