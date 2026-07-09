@@ -66,7 +66,7 @@ Agent: [calls update_article with id=42, data={"published": true}]
 
 ## 📄 License
 
-GPL-3.0-or-later
+MIT
 
 ---
 

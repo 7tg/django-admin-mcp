@@ -30,7 +30,7 @@ setup(
         "pydantic>=2.0",
     ],
     python_requires=">=3.10",
-    license="GPL-3.0-or-later",
+    license="MIT",
     keywords=[
         "django",
         "admin",

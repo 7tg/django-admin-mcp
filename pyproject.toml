@@ -8,7 +8,7 @@ version = "0.3.1"
 description = "Django admin MCP integration - expose Django admin models to MCP clients"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "GPL-3.0-or-later"
+license = "MIT"
 authors = [
     {name = "Barbaros Goren", email = "gorenbarbaros@gmail.com"}
 ]
