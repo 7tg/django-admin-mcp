@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/7tg-django-admin-mcp-badge.png)](https://mseep.ai/app/7tg-django-admin-mcp)
+
 # django-admin-mcp
 
 [![Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/7tg/django-admin-mcp)
