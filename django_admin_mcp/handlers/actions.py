@@ -15,6 +15,7 @@ from pydantic import TypeAdapter
 from django_admin_mcp.handlers.base import (
     format_form_errors,
     get_admin_form_class,
+    get_admin_queryset,
     json_response,
     normalize_fk_fields,
     safe_error_message,
@@ -155,7 +156,8 @@ async def handle_action(
 
         @sync_to_async
         def execute_action():
-            queryset = model.objects.filter(pk__in=ids)
+            # Scope selected rows to the admin queryset (proxy filters, soft-delete, etc.)
+            queryset = get_admin_queryset(model, model_admin, request).filter(pk__in=ids)
             count = queryset.count()
 
             if count == 0:

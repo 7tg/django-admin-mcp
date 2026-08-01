@@ -1,8 +1,8 @@
 """
-Regression tests: MCP list/get must honor ModelAdmin.get_queryset().
+Regression tests: MCP list/get/action must honor ModelAdmin.get_queryset().
 
 Proxy admins that partition a shared table via get_queryset should expose the
-same row scope through list_* / get_* as Django admin changelists.
+same row scope through list_* / get_* / action_* as Django admin changelists.
 """
 
 import json
@@ -12,7 +12,7 @@ import pytest
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import AnonymousUser, User
 
-from django_admin_mcp.handlers import create_mock_request, handle_get, handle_list
+from django_admin_mcp.handlers import create_mock_request, handle_action, handle_get, handle_list
 from tests.models import CatalogItem, CatalogItemA
 
 
@@ -157,3 +157,45 @@ class TestAdminGetQueryset:
                 model_admin.mcp_use_admin_queryset = original
             else:
                 delattr(model_admin, "mcp_use_admin_queryset")
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestAdminActionGetQueryset:
+    """action_* must only operate on rows inside model_admin.get_queryset()."""
+
+    async def test_action_rejects_out_of_scope_pk(self):
+        """Knowing a PK outside the admin queryset must not allow acting on it."""
+        uid = unique_id()
+        item_b = await create_catalog_item(f"Item B {uid}", "B")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_action(
+            "catalogitema",
+            {"action": "delete_selected", "ids": [item_b.pk]},
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        assert "error" in data
+        assert "No objects found" in data["error"]
+        assert await sync_to_async(CatalogItem.objects.filter(pk=item_b.pk).exists)()
+
+    async def test_action_only_affects_in_scope_ids(self):
+        """Mixed IDs: only rows in the admin queryset are acted on."""
+        uid = unique_id()
+        item_a = await create_catalog_item(f"Item A {uid}", "A")
+        item_b = await create_catalog_item(f"Item B {uid}", "B")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_action(
+            "catalogitema",
+            {"action": "delete_selected", "ids": [item_a.pk, item_b.pk]},
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        assert data.get("success") is True
+        assert data["affected_count"] == 1
+        assert not await sync_to_async(CatalogItem.objects.filter(pk=item_a.pk).exists)()
+        assert await sync_to_async(CatalogItem.objects.filter(pk=item_b.pk).exists)()
