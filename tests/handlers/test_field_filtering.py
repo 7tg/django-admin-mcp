@@ -232,3 +232,24 @@ class TestFieldFiltering:
                 delattr(model_admin, "mcp_exclude_fields")
             else:
                 model_admin.mcp_exclude_fields = original_exclude
+
+    def test_auto_resolve_skips_mismatched_registered_model(self):
+        """Do not apply admin filters when registry model does not match the instance."""
+        from unittest.mock import MagicMock, patch  # noqa: PLC0415
+
+        author = Author.objects.create(name="Test Author", email="test@example.com", bio="Secret bio")
+        mismatched_admin = MagicMock()
+        mismatched_admin.mcp_fields = None
+        mismatched_admin.fields = None
+        mismatched_admin.mcp_exclude_fields = ["bio"]
+        mismatched_admin.exclude = None
+
+        with patch(
+            "django_admin_mcp.handlers.base.get_model_admin",
+            return_value=(Article, mismatched_admin),
+        ):
+            result = serialize_instance(author, None)
+
+        # Mismatch → no admin filtering; bio remains
+        assert "bio" in result
+        assert "name" in result
