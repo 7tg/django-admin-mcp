@@ -19,6 +19,7 @@ from django_admin_mcp.handlers.base import (
     check_inline_permission,
     format_form_errors,
     get_admin_form_class,
+    get_admin_queryset,
     json_response,
     normalize_fk_fields,
     safe_error_message,
@@ -390,7 +391,7 @@ async def handle_list(
 
         @sync_to_async
         def get_objects():
-            queryset = model.objects.all()
+            queryset = get_admin_queryset(model, model_admin, request)
 
             # Apply filters
             if filters:
@@ -416,7 +417,7 @@ async def handle_list(
 
             # Apply pagination
             queryset = queryset[offset : offset + limit]
-            return total_count, [serialize_instance(obj) for obj in queryset]
+            return total_count, [serialize_instance(obj, model_admin) for obj in queryset]
 
         total_count, results = await get_objects()
 
@@ -462,7 +463,7 @@ async def handle_get(
 
         @sync_to_async
         def get_object():
-            obj = model.objects.get(pk=obj_id)
+            obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
             result = serialize_instance(obj, model_admin)
 
             # Include inlines if requested

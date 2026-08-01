@@ -19,13 +19,12 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
     with django_db_blocker.unblock():
         # Deferred import: must wait for Django app registry to be ready
         from django_admin_mcp import MCPAdminMixin  # noqa: PLC0415
-        from tests.models import Article, Author  # noqa: PLC0415
+        from tests.models import Article, Author, CatalogItemA, CatalogItemB  # noqa: PLC0415
 
         # Clear any existing registrations
-        if Author in admin.site._registry:
-            admin.site.unregister(Author)
-        if Article in admin.site._registry:
-            admin.site.unregister(Article)
+        for model in (Author, Article, CatalogItemA, CatalogItemB):
+            if model in admin.site._registry:
+                admin.site.unregister(model)
 
         # Define inline for Author -> Articles
         class ArticleInline(admin.TabularInline):
@@ -51,10 +50,29 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
             ordering = ["-published_date", "title"]
             mcp_expose = True  # Expose MCP tools
 
+        @admin.register(CatalogItemA)
+        class CatalogItemAAdmin(MCPAdminMixin, admin.ModelAdmin):
+            """Proxy admin scoped to channel A via get_queryset."""
+
+            mcp_expose = True
+            search_fields = ["title"]
+
+            def get_queryset(self, request):
+                return super().get_queryset(request).filter(channel="A")
+
+        @admin.register(CatalogItemB)
+        class CatalogItemBAdmin(MCPAdminMixin, admin.ModelAdmin):
+            """Proxy admin scoped to channel B via get_queryset."""
+
+            mcp_expose = True
+            search_fields = ["title"]
+
+            def get_queryset(self, request):
+                return super().get_queryset(request).filter(channel="B")
+
         yield
 
         # Cleanup (optional, as this is session-scoped)
-        if Author in admin.site._registry:
-            admin.site.unregister(Author)
-        if Article in admin.site._registry:
-            admin.site.unregister(Article)
+        for model in (Author, Article, CatalogItemA, CatalogItemB):
+            if model in admin.site._registry:
+                admin.site.unregister(model)
