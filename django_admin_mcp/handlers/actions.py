@@ -165,13 +165,17 @@ async def handle_action(
 
             # Handle built-in delete_selected directly (it renders HTML in Django)
             if action_name == "delete_selected":
-                deleted_count = queryset.count()
+                if model_admin is not None and not model_admin.has_delete_permission(request):
+                    return {
+                        "error": f"Permission denied: cannot delete {model_name}",
+                        "code": "permission_denied",
+                    }
                 queryset.delete()
                 return {
                     "success": True,
                     "action": action_name,
-                    "affected_count": deleted_count,
-                    "message": f"Deleted {deleted_count} {model._meta.verbose_name_plural}",
+                    "affected_count": count,
+                    "message": f"Deleted {count} {model._meta.verbose_name_plural}",
                 }
 
             # Look up custom action via Django's get_actions
