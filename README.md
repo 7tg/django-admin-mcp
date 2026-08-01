@@ -238,7 +238,7 @@ When an admin action returns a Django `HttpResponse` / `StreamingHttpResponse` (
   "result": {
     "type": "file",
     "encoding": "utf-8",
-    "content_type": "text/csv",
+    "content_type": "text/csv; charset=utf-8",
     "filename": "export.csv",
     "content_disposition": "attachment; filename=\"export.csv\"",
     "size": 10,

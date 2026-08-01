@@ -82,28 +82,34 @@ def _http_response_body(response: HttpResponse | StreamingHttpResponse) -> bytes
     """Read the full body from an HttpResponse or StreamingHttpResponse.
 
     Raises ActionFileTooLargeError if the body exceeds MCP_ACTION_MAX_FILE_BYTES.
+    Closes streaming responses after buffering so file-backed iterators release FDs.
     """
     max_bytes = _max_action_file_bytes()
     streaming_content = getattr(response, "streaming_content", None)
-    if streaming_content is not None:
-        chunks: list[bytes] = []
-        total = 0
-        for chunk in streaming_content:
-            data = _ensure_bytes(chunk)
-            total += len(data)
-            if total > max_bytes:
-                raise ActionFileTooLargeError(
-                    f"Action file response exceeds MCP_ACTION_MAX_FILE_BYTES ({max_bytes} bytes)"
-                )
-            chunks.append(data)
-        return b"".join(chunks)
+    try:
+        if streaming_content is not None:
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in streaming_content:
+                data = _ensure_bytes(chunk)
+                total += len(data)
+                if total > max_bytes:
+                    raise ActionFileTooLargeError(
+                        f"Action file response exceeds MCP_ACTION_MAX_FILE_BYTES ({max_bytes} bytes)"
+                    )
+                chunks.append(data)
+            return b"".join(chunks)
 
-    content = _ensure_bytes(response.content)
-    if len(content) > max_bytes:
-        raise ActionFileTooLargeError(
-            f"Action file response exceeds MCP_ACTION_MAX_FILE_BYTES ({max_bytes} bytes)"
-        )
-    return content
+        content = _ensure_bytes(response.content)
+        if len(content) > max_bytes:
+            raise ActionFileTooLargeError(
+                f"Action file response exceeds MCP_ACTION_MAX_FILE_BYTES ({max_bytes} bytes)"
+            )
+        return content
+    finally:
+        close = getattr(response, "close", None)
+        if callable(close):
+            close()
 
 
 def _response_header(response: HttpResponse | StreamingHttpResponse, name: str) -> str:
