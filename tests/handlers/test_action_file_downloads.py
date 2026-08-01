@@ -219,3 +219,47 @@ class TestHandleActionFileDownloads:
             assert parsed["result"] is None
         finally:
             await restore(admin_instance, admin_class, original)
+
+    @pytest.mark.asyncio
+    async def test_action_oversized_file_returns_error(self, settings):
+        settings.MCP_ACTION_MAX_FILE_BYTES = 8
+        uid = unique_id()
+        user = await create_superuser(uid)
+        author = await create_author(f"Big Author {uid}", f"big_{uid}@example.com")
+        request = create_mock_request(user)
+
+        @sync_to_async
+        def add_big_export_action():
+            author_admin = django_admin.site._registry[Author]
+            admin_class = author_admin.__class__
+            original_actions = getattr(author_admin, "actions", [])
+
+            def export_big(modeladmin, request, queryset):
+                response = HttpResponse(b"0123456789", content_type="application/octet-stream")
+                response["Content-Disposition"] = "attachment;filename=big.bin"
+                return response
+
+            export_big.short_description = "Export big"
+            admin_class.export_big = export_big
+            author_admin.actions = list(original_actions or []) + ["export_big"]
+            return author_admin, admin_class, original_actions
+
+        @sync_to_async
+        def restore(admin_instance, admin_class, original):
+            admin_instance.actions = original
+            if hasattr(admin_class, "export_big"):
+                delattr(admin_class, "export_big")
+
+        admin_instance, admin_class, original = await add_big_export_action()
+        try:
+            result = await handle_action(
+                "author",
+                {"action": "export_big", "ids": [author.pk]},
+                request,
+            )
+            parsed = json.loads(result[0].text)
+            assert "error" in parsed
+            assert "MCP_ACTION_MAX_FILE_BYTES" in parsed["error"]
+            assert parsed.get("success") is not True
+        finally:
+            await restore(admin_instance, admin_class, original)
