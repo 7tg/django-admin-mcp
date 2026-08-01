@@ -241,7 +241,7 @@ When an admin action returns a Django `HttpResponse` / `StreamingHttpResponse` (
     "content_type": "text/csv",
     "filename": "export.csv",
     "content_disposition": "attachment; filename=\"export.csv\"",
-    "size": 12,
+    "size": 10,
     "status_code": 200,
     "content": "a,b\r\n1,2\r\n"
   }
@@ -249,6 +249,8 @@ When an admin action returns a Django `HttpResponse` / `StreamingHttpResponse` (
 ```
 
 Text-ish content types (`text/*`, `application/json`, …) use `"encoding": "utf-8"`. Binary payloads use `"encoding": "base64"` with ASCII base64 in `content`.
+
+Large downloads are rejected once the body exceeds `MCP_ACTION_MAX_FILE_BYTES` (default 5 MiB) to protect MCP transports.
 
 ### 📦 Bulk Operations
 

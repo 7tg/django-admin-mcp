@@ -38,6 +38,19 @@ _TEXT_CONTENT_TYPE_PREFIXES = (
 
 _TEXT_CONTENT_TYPE_EXACT = frozenset({"text/csv", "text/tsv", "application/csv"})
 
+# Default cap for buffering download bodies into MCP JSON (override via settings).
+_DEFAULT_MAX_ACTION_FILE_BYTES = 5 * 1024 * 1024
+
+
+class ActionFileTooLargeError(ValueError):
+    """Raised when an action file response exceeds MCP_ACTION_MAX_FILE_BYTES."""
+
+
+def _max_action_file_bytes() -> int:
+    from django.conf import settings  # noqa: PLC0415
+
+    return int(getattr(settings, "MCP_ACTION_MAX_FILE_BYTES", _DEFAULT_MAX_ACTION_FILE_BYTES))
+
 
 def _filename_from_content_disposition(disposition: str) -> str | None:
     """Parse a filename from a Content-Disposition header value."""
@@ -57,17 +70,40 @@ def _is_text_content_type(content_type: str) -> bool:
     return lowered in _TEXT_CONTENT_TYPE_EXACT
 
 
+def _ensure_bytes(chunk: Any) -> bytes:
+    if isinstance(chunk, memoryview):
+        return chunk.tobytes()
+    if isinstance(chunk, bytes):
+        return chunk
+    return bytes(chunk)
+
+
 def _http_response_body(response: HttpResponse | StreamingHttpResponse) -> bytes:
-    """Read the full body from an HttpResponse or StreamingHttpResponse."""
+    """Read the full body from an HttpResponse or StreamingHttpResponse.
+
+    Raises ActionFileTooLargeError if the body exceeds MCP_ACTION_MAX_FILE_BYTES.
+    """
+    max_bytes = _max_action_file_bytes()
     streaming_content = getattr(response, "streaming_content", None)
     if streaming_content is not None:
-        return b"".join(streaming_content)
-    content = response.content
-    if isinstance(content, memoryview):
-        return content.tobytes()
-    if isinstance(content, bytes):
-        return content
-    return bytes(content)
+        chunks: list[bytes] = []
+        total = 0
+        for chunk in streaming_content:
+            data = _ensure_bytes(chunk)
+            total += len(data)
+            if total > max_bytes:
+                raise ActionFileTooLargeError(
+                    f"Action file response exceeds MCP_ACTION_MAX_FILE_BYTES ({max_bytes} bytes)"
+                )
+            chunks.append(data)
+        return b"".join(chunks)
+
+    content = _ensure_bytes(response.content)
+    if len(content) > max_bytes:
+        raise ActionFileTooLargeError(
+            f"Action file response exceeds MCP_ACTION_MAX_FILE_BYTES ({max_bytes} bytes)"
+        )
+    return content
 
 
 def _response_header(response: HttpResponse | StreamingHttpResponse, name: str) -> str:
@@ -281,12 +317,16 @@ async def handle_action(
                 if action_name in actions_dict:
                     func, name, description = actions_dict[action_name]
                     result = func(model_admin, request, queryset)
+                    try:
+                        serialized = serialize_action_result(result)
+                    except ActionFileTooLargeError as e:
+                        return {"error": str(e)}
                     return {
                         "success": True,
                         "action": action_name,
                         "affected_count": count,
                         "message": f"Executed {action_name} on {count} objects",
-                        "result": serialize_action_result(result),
+                        "result": serialized,
                     }
 
             return {"error": f"Action '{action_name}' not found"}

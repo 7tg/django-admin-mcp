@@ -14,6 +14,7 @@ from django.http import HttpResponse, StreamingHttpResponse
 
 from django_admin_mcp.handlers import handle_action
 from django_admin_mcp.handlers.actions import (
+    ActionFileTooLargeError,
     _filename_from_content_disposition,
     _is_text_content_type,
     serialize_action_result,
@@ -90,6 +91,14 @@ class TestSerializeActionResultHelpers:
         assert payload["type"] == "file"
         assert payload["encoding"] == "utf-8"
         assert payload["content"] == "hello world"
+
+    def test_serialize_rejects_oversized_body(self, settings):
+        settings.MCP_ACTION_MAX_FILE_BYTES = 8
+        response = HttpResponse(b"0123456789", content_type="application/octet-stream")
+        response["Content-Disposition"] = "attachment;filename=big.bin"
+        with pytest.raises(ActionFileTooLargeError) as exc_info:
+            serialize_action_result(response)
+        assert "MCP_ACTION_MAX_FILE_BYTES" in str(exc_info.value)
 
 
 @pytest.mark.django_db(transaction=True)

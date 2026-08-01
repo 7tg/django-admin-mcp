@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Serialize admin action `HttpResponse` / `StreamingHttpResponse` downloads as structured file payloads (UTF-8 or base64) instead of `str(response)`
+- Reject oversized action file bodies via `MCP_ACTION_MAX_FILE_BYTES` (default 5 MiB)
 
 ## [0.3.0] - 2026-02-08
 
