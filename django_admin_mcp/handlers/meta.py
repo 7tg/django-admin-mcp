@@ -29,7 +29,7 @@ def _json_safe_admin_item(item: Any) -> Any:
     """
     if isinstance(item, str):
         return item
-    if isinstance(item, list | tuple):
+    if isinstance(item, (list, tuple)):
         return [_json_safe_admin_item(v) for v in item]
     if isinstance(item, type):
         return f"{item.__module__}.{item.__qualname__}"

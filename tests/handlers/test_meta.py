@@ -187,8 +187,9 @@ class TestHandleDescribe:
             assert "error" not in data
             list_filter = data["admin_config"]["list_filter"]
             assert len(list_filter) == 1
-            assert isinstance(list_filter[0], str)
-            assert "HasBioFilter" in list_filter[0]
+            expected = f"{HasBioFilter.__module__}.{HasBioFilter.__qualname__}"
+            assert list_filter[0] == expected
+            assert not list_filter[0].startswith("<")
         finally:
             model_admin.list_filter = original_list_filter
 
