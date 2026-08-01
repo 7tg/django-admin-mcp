@@ -5,11 +5,13 @@ This module provides handlers for admin actions and bulk operations
 extracted from the mixin module.
 """
 
+import base64
+import re
 from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.db import transaction
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse, StreamingHttpResponse
 from pydantic import TypeAdapter
 
 from django_admin_mcp.handlers.base import (
@@ -21,6 +23,107 @@ from django_admin_mcp.handlers.base import (
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.protocol.types import TextContent
+
+_FILENAME_RE = re.compile(
+    r"""filename\*?=(?:UTF-8'')?["']?([^";\n]+)["']?""",
+    re.IGNORECASE,
+)
+
+_TEXT_CONTENT_TYPE_PREFIXES = (
+    "text/",
+    "application/json",
+    "application/xml",
+    "application/javascript",
+)
+
+_TEXT_CONTENT_TYPE_EXACT = frozenset({"text/csv", "text/tsv", "application/csv"})
+
+
+def _filename_from_content_disposition(disposition: str) -> str | None:
+    """Parse a filename from a Content-Disposition header value."""
+    if not disposition:
+        return None
+    match = _FILENAME_RE.search(disposition)
+    if not match:
+        return None
+    return match.group(1).strip().strip("\"'")
+
+
+def _is_text_content_type(content_type: str) -> bool:
+    """Return True when content should be returned as UTF-8 text to MCP clients."""
+    lowered = (content_type or "").split(";")[0].strip().lower()
+    if any(lowered.startswith(prefix) for prefix in _TEXT_CONTENT_TYPE_PREFIXES):
+        return True
+    return lowered in _TEXT_CONTENT_TYPE_EXACT
+
+
+def _http_response_body(response: HttpResponse | StreamingHttpResponse) -> bytes:
+    """Read the full body from an HttpResponse or StreamingHttpResponse."""
+    streaming_content = getattr(response, "streaming_content", None)
+    if streaming_content is not None:
+        return b"".join(streaming_content)
+    content = response.content
+    if isinstance(content, memoryview):
+        return content.tobytes()
+    if isinstance(content, bytes):
+        return content
+    return bytes(content)
+
+
+def _response_header(response: HttpResponse | StreamingHttpResponse, name: str) -> str:
+    """Read a response header across Django HttpResponse variants."""
+    value = response.get(name, "") or ""
+    if value:
+        return value
+    headers = getattr(response, "headers", None)
+    if headers is not None:
+        return headers.get(name, "") or ""
+    return ""
+
+
+def serialize_action_result(result: Any) -> Any:
+    """
+    Serialize an admin action return value for MCP JSON responses.
+
+    Download actions typically return ``HttpResponse`` / ``StreamingHttpResponse``.
+    Those are converted to a structured file payload (UTF-8 text or base64) with
+    metadata. Other values fall back to ``str(result)``; ``None`` stays ``None``.
+    """
+    if result is None:
+        return None
+
+    if isinstance(result, (HttpResponse, StreamingHttpResponse)):
+        disposition = _response_header(result, "Content-Disposition")
+        content_type = (
+            _response_header(result, "Content-Type")
+            or getattr(result, "content_type", None)
+            or "application/octet-stream"
+        )
+        body = _http_response_body(result)
+        filename = _filename_from_content_disposition(disposition) or "download"
+        payload: dict[str, Any] = {
+            "type": "file",
+            "content_type": content_type,
+            "filename": filename,
+            "size": len(body),
+            "status_code": getattr(result, "status_code", 200),
+        }
+        if disposition:
+            payload["content_disposition"] = disposition
+
+        if _is_text_content_type(content_type):
+            try:
+                payload["encoding"] = "utf-8"
+                payload["content"] = body.decode("utf-8")
+                return payload
+            except UnicodeDecodeError:
+                pass
+
+        payload["encoding"] = "base64"
+        payload["content"] = base64.b64encode(body).decode("ascii")
+        return payload
+
+    return str(result)
 
 
 def _get_admin_actions(model_admin, request):
@@ -183,7 +286,7 @@ async def handle_action(
                         "action": action_name,
                         "affected_count": count,
                         "message": f"Executed {action_name} on {count} objects",
-                        "result": str(result) if result else None,
+                        "result": serialize_action_result(result),
                     }
 
             return {"error": f"Action '{action_name}' not found"}

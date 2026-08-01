@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Serialize admin action `HttpResponse` / `StreamingHttpResponse` downloads as structured file payloads (UTF-8 or base64) instead of `str(response)`
+
 ## [0.3.0] - 2026-02-08
 
 ### Added
