@@ -55,7 +55,7 @@ class MCPAdminMixin:
     mcp_expose: bool
     mcp_fields: list[str] | None
     mcp_exclude_fields: list[str] | None
-    mcp_use_admin_queryset: bool
+    mcp_use_admin_queryset: bool = True
 
     # Class-level registry to track registered models
     _registered_models: dict[str, dict[str, Any]] = {}

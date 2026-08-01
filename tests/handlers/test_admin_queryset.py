@@ -139,7 +139,8 @@ class TestAdminGetQueryset:
         request = create_mock_request(user=await create_superuser(uid))
 
         model_admin = admin.site._registry[CatalogItemA]
-        original = getattr(model_admin, "mcp_use_admin_queryset", True)
+        had_instance_attr = "mcp_use_admin_queryset" in model_admin.__dict__
+        original = model_admin.__dict__.get("mcp_use_admin_queryset")
         model_admin.mcp_use_admin_queryset = False
         try:
             result = await handle_list(
@@ -152,4 +153,7 @@ class TestAdminGetQueryset:
             channels = {row["channel"] for row in data["results"]}
             assert channels == {"A", "B"}
         finally:
-            model_admin.mcp_use_admin_queryset = original
+            if had_instance_attr:
+                model_admin.mcp_use_admin_queryset = original
+            else:
+                delattr(model_admin, "mcp_use_admin_queryset")

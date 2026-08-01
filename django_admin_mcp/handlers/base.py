@@ -269,7 +269,7 @@ def get_model_name(model: type[models.Model]) -> str:
 
 def get_admin_queryset(
     model: type[models.Model],
-    model_admin: Any,
+    model_admin: Any | None,
     request: HttpRequest,
 ) -> models.QuerySet:
     """
