@@ -147,6 +147,51 @@ class TestHandleDescribe:
         assert "search_fields" in admin_config
         assert "ordering" in admin_config
 
+    async def test_describe_with_none_ordering(self):
+        """ModelAdmin.ordering defaults to None; describe must coerce to []."""
+        from django.contrib import admin  # noqa: PLC0415
+
+        request = create_mock_request()
+        model_admin = admin.site._registry[Author]
+        original_ordering = model_admin.ordering
+        model_admin.ordering = None
+        try:
+            result = await handle_describe("author", {}, request)
+            data = json.loads(result[0].text)
+            assert "error" not in data
+            assert data["admin_config"]["ordering"] == []
+        finally:
+            model_admin.ordering = original_ordering
+
+    async def test_describe_with_custom_list_filter_class(self):
+        """Custom list_filter classes must serialize as dotted paths, not crash."""
+        from django.contrib import admin  # noqa: PLC0415
+
+        class HasBioFilter(admin.SimpleListFilter):
+            title = "has bio"
+            parameter_name = "has_bio"
+
+            def lookups(self, request, model_admin):
+                return (("yes", "Yes"), ("no", "No"))
+
+            def queryset(self, request, queryset):
+                return queryset
+
+        request = create_mock_request()
+        model_admin = admin.site._registry[Author]
+        original_list_filter = model_admin.list_filter
+        model_admin.list_filter = [HasBioFilter]
+        try:
+            result = await handle_describe("author", {}, request)
+            data = json.loads(result[0].text)
+            assert "error" not in data
+            list_filter = data["admin_config"]["list_filter"]
+            assert len(list_filter) == 1
+            assert isinstance(list_filter[0], str)
+            assert "HasBioFilter" in list_filter[0]
+        finally:
+            model_admin.list_filter = original_list_filter
+
     async def test_includes_inlines_config(self):
         """Test that inlines configuration is included for Author."""
         request = create_mock_request()
