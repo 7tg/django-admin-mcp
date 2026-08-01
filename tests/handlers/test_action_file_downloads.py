@@ -15,6 +15,7 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django_admin_mcp.handlers import handle_action
 from django_admin_mcp.handlers.actions import (
     ActionFileTooLargeError,
+    _charset_from_content_type,
     _filename_from_content_disposition,
     _is_text_content_type,
     serialize_action_result,
@@ -68,6 +69,11 @@ class TestSerializeActionResultHelpers:
         assert _is_text_content_type("application/json") is True
         assert _is_text_content_type("application/pdf") is False
 
+    def test_charset_from_content_type(self):
+        assert _charset_from_content_type("text/csv; charset=iso-8859-1") == "iso-8859-1"
+        assert _charset_from_content_type('text/plain; charset="UTF-8"') == "UTF-8"
+        assert _charset_from_content_type("text/csv") is None
+
     def test_serialize_none(self):
         assert serialize_action_result(None) is None
 
@@ -84,6 +90,16 @@ class TestSerializeActionResultHelpers:
         assert payload["content_type"].startswith("text/csv")
         assert "1,2" in payload["content"]
         assert payload["size"] == len(b"a,b\r\n1,2\r\n")
+
+    def test_serialize_http_response_non_utf8_charset(self):
+        # Latin-1 bytes that are invalid UTF-8 must still decode as text.
+        body = "café,naïve".encode("iso-8859-1")
+        response = HttpResponse(body, content_type="text/csv; charset=iso-8859-1")
+        response["Content-Disposition"] = 'attachment; filename="latin1.csv"'
+        payload = serialize_action_result(response)
+        assert payload["encoding"] == "utf-8"
+        assert payload["content"] == "café,naïve"
+        assert payload["size"] == len(body)
 
     def test_serialize_http_response_binary_file(self):
         raw = b"%PDF-1.4 fake"

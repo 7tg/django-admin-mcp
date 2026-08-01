@@ -80,11 +80,32 @@ def _filename_from_content_disposition(disposition: str) -> str | None:
 
 
 def _is_text_content_type(content_type: str) -> bool:
-    """Return True when content should be returned as UTF-8 text to MCP clients."""
+    """Return True when content should be returned as text (not base64) to MCP clients."""
     lowered = (content_type or "").split(";")[0].strip().lower()
     if any(lowered.startswith(prefix) for prefix in _TEXT_CONTENT_TYPE_PREFIXES):
         return True
     return lowered in _TEXT_CONTENT_TYPE_EXACT
+
+
+def _charset_from_content_type(content_type: str) -> str | None:
+    """Extract a charset parameter from a Content-Type header value."""
+    if not content_type:
+        return None
+    for part in content_type.split(";"):
+        part = part.strip()
+        if part.lower().startswith("charset="):
+            return part.split("=", 1)[1].strip().strip("\"'") or None
+    return None
+
+
+def _decode_text_body(
+    body: bytes,
+    content_type: str,
+    response_charset: str | None = None,
+) -> str:
+    """Decode a text download body using Content-Type / response charset."""
+    charset = _charset_from_content_type(content_type) or response_charset or "utf-8"
+    return body.decode(charset)
 
 
 def _ensure_bytes(chunk: Any) -> bytes:
@@ -170,10 +191,16 @@ def serialize_action_result(result: Any) -> Any:
 
         if _is_text_content_type(content_type):
             try:
+                # encoding=utf-8 means JSON text content (not base64), regardless of
+                # the HTTP charset used to decode the bytes into Unicode.
                 payload["encoding"] = "utf-8"
-                payload["content"] = body.decode("utf-8")
+                payload["content"] = _decode_text_body(
+                    body,
+                    content_type,
+                    getattr(result, "charset", None),
+                )
                 return payload
-            except UnicodeDecodeError:
+            except (LookupError, UnicodeDecodeError):
                 pass
 
         payload["encoding"] = "base64"
