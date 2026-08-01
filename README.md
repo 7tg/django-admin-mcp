@@ -248,7 +248,7 @@ When an admin action returns a Django `HttpResponse` / `StreamingHttpResponse` (
 }
 ```
 
-Text-ish content types (`text/*`, `application/json`, …) decode using the `Content-Type` charset (or `response.charset`, default UTF-8) and return `"encoding": "utf-8"` with Unicode text in `content`. Binary payloads use `"encoding": "base64"` with ASCII base64 in `content`.
+Text-ish content types (`text/*`, `application/json`, …) decode using the `Content-Type` charset (or `response.charset`, default UTF-8) and return `"encoding": "utf-8"` with Unicode text in `content`. If that decode fails (unknown charset or invalid bytes), the payload falls back to `"encoding": "base64"` like binary downloads. Binary payloads use `"encoding": "base64"` with ASCII base64 in `content`.
 
 Large downloads are rejected once the body exceeds `MCP_ACTION_MAX_FILE_BYTES` (default 5 MiB) to protect MCP transports.
 
