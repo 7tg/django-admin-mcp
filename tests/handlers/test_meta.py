@@ -19,11 +19,25 @@ from django_admin_mcp.handlers import (
 )
 from django_admin_mcp.handlers.meta import (
     _get_field_metadata,
+    _json_safe_admin_item,
     _model_matches_query,
 )
 from tests.models import Article, Author
 
 User = get_user_model()
+
+
+class TestJsonSafeAdminItem:
+    """Tests for _json_safe_admin_item helper."""
+
+    def test_preserves_none_as_none(self):
+        assert _json_safe_admin_item(None) is None
+
+    def test_preserves_none_inside_nested_lists(self):
+        assert _json_safe_admin_item(("name", None)) == ["name", None]
+
+    def test_stringifies_unknown_scalars(self):
+        assert _json_safe_admin_item(42) == "42"
 
 
 class TestModelMatchesQuery:

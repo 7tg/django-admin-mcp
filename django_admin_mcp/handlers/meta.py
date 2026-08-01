@@ -27,6 +27,8 @@ def _json_safe_admin_item(item: Any) -> Any:
     ModelAdmin attributes like list_filter/list_display may contain filter
     classes or callables that Pydantic cannot serialize.
     """
+    if item is None:
+        return None
     if isinstance(item, str):
         return item
     if isinstance(item, (list, tuple)):
