@@ -205,12 +205,30 @@ class TestFieldFiltering:
         assert result == {}
 
     def test_none_model_admin_includes_all_fields(self):
-        """Test that None model_admin includes all fields (backwards compatibility)."""
+        """Test that None model_admin includes all fields when admin has no excludes."""
         author = Author.objects.create(name="Test Author", email="test@example.com", bio="Test bio")
         result = serialize_instance(author, None)
 
-        # Should include all fields when model_admin is None
+        # Registered AuthorAdmin has no mcp_exclude_fields, so all fields remain
         assert "id" in result
         assert "name" in result
         assert "email" in result
         assert "bio" in result
+
+    def test_none_model_admin_auto_resolves_exclude_fields(self):
+        """When model_admin is omitted, resolve registered admin and apply excludes."""
+        from django.contrib import admin  # noqa: PLC0415
+
+        author = Author.objects.create(name="Test Author", email="test@example.com", bio="Secret bio")
+        model_admin = admin.site._registry[Author]
+        original_exclude = getattr(model_admin, "mcp_exclude_fields", None)
+        model_admin.mcp_exclude_fields = ["bio"]
+        try:
+            result = serialize_instance(author, None)
+            assert "bio" not in result
+            assert "name" in result
+        finally:
+            if original_exclude is None:
+                delattr(model_admin, "mcp_exclude_fields")
+            else:
+                model_admin.mcp_exclude_fields = original_exclude

@@ -416,7 +416,7 @@ async def handle_list(
 
             # Apply pagination
             queryset = queryset[offset : offset + limit]
-            return total_count, [serialize_instance(obj) for obj in queryset]
+            return total_count, [serialize_instance(obj, model_admin) for obj in queryset]
 
         total_count, results = await get_objects()
 
