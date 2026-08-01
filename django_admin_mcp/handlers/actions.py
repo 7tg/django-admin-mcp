@@ -156,6 +156,14 @@ async def handle_action(
 
         @sync_to_async
         def execute_action():
+            # Check delete permission before any ID lookup to avoid leaking existence
+            if action_name == "delete_selected":
+                if model_admin is not None and not model_admin.has_delete_permission(request):
+                    return {
+                        "error": f"Permission denied: cannot delete {model_name}",
+                        "code": "permission_denied",
+                    }
+
             # Scope selected rows to the admin queryset (proxy filters, soft-delete, etc.)
             queryset = get_admin_queryset(model, model_admin, request).filter(pk__in=ids)
             count = queryset.count()
@@ -165,12 +173,7 @@ async def handle_action(
 
             # Handle built-in delete_selected directly (it renders HTML in Django)
             if action_name == "delete_selected":
-                if model_admin is not None and not model_admin.has_delete_permission(request):
-                    return {
-                        "error": f"Permission denied: cannot delete {model_name}",
-                        "code": "permission_denied",
-                    }
-                deleted_count = queryset.count()
+                deleted_count = count
                 queryset.delete()
                 return {
                     "success": True,
