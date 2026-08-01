@@ -48,6 +48,18 @@ class TestSerializeActionResultHelpers:
         assert _filename_from_content_disposition('attachment; filename="export.csv"') == "export.csv"
         assert _filename_from_content_disposition("attachment;filename=export.tsv") == "export.tsv"
         assert _filename_from_content_disposition("attachment; filename*=UTF-8''report.pdf") == "report.pdf"
+        assert (
+            _filename_from_content_disposition("attachment; filename*=UTF-8''report%20final.pdf") == "report final.pdf"
+        )
+        # Plain filename= must not percent-decode (literal %).
+        assert _filename_from_content_disposition('attachment; filename="foo%20bar.pdf"') == "foo%20bar.pdf"
+        # Prefer filename* when both are present.
+        assert (
+            _filename_from_content_disposition(
+                "attachment; filename=\"fallback.pdf\"; filename*=UTF-8''report%20final.pdf"
+            )
+            == "report final.pdf"
+        )
         assert _filename_from_content_disposition("") is None
 
     def test_is_text_content_type(self):

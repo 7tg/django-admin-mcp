@@ -8,6 +8,7 @@ extracted from the mixin module.
 import base64
 import re
 from typing import Any
+from urllib.parse import unquote
 
 from asgiref.sync import sync_to_async
 from django.db import transaction
@@ -24,8 +25,13 @@ from django_admin_mcp.handlers.base import (
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.protocol.types import TextContent
 
+# RFC 5987 / 6266: filename*=charset'lang'value (prefer over plain filename=).
+_FILENAME_STAR_RE = re.compile(
+    r"""filename\*=([^']*)'[^']*'([^;\n]+)""",
+    re.IGNORECASE,
+)
 _FILENAME_RE = re.compile(
-    r"""filename\*?=(?:UTF-8'')?["']?([^";\n]+)["']?""",
+    r"""filename=(?!\*)["']?([^";\n]+)["']?""",
     re.IGNORECASE,
 )
 
@@ -53,9 +59,20 @@ def _max_action_file_bytes() -> int:
 
 
 def _filename_from_content_disposition(disposition: str) -> str | None:
-    """Parse a filename from a Content-Disposition header value."""
+    """Parse a filename from a Content-Disposition header value.
+
+    Prefers RFC 5987 ``filename*`` (percent-decoded) over plain ``filename``.
+    """
     if not disposition:
         return None
+    star = _FILENAME_STAR_RE.search(disposition)
+    if star:
+        charset = star.group(1).strip() or "utf-8"
+        raw = star.group(2).strip().strip("\"'")
+        try:
+            return unquote(raw, encoding=charset, errors="strict")
+        except (LookupError, UnicodeDecodeError):
+            return unquote(raw, encoding="utf-8", errors="replace")
     match = _FILENAME_RE.search(disposition)
     if not match:
         return None
@@ -102,9 +119,7 @@ def _http_response_body(response: HttpResponse | StreamingHttpResponse) -> bytes
 
         content = _ensure_bytes(response.content)
         if len(content) > max_bytes:
-            raise ActionFileTooLargeError(
-                f"Action file response exceeds MCP_ACTION_MAX_FILE_BYTES ({max_bytes} bytes)"
-            )
+            raise ActionFileTooLargeError(f"Action file response exceeds MCP_ACTION_MAX_FILE_BYTES ({max_bytes} bytes)")
         return content
     finally:
         close = getattr(response, "close", None)
