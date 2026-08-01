@@ -170,12 +170,13 @@ async def handle_action(
                         "error": f"Permission denied: cannot delete {model_name}",
                         "code": "permission_denied",
                     }
+                deleted_count = queryset.count()
                 queryset.delete()
                 return {
                     "success": True,
                     "action": action_name,
-                    "affected_count": count,
-                    "message": f"Deleted {count} {model._meta.verbose_name_plural}",
+                    "affected_count": deleted_count,
+                    "message": f"Deleted {deleted_count} {model._meta.verbose_name_plural}",
                 }
 
             # Look up custom action via Django's get_actions
