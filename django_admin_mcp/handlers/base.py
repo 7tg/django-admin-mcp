@@ -14,6 +14,7 @@ from django.contrib.admin.sites import site
 from django.core.exceptions import FieldError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, OperationalError, models
+from django.db.models.fields.files import FieldFile
 from django.forms import ModelForm
 from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
@@ -247,6 +248,9 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
         elif isinstance(value, list | models.QuerySet):
             # M2M fields - convert to list of PKs
             serialized[key] = [item.pk if isinstance(item, models.Model) else item for item in value]
+        elif isinstance(value, FieldFile):
+            # FileField/ImageField - .name is JSON-safe; .url raises ValueError when empty
+            serialized[key] = value.name or ""
         else:
             serialized[key] = value
 
