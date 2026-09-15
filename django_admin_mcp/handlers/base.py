@@ -375,10 +375,17 @@ def resolve_field_visibility(model_admin: Any) -> tuple[list | None, list | None
     3. fields: Django admin's fields list (fallback if mcp_fields not set)
     4. exclude: Django admin's exclude list (fallback if mcp_exclude_fields not set)
 
+    Grouped (tupled) entries — a valid admin layout choice like
+    ``fields = [("name", "email")]`` — are flattened so name comparisons
+    against them work (issue #107).
+
     Returns:
         Tuple of (fields_to_include, fields_to_exclude); each is None when
         no configuration applies.
     """
+    # Deferred import: admin utils require the app registry to be ready
+    from django.contrib.admin.utils import flatten  # noqa: PLC0415
+
     fields_to_include = None
     fields_to_exclude = None
 
@@ -392,6 +399,11 @@ def resolve_field_visibility(model_admin: Any) -> tuple[list | None, list | None
             fields_to_exclude = model_admin.mcp_exclude_fields
         elif hasattr(model_admin, "exclude") and model_admin.exclude is not None:
             fields_to_exclude = model_admin.exclude
+
+    if fields_to_include is not None:
+        fields_to_include = flatten(fields_to_include)
+    if fields_to_exclude is not None:
+        fields_to_exclude = flatten(fields_to_exclude)
 
     return fields_to_include, fields_to_exclude
 
