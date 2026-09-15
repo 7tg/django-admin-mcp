@@ -22,9 +22,7 @@ def unique_id():
 @sync_to_async
 def make_fixture(uid):
     gadget = Gadget.objects.create(title=f"Gadget {uid}", api_key="ORIGINAL")
-    user = User.objects.create_superuser(
-        username=f"bulklog_{uid}", email=f"bulklog_{uid}@example.com", password="pw"
-    )
+    user = User.objects.create_superuser(username=f"bulklog_{uid}", email=f"bulklog_{uid}@example.com", password="pw")
     return gadget, user
 
 
@@ -63,9 +61,7 @@ class TestBulkUpdateLogRedaction:
         gadget, user = await make_fixture(uid)
         request = create_mock_request(user)
 
-        result = await handle_update(
-            "gadget", {"id": gadget.pk, "data": {"api_key": f"SINGLE_SECRET_{uid}"}}, request
-        )
+        result = await handle_update("gadget", {"id": gadget.pk, "data": {"api_key": f"SINGLE_SECRET_{uid}"}}, request)
         data = json.loads(result[0].text)
         assert data.get("success") is True, data
 

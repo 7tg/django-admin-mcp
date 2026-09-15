@@ -36,9 +36,7 @@ def author_search_fields(fields):
 def make_fixture(uid):
     ada = Author.objects.create(name=f"Ada {uid}", email=f"ada_{uid}@example.com")
     grada = Author.objects.create(name=f"Grada {uid}", email=f"grada_{uid}@example.com")
-    user = User.objects.create_superuser(
-        username=f"search_{uid}", email=f"search_{uid}@example.com", password="pw"
-    )
+    user = User.objects.create_superuser(username=f"search_{uid}", email=f"search_{uid}@example.com", password="pw")
     return ada, grada, user
 
 

@@ -42,9 +42,7 @@ def author_admin_attrs(**attrs):
 @sync_to_async
 def make_fixture(uid):
     author = Author.objects.create(name=f"Grouped {uid}", email=f"grouped_{uid}@example.com")
-    user = User.objects.create_superuser(
-        username=f"grouped_{uid}", email=f"grouped_u_{uid}@example.com", password="pw"
-    )
+    user = User.objects.create_superuser(username=f"grouped_{uid}", email=f"grouped_u_{uid}@example.com", password="pw")
     return author, user
 
 

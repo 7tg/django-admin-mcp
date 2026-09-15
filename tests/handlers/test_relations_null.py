@@ -27,9 +27,7 @@ def make_fixture(uid, with_owner=False, with_twin=False):
         owner=author if with_owner else None,
         twin=author if with_twin else None,
     )
-    user = User.objects.create_superuser(
-        username=f"relnull_{uid}", email=f"relnull_u_{uid}@example.com", password="pw"
-    )
+    user = User.objects.create_superuser(username=f"relnull_{uid}", email=f"relnull_u_{uid}@example.com", password="pw")
     return author, gadget, user
 
 

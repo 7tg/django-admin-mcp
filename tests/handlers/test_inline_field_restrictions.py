@@ -141,9 +141,7 @@ class TestInlineFieldRestrictions:
                 {
                     "id": author.pk,
                     "data": {},
-                    "inlines": {
-                        "article": [{"data": {"title": f"New {uid}", "content": "c", "is_published": True}}]
-                    },
+                    "inlines": {"article": [{"data": {"title": f"New {uid}", "content": "c", "is_published": True}}]},
                 },
                 request,
             )
