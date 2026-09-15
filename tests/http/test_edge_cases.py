@@ -97,14 +97,15 @@ class TestFunctionBasedViewEdgeCases:
         client = AsyncClient()
         response = await client.post(
             "/api/",
-            data=json.dumps({"method": "unknown/method"}),
+            data=json.dumps({"id": 1, "method": "unknown/method"}),
             content_type="application/json",
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
         assert response.status_code == 200
         data = json.loads(response.content)
-        # JSON-RPC method-not-found envelope (issue #97)
+        # JSON-RPC method-not-found envelope (issue #97); id-less requests
+        # are notifications and get an empty 202 instead (issue #108)
         assert data["error"]["code"] == -32601
         assert "unknown/method" in data["error"]["message"]
 

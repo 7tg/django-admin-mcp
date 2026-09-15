@@ -271,8 +271,9 @@ async def mcp_endpoint(request):
             ),
         )
         return JsonResponse(response.model_dump())
-    elif method == "notifications/initialized":
-        # Notifications get no JSON-RPC response body (issue #97)
+    elif method.startswith("notifications/"):
+        # Notifications get no JSON-RPC response body — not even an error
+        # envelope (issues #97, #108)
         return HttpResponse(status=202)
     elif method == "tools/list":
         try:
@@ -313,6 +314,10 @@ async def mcp_endpoint(request):
         except ResourceError as e:
             return _jsonrpc_error(body.id, -32002, str(e))
         return _jsonrpc_result(body.id, {"contents": [contents]})
+    elif body.id is None:
+        # A request without an id is a notification: per JSON-RPC 2.0 it must
+        # never receive a response, error responses included (issue #108)
+        return HttpResponse(status=202)
     else:
         return _jsonrpc_error(body.id, METHOD_NOT_FOUND, f"Method not found: {method}")
 
