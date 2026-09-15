@@ -205,12 +205,51 @@ class TestFieldFiltering:
         assert result == {}
 
     def test_none_model_admin_includes_all_fields(self):
-        """Test that None model_admin includes all fields (backwards compatibility)."""
+        """Test that None model_admin includes all fields when admin has no excludes."""
         author = Author.objects.create(name="Test Author", email="test@example.com", bio="Test bio")
         result = serialize_instance(author, None)
 
-        # Should include all fields when model_admin is None
+        # Registered AuthorAdmin has no mcp_exclude_fields, so all fields remain
         assert "id" in result
         assert "name" in result
         assert "email" in result
         assert "bio" in result
+
+    def test_none_model_admin_auto_resolves_exclude_fields(self):
+        """When model_admin is omitted, resolve registered admin and apply excludes."""
+        from django.contrib import admin  # noqa: PLC0415
+
+        author = Author.objects.create(name="Test Author", email="test@example.com", bio="Secret bio")
+        model_admin = admin.site._registry[Author]
+        original_exclude = getattr(model_admin, "mcp_exclude_fields", None)
+        model_admin.mcp_exclude_fields = ["bio"]
+        try:
+            result = serialize_instance(author, None)
+            assert "bio" not in result
+            assert "name" in result
+        finally:
+            if original_exclude is None:
+                delattr(model_admin, "mcp_exclude_fields")
+            else:
+                model_admin.mcp_exclude_fields = original_exclude
+
+    def test_auto_resolve_skips_mismatched_registered_model(self):
+        """Do not apply admin filters when registry model does not match the instance."""
+        from unittest.mock import MagicMock, patch  # noqa: PLC0415
+
+        author = Author.objects.create(name="Test Author", email="test@example.com", bio="Secret bio")
+        mismatched_admin = MagicMock()
+        mismatched_admin.mcp_fields = None
+        mismatched_admin.fields = None
+        mismatched_admin.mcp_exclude_fields = ["bio"]
+        mismatched_admin.exclude = None
+
+        with patch(
+            "django_admin_mcp.handlers.base.get_model_admin",
+            return_value=(Article, mismatched_admin),
+        ):
+            result = serialize_instance(author, None)
+
+        # Mismatch → no admin filtering; bio remains
+        assert "bio" in result
+        assert "name" in result

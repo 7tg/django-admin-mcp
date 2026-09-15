@@ -134,6 +134,34 @@ class TestHandleList:
         assert "error" in data
         assert data["code"] == "permission_denied"
 
+    @pytest.mark.asyncio
+    @pytest.mark.django_db
+    async def test_list_respects_mcp_exclude_fields(self):
+        """list_* must omit fields configured via mcp_exclude_fields."""
+        from django.contrib import admin  # noqa: PLC0415
+
+        uid = unique_id()
+        author = await self._create_author(uid)
+        await sync_to_async(Author.objects.filter(pk=author.pk).update)(bio="super-secret-bio")
+        request = await self._create_superuser_request(uid)
+
+        model_admin = admin.site._registry[Author]
+        original_exclude = getattr(model_admin, "mcp_exclude_fields", None)
+        model_admin.mcp_exclude_fields = ["bio"]
+        try:
+            result = await handle_list("author", {"filters": {"id": author.pk}}, request)
+            data = json.loads(result[0].text)
+            assert data["count"] == 1
+            row = data["results"][0]
+            assert "bio" not in row
+            assert "super-secret-bio" not in json.dumps(row)
+            assert row["name"] == f"Test Author {uid}"
+        finally:
+            if original_exclude is None:
+                delattr(model_admin, "mcp_exclude_fields")
+            else:
+                model_admin.mcp_exclude_fields = original_exclude
+
     async def _create_author(self, uid):
         """Helper to create an author."""
 

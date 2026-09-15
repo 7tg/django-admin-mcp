@@ -211,6 +211,9 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
 
     Field filtering prevents sensitive data exposure in MCP responses.
 
+    When ``model_admin`` is omitted, looks up the registered MCP admin for the
+    instance's model so list/related/inline call sites still apply excludes.
+
     Args:
         instance: The Django model instance to serialize.
         model_admin: Optional ModelAdmin with field configuration.
@@ -218,6 +221,15 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
     Returns:
         Dictionary representation of the model instance with filtered fields.
     """
+    if model_admin is None:
+        registered_model, resolved_admin = get_model_admin(instance._meta.model_name)
+        # Guard against model_name collisions across apps / proxy mismatches
+        if (
+            registered_model is not None
+            and registered_model._meta.concrete_model is instance._meta.concrete_model
+        ):
+            model_admin = resolved_admin
+
     # Determine which fields to include/exclude
     fields_to_include = None
     fields_to_exclude = None

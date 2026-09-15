@@ -205,6 +205,38 @@ class TestHandleRelated:
 
     @pytest.mark.django_db
     @pytest.mark.asyncio
+    async def test_related_respects_mcp_exclude_fields(self):
+        """related_* must omit excluded fields on the related model's admin."""
+        from django.contrib import admin  # noqa: PLC0415
+
+        uid = unique_id()
+        author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
+        await create_article(f"Article {uid}", "super-secret-content", author)
+        request = create_mock_request()
+
+        model_admin = admin.site._registry[Article]
+        original_exclude = getattr(model_admin, "mcp_exclude_fields", None)
+        model_admin.mcp_exclude_fields = ["content"]
+        try:
+            result = await handle_related(
+                "author",
+                {"id": author.pk, "relation": "articles"},
+                request,
+            )
+            data = json.loads(result[0].text)
+            assert data["count"] == 1
+            row = data["results"][0]
+            assert "content" not in row
+            assert "super-secret-content" not in json.dumps(row)
+            assert row["title"] == f"Article {uid}"
+        finally:
+            if original_exclude is None:
+                delattr(model_admin, "mcp_exclude_fields")
+            else:
+                model_admin.mcp_exclude_fields = original_exclude
+
+    @pytest.mark.django_db
+    @pytest.mark.asyncio
     async def test_many_relation_with_limit(self):
         """Test pagination with limit parameter."""
         uid = unique_id()
