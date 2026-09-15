@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-admin-mcp"
-version = "0.3.2"
+version = "0.3.3"
 description = "Django admin MCP integration - expose Django admin models to MCP clients"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,7 +26,7 @@ keywords = [
     "api",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Framework :: Django",
     "Framework :: Django :: 3.2",
