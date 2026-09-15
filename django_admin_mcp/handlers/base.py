@@ -271,6 +271,28 @@ def get_model_name(model: type[models.Model]) -> str:
     return model._meta.model_name or ""
 
 
+def get_admin_queryset(
+    model: type[models.Model],
+    model_admin: Any | None,
+    request: HttpRequest,
+) -> models.QuerySet:
+    """
+    Return the queryset MCP read handlers should use for a model.
+
+    By default this mirrors Django admin changelists by calling
+    ``model_admin.get_queryset(request)``. Set ``mcp_use_admin_queryset = False``
+    on the ModelAdmin to fall back to ``model.objects.all()``.
+
+    Security scoping in ``get_queryset`` should key off the user / permissions
+    on ``request``, not changelist URL shape — MCP requests use a synthetic path.
+    """
+    if model_admin is None:
+        return model.objects.all()
+    if getattr(model_admin, "mcp_use_admin_queryset", True) is False:
+        return model.objects.all()
+    return model_admin.get_queryset(request)
+
+
 def get_admin_form_class(
     model: type[models.Model],
     model_admin: Any,

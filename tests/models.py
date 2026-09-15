@@ -34,3 +34,32 @@ class Article(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class CatalogItem(models.Model):
+    """Concrete model shared by channel proxy admins."""
+
+    title = models.CharField(max_length=200)
+    channel = models.CharField(max_length=1)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.title
+
+
+class CatalogItemA(CatalogItem):
+    """Proxy for channel A rows (admin-scoped via get_queryset)."""
+
+    class Meta:
+        proxy = True
+        app_label = "tests"
+
+
+class CatalogItemB(CatalogItem):
+    """Proxy for channel B rows (admin-scoped via get_queryset)."""
+
+    class Meta:
+        proxy = True
+        app_label = "tests"
