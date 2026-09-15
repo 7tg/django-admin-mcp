@@ -183,6 +183,40 @@ async def async_check_permission(request: HttpRequest, model_admin: Any, action:
     return await sync_to_async(check_permission)(request, model_admin, action)
 
 
+def check_module_permission(request: HttpRequest, model_admin: Any) -> bool:
+    """
+    Check Django admin module-level permission (synchronous version).
+
+    Mirrors the admin index behavior: a ModelAdmin whose
+    ``has_module_permission()`` returns False is hidden entirely.
+
+    Args:
+        request: HttpRequest with user set.
+        model_admin: The ModelAdmin instance to check permissions against.
+
+    Returns:
+        True if the module is visible to the user, False otherwise.
+    """
+    if model_admin is None:
+        return True  # No admin = no permission restrictions
+
+    # If no user is set on request, skip permission checks (backwards compat)
+    user = getattr(request, "user", None)
+    if user is None:
+        return True
+
+    permission_method = getattr(model_admin, "has_module_permission", None)
+    if permission_method and callable(permission_method):
+        return bool(permission_method(request))
+
+    return True
+
+
+async def async_check_module_permission(request: HttpRequest, model_admin: Any) -> bool:
+    """Async wrapper around check_module_permission for use in handlers."""
+    return await sync_to_async(check_module_permission)(request, model_admin)
+
+
 def get_exposed_models() -> list[tuple[str, Any]]:
     """
     Get all models registered via MCPAdminMixin that have mcp_expose=True.

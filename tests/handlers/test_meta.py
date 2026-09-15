@@ -384,3 +384,54 @@ class TestHandleFindModelsPermissions:
         model_names = [m["model_name"] for m in data["models"]]
         assert "author" in model_names
         assert "article" in model_names
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+class TestFindModelsModulePermission:
+    """handle_find_models must respect ModelAdmin.has_module_permission (issue #64)."""
+
+    async def test_module_permission_false_hides_model_from_discovery(self):
+        """A model whose admin denies module permission is hidden even from superusers."""
+        from django_admin_mcp.handlers.base import get_model_admin  # noqa: PLC0415
+
+        uid = unique_id()
+        superuser = await sync_to_async(User.objects.create_superuser)(
+            username=f"module_super_{uid}",
+            email=f"module_super_{uid}@example.com",
+            password="test",
+        )
+        request = create_mock_request(superuser)
+
+        _, model_admin = get_model_admin("author")
+        model_admin.has_module_permission = lambda request: False
+        try:
+            result = await handle_find_models("", {}, request)
+            data = json.loads(result[0].text)
+            model_names = [m["model_name"] for m in data["models"]]
+            assert "author" not in model_names
+            assert "article" in model_names
+        finally:
+            del model_admin.has_module_permission
+
+    async def test_module_permission_true_keeps_model_visible(self):
+        """Default module permission keeps models discoverable for permitted users."""
+        uid = unique_id()
+        superuser = await sync_to_async(User.objects.create_superuser)(
+            username=f"module_super2_{uid}",
+            email=f"module_super2_{uid}@example.com",
+            password="test",
+        )
+        request = create_mock_request(superuser)
+
+        result = await handle_find_models("", {}, request)
+        data = json.loads(result[0].text)
+        model_names = [m["model_name"] for m in data["models"]]
+        assert "author" in model_names
+
+    async def test_no_user_request_skips_module_check(self):
+        """Requests without a user keep backwards-compatible behavior."""
+        request = create_mock_request()
+        result = await handle_find_models("", {}, request)
+        data = json.loads(result[0].text)
+        assert "models" in data

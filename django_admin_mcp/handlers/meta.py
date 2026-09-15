@@ -12,6 +12,7 @@ from django.db import models
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
+    async_check_module_permission,
     async_check_permission,
     json_response,
     safe_error_message,
@@ -285,6 +286,10 @@ async def handle_find_models(
         # Filter by user permissions (async operation)
         models_info = []
         for candidate in candidates:
+            # Hidden modules (has_module_permission=False) are excluded from
+            # discovery entirely, mirroring the Django admin index (issue #64)
+            if not await async_check_module_permission(request, candidate["model_admin"]):
+                continue
             if await async_check_permission(request, candidate["model_admin"], "view"):
                 # Remove model_admin before adding to response
                 models_info.append(
