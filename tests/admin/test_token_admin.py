@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib import admin
+from django.core.exceptions import PermissionDenied
 from django.test import RequestFactory
 from django.utils import timezone
 
@@ -183,3 +184,60 @@ class TestMCPTokenAdmin:
         token = form.save()
 
         assert token.expires_at is not None
+
+
+@pytest.mark.django_db
+class TestRegenerateTokenView:
+    """Token regeneration must be POST-only and permission-checked (issue #96)."""
+
+    def _admin(self):
+        return MCPTokenAdmin(MCPToken, admin.site)
+
+    def test_get_request_does_not_regenerate(self):
+        token = MCPTokenFactory()
+        original_key = token.token_key
+        staff = UserFactory(is_staff=True, is_superuser=True)
+        request = RequestFactory().get(f"/admin/django_admin_mcp/mcptoken/{token.pk}/regenerate/")
+        request.user = staff
+
+        response = self._admin().regenerate_token_view(request, token.pk)
+
+        assert response.status_code == 405
+        token.refresh_from_db()
+        assert token.token_key == original_key
+
+    def test_post_without_change_permission_is_denied(self):
+        token = MCPTokenFactory()
+        original_key = token.token_key
+        staff = UserFactory(is_staff=True)  # staff but no MCPToken permissions
+        request = RequestFactory().post(f"/admin/django_admin_mcp/mcptoken/{token.pk}/regenerate/")
+        request.user = staff
+
+        with pytest.raises(PermissionDenied):
+            self._admin().regenerate_token_view(request, token.pk)
+
+        token.refresh_from_db()
+        assert token.token_key == original_key
+
+    def test_post_with_change_permission_regenerates(self):
+        token = MCPTokenFactory()
+        original_key = token.token_key
+        staff = UserFactory(is_staff=True, is_superuser=True)
+        request = RequestFactory().post(f"/admin/django_admin_mcp/mcptoken/{token.pk}/regenerate/")
+        request.user = staff
+
+        admin_instance = self._admin()
+        with patch.object(MCPTokenAdmin, "message_user") as message_user:
+            response = admin_instance.regenerate_token_view(request, token.pk)
+
+        assert response.status_code == 302
+        assert message_user.called
+        token.refresh_from_db()
+        assert token.token_key != original_key
+
+    def test_regenerate_button_submits_via_post(self):
+        token = MCPTokenFactory()
+        html = self._admin().regenerate_token_button(token)
+
+        assert 'formmethod="post"' in html
+        assert "<a " not in html

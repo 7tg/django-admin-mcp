@@ -4,7 +4,8 @@ Admin configuration for django-admin-mcp models
 
 from django import forms
 from django.contrib import admin, messages
-from django.http import HttpResponseRedirect
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -106,11 +107,22 @@ class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
         return custom_urls + urls
 
     def regenerate_token_view(self, request, token_id):
-        """View to regenerate a token."""
+        """View to regenerate a token.
+
+        POST-only (regeneration invalidates the current token, and admin_view's
+        csrf_protect only covers unsafe methods) and gated on change permission —
+        admin_view alone admits any active staff user (issue #96).
+        """
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+
         token = self.get_object(request, token_id)
         if token is None:
             self.message_user(request, "Token not found.", messages.ERROR)
             return HttpResponseRedirect(reverse("admin:django_admin_mcp_mcptoken_changelist"))
+
+        if not self.has_change_permission(request, token):
+            raise PermissionDenied
 
         # Regenerate the token
         new_plaintext = token.regenerate_token()
@@ -134,11 +146,15 @@ class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
         """Display a button to regenerate the token."""
         if obj.pk:
             url = reverse("admin:django_admin_mcp_mcptoken_regenerate", args=[obj.pk])
+            # Rendered inside the admin change form: formaction/formmethod
+            # reuse that form's POST (and its CSRF token) for this URL, so
+            # regeneration never happens on a GET (issue #96)
             return format_html(
-                '<a class="button" href="{}" onclick="return confirm(\'Are you sure? '
-                "This will invalidate the current token immediately.');\""
+                '<button type="submit" class="button" formaction="{}" formmethod="post" '
+                "onclick=\"return confirm('Are you sure? "
+                "This will invalidate the current token immediately.');\" "
                 'style="background: #dc3545; color: white; padding: 5px 10px; '
-                'text-decoration: none; border-radius: 3px;">Regenerate Token</a>',
+                'border: none; border-radius: 3px;">Regenerate Token</button>',
                 url,
             )
         return "-"
