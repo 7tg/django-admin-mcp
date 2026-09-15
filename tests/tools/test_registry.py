@@ -11,6 +11,7 @@ from asgiref.sync import sync_to_async
 from django.contrib.auth.models import User
 from django.test import RequestFactory
 
+from django_admin_mcp.handlers.crud import SAFE_FILTER_LOOKUPS
 from django_admin_mcp.protocol.types import TextContent, Tool
 from django_admin_mcp.tools import (
     HANDLERS,
@@ -219,8 +220,6 @@ class TestGetModelTools:
     @pytest.mark.django_db
     def test_list_tool_description_covers_all_safe_lookups(self, django_setup_with_admin):
         """The list_* description must advertise every whitelisted filter lookup."""
-        from django_admin_mcp.handlers.crud import SAFE_FILTER_LOOKUPS
-
         tools = get_model_tools(Author)
         list_tool = next(t for t in tools if t.name == "list_author")
 
