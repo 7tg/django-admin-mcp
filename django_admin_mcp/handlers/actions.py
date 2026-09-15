@@ -343,9 +343,12 @@ async def handle_action(
 
         @sync_to_async
         def execute_action():
-            # Check delete permission before any ID lookup to avoid leaking existence
+            # Check delete permission before any ID lookup to avoid leaking existence.
+            # has_delete_permission requires request.user; requests without one fall
+            # through to the decorator-level permission handling.
             if action_name == "delete_selected":
-                if model_admin is not None and not model_admin.has_delete_permission(request):
+                user = getattr(request, "user", None)
+                if model_admin is not None and user is not None and not model_admin.has_delete_permission(request):
                     return {
                         "error": f"Permission denied: cannot delete {model_name}",
                         "code": "permission_denied",
