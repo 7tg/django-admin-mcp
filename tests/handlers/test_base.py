@@ -11,7 +11,9 @@ import pytest
 from django.contrib.auth.models import AnonymousUser, User
 from django.core.exceptions import FieldError
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files.base import ContentFile
 from django.db import IntegrityError, OperationalError
+from django.db.models.fields.files import FieldFile
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers import (
@@ -24,7 +26,7 @@ from django_admin_mcp.handlers import (
     serialize_instance,
 )
 from django_admin_mcp.handlers.base import MCPRequest, safe_error_message, sanitize_pydantic_errors
-from django_admin_mcp.protocol.types import TextContent
+from django_admin_mcp.protocol.types import ListResponse, TextContent
 from tests.models import Article, Author
 
 
@@ -206,6 +208,49 @@ class TestSerializeInstance:
         assert result["title"] == "Test Article"
         # FK should be serialized (either as ID or string)
         assert "author" in result
+
+    def test_empty_filefield_serializes_to_empty_string(self):
+        """Empty FileField must be a JSON string, never FieldFile (ImageFieldFile subclasses FieldFile)."""
+        uid = unique_id()
+        author = Author.objects.create(name=f"File Author {uid}", email=f"file_{uid}@example.com")
+        result = serialize_instance(author)
+        assert result["attachment"] == ""
+        assert isinstance(result["attachment"], str)
+        assert not isinstance(result["attachment"], FieldFile)
+
+    def test_stored_filefield_serializes_to_storage_path(self, tmp_path, settings):
+        """Stored FileField must serialize to the storage path string."""
+        settings.MEDIA_ROOT = str(tmp_path)
+        uid = unique_id()
+        author = Author.objects.create(name=f"File Author {uid}", email=f"file_{uid}@example.com")
+        author.attachment.save("hello.txt", ContentFile(b"hello"), save=True)
+        result = serialize_instance(author)
+        assert isinstance(result["attachment"], str)
+        assert result["attachment"]
+        assert "hello.txt" in result["attachment"]
+        assert not isinstance(result["attachment"], FieldFile)
+        dumped = ListResponse(count=1, total_count=1, results=[result]).model_dump_json()
+        assert "hello.txt" in dumped
+        parsed = json.loads(json_response(result)[0].text)
+        assert "hello.txt" in parsed["attachment"]
+
+    def test_list_response_dumps_filefield_json(self):
+        """ListResponse.model_dump_json must succeed (production crash on ImageFieldFile)."""
+        uid = unique_id()
+        author = Author.objects.create(name=f"File Author {uid}", email=f"file_{uid}@example.com")
+        serialized = serialize_instance(author)
+        json_text = ListResponse(count=1, total_count=1, results=[serialized]).model_dump_json()
+        data = json.loads(json_text)
+        assert data["results"][0]["attachment"] == ""
+
+    def test_json_response_dumps_filefield(self):
+        """json_response (get/related path) must succeed on a serialized FileField."""
+        uid = unique_id()
+        author = Author.objects.create(name=f"File Author {uid}", email=f"file_{uid}@example.com")
+        serialized = serialize_instance(author)
+        result = json_response(serialized)
+        data = json.loads(result[0].text)
+        assert data["attachment"] == ""
 
 
 @pytest.mark.django_db

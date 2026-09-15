@@ -11,6 +11,7 @@ class Author(models.Model):
     name = models.CharField(max_length=200)
     email = models.EmailField(unique=True)
     bio = models.TextField(blank=True)
+    attachment = models.FileField(upload_to="attachments/", blank=True)
 
     class Meta:
         app_label = "tests"
