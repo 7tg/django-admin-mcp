@@ -14,8 +14,8 @@ Django Admin MCP uses token-based authentication for all API requests. This guid
     - **Name** — Descriptive identifier (e.g., "MCP - Development")
     - **Is Active** — Enable/disable the token
     - **Expires At** — Expiration date (leave blank for a token that never expires)
-    - **User** — The Django user actions are audit-logged under (required; the user's own permissions are **not** used for authorization)
-    - **Groups** / **Permissions** — What the token is allowed to do: these token-level assignments are the sole source of authorization
+    - **User** — Caps the token's access (the token can never exceed this user's permissions) and is the identity actions are audit-logged under (required)
+    - **Groups** / **Permissions** — What the token is allowed to do, up to the linked user's own permissions
 
 5. Click **Save**
 6. Copy the generated token — it is only displayed once after creation
@@ -28,7 +28,7 @@ An existing token's change page also offers a **Regenerate Token** button that i
 from django_admin_mcp.models import MCPToken
 from django.contrib.auth.models import Permission, User
 
-# The user is for audit logging; it does not grant any access
+# The user caps the token's access and is the audit identity
 user = User.objects.get(username='mcp-agent')
 
 token = MCPToken.objects.create(
@@ -37,6 +37,7 @@ token = MCPToken.objects.create(
 )
 
 # Grant the token exactly the permissions the agent needs
+# (effective only if the linked user holds them too)
 token.permissions.add(
     Permission.objects.get(codename='view_article', content_type__app_label='blog'),
 )
@@ -109,8 +110,8 @@ This is automatically updated on each authenticated request.
 
 ## Permission Assignment
 
-!!! important "Permissions live on the token"
-    At request time, every check runs against the token's own `permissions` and `groups`. The linked user's Django permissions are **not** inherited — even a token bound to a superuser has no access until permissions are granted on the token. Tokens start with no permissions (principle of least privilege).
+!!! important "Effective permissions = token grants ∩ user permissions"
+    At request time, every check runs against the token's own `permissions` and `groups`, capped by the linked user's Django permissions — a token can narrow its user's access but never exceed it. Tokens start with no permissions (principle of least privilege): even a superuser-bound token has no access until permissions are granted on the token, and a grant the linked user lacks stays ineffective.
 
 ### Direct Permissions
 
@@ -139,11 +140,14 @@ token.groups.add(editors)
 ### Check Permissions
 
 ```python
-# Effective permissions: direct + group permissions on the token
-perms = token.get_all_permissions()
-print(f"Permissions: {perms}")
+# Permissions granted on the token (direct + group)
+grants = token.get_all_permissions()
 
-# Single checks
+# Effective permissions: grants capped by the linked user's permissions
+perms = token.get_effective_permissions()
+print(f"Effective permissions: {perms}")
+
+# Single checks against the grants
 token.has_perm('blog.view_article')
 token.has_module_perms('blog')
 ```
@@ -152,16 +156,14 @@ token.has_module_perms('blog')
 
 ### Principle of Least Privilege
 
-Grant each token only the permissions it needs:
+Grant each token only the permissions it needs (the linked user must hold them too — it caps the token):
 
 ```python
 from django.contrib.auth.models import User, Permission
 from django.contrib.contenttypes.models import ContentType
 from blog.models import Article, Author
 
-audit_user = User.objects.get(username='mcp-agent')  # audit trail only
-readonly_token = MCPToken.objects.create(name='Read Only', user=audit_user)
-readonly_token.permissions.add(
+view_perms = [
     Permission.objects.get(
         codename='view_article',
         content_type=ContentType.objects.get_for_model(Article),
@@ -170,7 +172,13 @@ readonly_token.permissions.add(
         codename='view_author',
         content_type=ContentType.objects.get_for_model(Author),
     ),
-)
+]
+
+agent_user = User.objects.get(username='mcp-agent')
+agent_user.user_permissions.add(*view_perms)
+
+readonly_token = MCPToken.objects.create(name='Read Only', user=agent_user)
+readonly_token.permissions.add(*view_perms)
 ```
 
 ### Use Expiration Dates

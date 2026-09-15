@@ -33,7 +33,8 @@ Request with Token
        ↓
 Token Validation (active, not expired)
        ↓
-request.user = permission proxy answering from the token's permissions/groups
+request.user = permission proxy answering from the token's effective permissions
+               (token permissions/groups ∩ linked user's permissions)
        ↓
 ModelAdmin.has_module_permission() / has_<action>_permission()
        ↓
@@ -46,8 +47,8 @@ Because checks go through the `ModelAdmin` methods, custom `has_*_permission()` 
 
 ## Permission Sources
 
-!!! important "Authorization uses the token's own permissions"
-    Every check runs against the token's `permissions` and `groups` fields. The linked user's Django permissions are **not** inherited — the user exists for audit logging only, and even a superuser-bound token has no access until permissions are granted on the token. Tokens start with no permissions (principle of least privilege).
+!!! important "Effective permissions = token grants ∩ user permissions"
+    Every check runs against the token's `permissions` and `groups` fields, **capped by the linked user's Django permissions** — a token can narrow its user's access but never exceed it. The user's permissions are not inherited (a permission must be granted on the token to be usable), tokens start with no permissions (principle of least privilege), and a token granted something its user lacks is still denied. Binding to a superuser means the token's grants apply as-is; deactivating the linked user disables all its tokens' access.
 
 ### Direct Permissions
 
@@ -131,18 +132,20 @@ When a permission check fails, the tool returns an error object (delivered as JS
 
 ## Best Practices
 
-Create one token per integration and grant it only the permissions it needs. The linked user is the audit identity — actions appear under it in the Django admin history.
+Create one token per integration and grant it only the permissions it needs. The linked user must hold at least those permissions (it caps the token) and is the audit identity — actions appear under it in the Django admin history.
 
 ### Read-Only Tokens
 
 For monitoring or exploration:
 
 ```python
-audit_user = User.objects.get(username='mcp-agent')
-readonly_token = MCPToken.objects.create(name='Read Only', user=audit_user)
-readonly_token.permissions.add(
-    *Permission.objects.filter(codename__startswith='view_')
-)
+# The linked user caps the token, so it must hold the permissions too
+agent_user = User.objects.get(username='mcp-agent')
+view_perms = Permission.objects.filter(codename__startswith='view_')
+agent_user.user_permissions.add(*view_perms)
+
+readonly_token = MCPToken.objects.create(name='Read Only', user=agent_user)
+readonly_token.permissions.add(*view_perms)
 ```
 
 ### Model-Specific Tokens
@@ -150,12 +153,13 @@ readonly_token.permissions.add(
 For single-purpose integrations:
 
 ```python
-article_token = MCPToken.objects.create(name='Article Manager', user=audit_user)
-article_token.permissions.add(
-    *Permission.objects.filter(
-        content_type=ContentType.objects.get_for_model(Article)
-    )
+article_perms = Permission.objects.filter(
+    content_type=ContentType.objects.get_for_model(Article)
 )
+agent_user.user_permissions.add(*article_perms)
+
+article_token = MCPToken.objects.create(name='Article Manager', user=agent_user)
+article_token.permissions.add(*article_perms)
 ```
 
 ### Audit Permissions
@@ -164,7 +168,7 @@ Review each token's effective permissions regularly:
 
 ```python
 for token in MCPToken.objects.filter(is_active=True).select_related('user'):
-    perms = token.get_all_permissions()
+    perms = token.get_effective_permissions()  # grants ∩ user permissions
     print(f"{token.name} (logs as {token.user.username}): {len(perms)} permissions")
     for perm in sorted(perms):
         print(f"  - {perm}")
@@ -200,7 +204,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
         return request.user.has_perm('blog.publish_article')
 ```
 
-Grant `blog.publish_article` to the token (directly or via one of its groups) to allow the action — `request.user.has_perm(...)` in MCP requests answers from the token's permissions.
+Grant `blog.publish_article` to the token (directly or via one of its groups) — and make sure its linked user holds it too — to allow the action. `request.user.has_perm(...)` in MCP requests answers from the token's effective permissions.
 
 Without `permissions=[...]` on the action, executing it via `action_<model>` only requires `change_<model>`.
 

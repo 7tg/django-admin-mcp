@@ -8,12 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed — BREAKING
-- **Token-level permissions are now enforced.** Authorization answers from the token's own `permissions` and `groups` fields (via a permission proxy placed on `request.user`); the linked user's Django permissions are no longer consulted, and a token bound to a superuser has no implicit access. The linked user remains the audit identity for `LogEntry` records. **Upgrade note:** existing tokens that relied on their user's permissions must be granted equivalent permissions/groups on the token itself before upgrading, or their requests will be denied.
+- **Token-level permissions are now enforced.** Authorization answers from the token's effective permissions — its own `permissions` and `groups` fields intersected with the linked user's Django permissions — via a permission proxy placed on `request.user`. A token can narrow its user's access but never exceed it: a token with no grants has no access even when bound to a superuser, a grant the linked user lacks stays ineffective, and deactivating the linked user disables the token's access. The linked user remains the audit identity for `LogEntry` records. **Upgrade note:** existing tokens had access equal to their user's permissions; after upgrading they must also be granted the needed permissions/groups on the token itself, or their requests will be denied.
 - Leaving **Expires At** blank in the admin form now creates a token that never expires, matching the field's help text. Programmatic creation without an `expires_at` kwarg still defaults to 90 days.
 
 ### Added
+- `MCPToken.get_effective_permissions()` — the token's grants capped by the linked user's permissions (what requests actually authorize with)
 - `MCPToken.has_module_perms(app_label)` — module-level permission check mirroring Django's `User.has_module_perms`, used by `find_models` discovery
-- `TokenUser` permission proxy (`django_admin_mcp.models.TokenUser`) answering Django's permission API from token permissions while delegating identity attributes to the linked user
+- `TokenUser` permission proxy (`django_admin_mcp.models.TokenUser`) answering Django's permission API from the token's effective permissions while delegating identity attributes to the linked user
 
 ### Fixed
 - `find_models` now reports `tools_exposed` based on each admin's `mcp_expose` flag instead of always `true`

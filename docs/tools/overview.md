@@ -206,7 +206,7 @@ There is no `isError` flag. Tool-level errors (permission denied, not found, val
 
 ## Permission Requirements
 
-Each tool requires specific Django permissions, checked against the permissions and groups assigned to the API token:
+Each tool requires specific Django permissions, checked against the API token's effective permissions (its assigned permissions and groups, capped by the linked user's permissions):
 
 | Operation | Permission Pattern |
 |-----------|-------------------|

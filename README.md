@@ -103,7 +103,7 @@ class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 ### 2. Create an API Token
 
-Go to Django admin at `/admin/django_admin_mcp/mcptoken/` and create a token. Grant the token exactly the permissions the agent needs via its **Permissions** and **Groups** fields — tokens start with no access, and the linked user is only the audit identity (its own permissions are not inherited).
+Go to Django admin at `/admin/django_admin_mcp/mcptoken/` and create a token. Grant the token exactly the permissions the agent needs via its **Permissions** and **Groups** fields — tokens start with no access. The linked user caps the token (it can never exceed that user's permissions) and is the audit identity actions are logged under.
 
 ### 3. Configure Your MCP Client
 
@@ -330,14 +330,15 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 ### Token Authentication
 
 - Tokens are created in Django admin (format: `mcp_<key>.<secret>`; only a salted hash of the secret is stored)
-- Each token carries its own permissions and groups; the linked Django user is the audit identity actions are logged under — its permissions are not inherited
+- Each token carries its own permissions and groups, capped by the linked Django user's permissions: a token can narrow its user's access but never exceed it
 - Tokens start with no permissions (principle of least privilege); even a superuser-bound token has no access until granted
+- The linked user is also the audit identity actions are logged under; deactivating the user disables all its tokens' access
 - Token expiry is configurable (blank in the admin form = never expires; programmatic creation defaults to 90 days)
 - Revoke tokens by deactivating or deleting them in admin
 
 ### Permission Checking
 
-All operations go through `ModelAdmin.has_*_permission()`, answered from the token's permissions:
+All operations go through `ModelAdmin.has_*_permission()`, answered from the token's effective permissions (its grants intersected with the linked user's permissions):
 
 | Operation | Required Permission |
 |-----------|-------------------|

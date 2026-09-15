@@ -159,6 +159,45 @@ class TestTokenPermissions:
 
         assert not token.has_module_perms("tests")
 
+    def test_effective_permissions_capped_by_user(self):
+        """Test get_effective_permissions is the intersection of token grants and user permissions."""
+        user = UserFactory()
+        content_type = ContentType.objects.get_for_model(Article)
+        view_perm = Permission.objects.get(content_type=content_type, codename="view_article")
+        delete_perm = Permission.objects.get(content_type=content_type, codename="delete_article")
+        user.user_permissions.add(view_perm)
+
+        token = MCPTokenFactory(user=user)
+        token.permissions.add(view_perm, delete_perm)
+
+        effective = token.get_effective_permissions()
+
+        assert "tests.view_article" in effective
+        assert "tests.delete_article" not in effective  # user lacks it
+
+    def test_effective_permissions_with_superuser(self):
+        """Test a superuser-bound token's effective permissions equal its grants."""
+        superuser = UserFactory(is_superuser=True)
+        content_type = ContentType.objects.get_for_model(Article)
+        view_perm = Permission.objects.get(content_type=content_type, codename="view_article")
+
+        token = MCPTokenFactory(user=superuser)
+        token.permissions.add(view_perm)
+
+        assert token.get_effective_permissions() == {"tests.view_article"}
+
+    def test_effective_permissions_empty_for_inactive_user(self):
+        """Test that deactivating the linked user removes all effective permissions."""
+        user = UserFactory(is_active=False)
+        content_type = ContentType.objects.get_for_model(Article)
+        view_perm = Permission.objects.get(content_type=content_type, codename="view_article")
+        user.user_permissions.add(view_perm)
+
+        token = MCPTokenFactory(user=user)
+        token.permissions.add(view_perm)
+
+        assert token.get_effective_permissions() == set()
+
     def test_has_perms_checks_multiple_permissions(self):
         """Test has_perms checks all given permissions."""
         token = MCPTokenFactory()

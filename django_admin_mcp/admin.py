@@ -68,10 +68,10 @@ class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
             "Permissions",
             {
                 "fields": ("user", "groups", "permissions"),
-                "description": "Groups and permissions control what the token can access; "
-                "the user is the audit identity actions are logged under (its own permissions "
-                "are not inherited). Tokens with no permissions have no access "
-                "(principle of least privilege).",
+                "description": "Groups and permissions control what the token can access, "
+                "capped by the user's own permissions (a token can narrow its user's access "
+                "but never exceed it). The user is also the audit identity actions are logged "
+                "under. Tokens with no permissions have no access (principle of least privilege).",
             },
         ),
         (

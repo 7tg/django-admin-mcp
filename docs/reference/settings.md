@@ -219,7 +219,7 @@ Token behavior is configured per-token in Django admin:
 | `token_key` | CharField | Auto-generated | Public key for O(1) lookup |
 | `token_hash` | CharField | Auto-generated | SHA-256 hash of the secret |
 | `salt` | CharField | Auto-generated | Per-token salt for hashing |
-| `user` | ForeignKey | Required | Django user for audit logging (permissions not inherited) |
+| `user` | ForeignKey | Required | Caps the token's permissions and is the audit identity |
 | `is_active` | Boolean | `True` | Enable/disable token |
 | `expires_at` | DateTime | See below | Expiration date |
 | `groups` | M2M | Empty | Groups granting permissions to the token |
@@ -237,8 +237,8 @@ Token format: `mcp_<key>.<secret>` — the key is stored in plaintext for lookup
 
 ### Permission Sources
 
-!!! important "Authorization uses the token's own permissions"
-    At request time, permission checks run through `ModelAdmin.has_*_permission()`, answered from the token's `permissions` and `groups` fields. The linked user's Django permissions are **not** inherited — the user is the audit identity only, and even a superuser-bound token has no access until permissions are granted on the token.
+!!! important "Effective permissions = token grants ∩ user permissions"
+    At request time, permission checks run through `ModelAdmin.has_*_permission()`, answered from the token's `permissions` and `groups` fields capped by the linked user's Django permissions. A token can narrow its user's access but never exceed it. The user's permissions are not inherited (grants must be on the token), even a superuser-bound token has no access until granted, and deactivating the linked user disables the token's access entirely.
 
 ---
 

@@ -1,8 +1,8 @@
 """
-End-to-end tests: HTTP authorization is enforced from the token's own permissions.
-
-The linked user is for audit logging only — even a superuser-bound token has
-no access unless permissions are granted on the token itself.
+End-to-end tests: HTTP authorization is enforced from the token's effective
+permissions — the token's own permissions/groups capped by the linked user's
+permissions. A token can narrow its user's access, never extend it, and even
+a superuser-bound token has no access unless permissions are granted on it.
 """
 
 import json
@@ -31,11 +31,15 @@ def make_superuser_token():
 
 
 @sync_to_async
-def make_token_with_perms(*codenames):
+def make_token_with_perms(*codenames, user_codenames=None):
+    """Token granted `codenames`; its user holds `user_codenames` (defaults to the same)."""
     user = User.objects.create_user(
         username=f"enforce_user_{User.objects.count()}",
         password="test",
     )
+    user_perms = codenames if user_codenames is None else user_codenames
+    if user_perms:
+        user.user_permissions.add(*Permission.objects.filter(codename__in=user_perms))
     token = MCPTokenFactory(user=user)
     if codenames:
         token.permissions.add(*Permission.objects.filter(codename__in=codenames))
@@ -81,8 +85,19 @@ class TestTokenPermissionEnforcement:
         assert payload.get("code") == "permission_denied"
 
     @pytest.mark.asyncio
+    async def test_token_grant_exceeding_user_permissions_is_denied(self):
+        """A token granted view_author whose user lacks it gets no access — the user caps the token."""
+        token = await make_token_with_perms("view_author", user_codenames=())
+
+        status, data = await call_tool_rpc(token, "list_author")
+
+        assert status == 200
+        payload = tool_payload(data)
+        assert payload.get("code") == "permission_denied"
+
+    @pytest.mark.asyncio
     async def test_token_level_view_permission_grants_access(self):
-        """A token holding view_author can list authors even though its user has no permissions."""
+        """A token holding view_author (also held by its user) can list authors."""
         token = await make_token_with_perms("view_author")
 
         status, data = await call_tool_rpc(token, "list_author")

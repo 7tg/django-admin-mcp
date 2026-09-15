@@ -33,13 +33,13 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
 3. Click **Add MCP Token**
 4. Fill in:
     - **Name**: A descriptive name (e.g., "MCP Token")
-    - **User**: The user actions are audit-logged under (its own permissions are not inherited)
-    - **Permissions** / **Groups**: What the token is allowed to do — tokens start with no access
+    - **User**: Caps the token's access (it can never exceed this user's permissions) and is the audit identity
+    - **Permissions** / **Groups**: What the token is allowed to do, up to the user's own permissions — tokens start with no access
 5. Click **Save**
 6. Copy the generated token (displayed only once after creation)
 
 !!! warning "Token Security"
-    The token is only displayed once after creation — store it securely. Access is governed by the permissions and groups assigned to the token itself; grant only what the agent needs (even a superuser-bound token has no access until granted).
+    The token is only displayed once after creation — store it securely. Access is governed by the permissions and groups assigned to the token, capped by the linked user's permissions; grant only what the agent needs (even a superuser-bound token has no access until granted).
 
 ## Configure Your MCP Client
 

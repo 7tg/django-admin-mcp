@@ -20,9 +20,11 @@ class MCPToken(models.Model):
     Each token provides access to specific MCP tools and can be enabled/disabled.
     Tokens can have an expiry date or be indefinite (expires_at=None).
 
-    Permissions are managed through direct permissions and groups assigned to the token,
-    NOT inherited from the linked user. The user field is used only for audit logging
-    (actions taken via this token are logged under the user in Django admin history).
+    Permissions are managed through direct permissions and groups assigned to the
+    token, capped by the linked user's Django permissions: a token can narrow its
+    user's access but never exceed it, and holds nothing the user lacks. The user
+    is also the audit identity (actions taken via this token are logged under the
+    user in Django admin history).
     """
 
     # Token format: mcp_<key>.<secret>
@@ -59,7 +61,8 @@ class MCPToken(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="mcp_tokens",
-        help_text="User for audit logging (actions are logged under this user)",
+        help_text="Caps the token's permissions (the token can never exceed this user's access) "
+        "and is the audit identity actions are logged under",
     )
     is_active = models.BooleanField(default=True, help_text="Whether this token is currently active")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -359,6 +362,23 @@ class MCPToken(models.Model):
 
         return perms
 
+    def get_effective_permissions(self):
+        """
+        Get the permissions the token can actually exercise.
+
+        The token's own grants (direct permissions + groups) capped by the
+        linked user's Django permissions — a token can narrow its user's
+        access but never exceed it. A superuser satisfies the cap for every
+        permission; an inactive user has no permissions, disabling the token.
+
+        Returns:
+            set: Set of permission strings in 'app_label.codename' format
+        """
+        # For inactive users Django's ModelBackend reports no permissions,
+        # and for superusers it reports all of them — so a plain
+        # intersection implements the cap in every case.
+        return self.get_all_permissions() & self.user.get_all_permissions()
+
     def has_module_perms(self, app_label):
         """
         Check if the token holds any permission in the given app.
@@ -382,13 +402,15 @@ class TokenUser:
     Permission proxy placed on MCP requests as ``request.user``.
 
     Answers Django's permission API (``has_perm``, ``has_perms``,
-    ``has_module_perms``, ``get_all_permissions``) from the token's own
-    permissions and groups, while delegating every other attribute
+    ``has_module_perms``, ``get_all_permissions``) from the token's
+    effective permissions — its own permissions and groups capped by the
+    linked user's permissions — while delegating every other attribute
     (``pk``, ``username``, ...) to the linked user so audit logging and
     admin hooks keep working.
 
-    The linked user's own permissions are never consulted — a token bound
-    to a superuser has no implicit access (principle of least privilege).
+    A token can narrow its user's access but never exceed it, and a token
+    with no grants has no access even when bound to a superuser
+    (principle of least privilege).
     """
 
     def __init__(self, token: MCPToken):
@@ -410,7 +432,7 @@ class TokenUser:
 
     def _permissions(self) -> set[str]:
         if self._perm_cache is None:
-            self._perm_cache = self._token.get_all_permissions()
+            self._perm_cache = self._token.get_effective_permissions()
         return self._perm_cache
 
     def has_perm(self, perm, obj=None):

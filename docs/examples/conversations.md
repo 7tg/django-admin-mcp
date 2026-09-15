@@ -352,7 +352,8 @@ I can't delete articles - this API token doesn't have delete permission.
 To fix this:
 1. Go to Django admin
 2. Open the MCP token under Django Admin MCP > MCP Tokens
-3. Grant it the "blog.delete_article" permission (directly or via a group)
+3. Grant it the "blog.delete_article" permission (directly or via a group);
+   the token's linked user must hold the permission as well
 
 Or use a token that has delete access.
 ```

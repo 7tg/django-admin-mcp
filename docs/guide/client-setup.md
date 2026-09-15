@@ -267,8 +267,8 @@ Tool calls that fail a permission check return HTTP 200 with an error object ins
 {"error": "Permission denied: cannot view article", "code": "permission_denied"}
 ```
 
-- The token lacks the required permission
-- Grant the permission to the token (via its `permissions` or `groups` fields in the MCP Token admin)
+- The token lacks the required permission, or its linked user does (the user caps the token)
+- Grant the permission to the token (via its `permissions` or `groups` fields in the MCP Token admin) and make sure the linked user holds it too
 
 ### No Tools Available
 
