@@ -34,9 +34,7 @@ def unique_id():
 
 @sync_to_async
 def create_plain_user(uid):
-    return User.objects.create_user(
-        username=f"noperm_{uid}", email=f"noperm_{uid}@example.com", password="x"
-    )
+    return User.objects.create_user(username=f"noperm_{uid}", email=f"noperm_{uid}@example.com", password="x")
 
 
 @sync_to_async
@@ -97,17 +95,13 @@ class TestTokenEdgeCases:
 
     @pytest.mark.asyncio
     async def test_token_expired_one_second_ago_is_rejected(self):
-        token = await sync_to_async(MCPTokenFactory)(
-            expires_at=timezone.now() - datetime.timedelta(seconds=1)
-        )
+        token = await sync_to_async(MCPTokenFactory)(expires_at=timezone.now() - datetime.timedelta(seconds=1))
         response = await self._post(token.plaintext_token)
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_token_expiring_in_the_future_is_accepted(self):
-        token = await sync_to_async(MCPTokenFactory)(
-            expires_at=timezone.now() + datetime.timedelta(hours=1)
-        )
+        token = await sync_to_async(MCPTokenFactory)(expires_at=timezone.now() + datetime.timedelta(hours=1))
         response = await self._post(token.plaintext_token)
         assert response.status_code == 200
 
@@ -126,9 +120,7 @@ class TestTokenEdgeCases:
 
     @pytest.mark.asyncio
     async def test_expired_token_not_marked_used(self):
-        token = await sync_to_async(MCPTokenFactory)(
-            expires_at=timezone.now() - datetime.timedelta(seconds=1)
-        )
+        token = await sync_to_async(MCPTokenFactory)(expires_at=timezone.now() - datetime.timedelta(seconds=1))
         response = await self._post(token.plaintext_token)
         assert response.status_code == 401
 
@@ -151,9 +143,7 @@ class TestInputInjection:
 
         @sync_to_async
         def superuser_request():
-            user = User.objects.create_superuser(
-                username=f"inj_{uid}", email=f"inj_{uid}@example.com", password="x"
-            )
+            user = User.objects.create_superuser(username=f"inj_{uid}", email=f"inj_{uid}@example.com", password="x")
             return create_mock_request(user)
 
         request = await superuser_request()
@@ -175,9 +165,7 @@ class TestInputInjection:
 
         @sync_to_async
         def superuser_request():
-            user = User.objects.create_superuser(
-                username=f"inj2_{uid}", email=f"inj2_{uid}@example.com", password="x"
-            )
+            user = User.objects.create_superuser(username=f"inj2_{uid}", email=f"inj2_{uid}@example.com", password="x")
             return create_mock_request(user)
 
         request = await superuser_request()

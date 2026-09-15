@@ -75,9 +75,7 @@ class TestInlineOperations:
             {
                 "id": author.pk,
                 "data": {},
-                "inlines": {
-                    "article": [{"data": {"title": f"Extra {uid}", "content": "c", "not_a_field": "ignored"}}]
-                },
+                "inlines": {"article": [{"data": {"title": f"Extra {uid}", "content": "c", "not_a_field": "ignored"}}]},
             },
             request,
         )
