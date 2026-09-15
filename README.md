@@ -228,6 +228,30 @@ Agent: [calls action_article with action="mark_as_published", ids=[1,2,3]]
 Marked 3 articles as published.
 ```
 
+When an admin action returns a Django `HttpResponse` / `StreamingHttpResponse` (typical for CSV/TSV/PDF downloads), `action_<model>` serializes the body instead of `str(response)`:
+
+```json
+{
+  "success": true,
+  "action": "export_csv",
+  "affected_count": 2,
+  "result": {
+    "type": "file",
+    "encoding": "utf-8",
+    "content_type": "text/csv; charset=utf-8",
+    "filename": "export.csv",
+    "content_disposition": "attachment; filename=\"export.csv\"",
+    "size": 10,
+    "status_code": 200,
+    "content": "a,b\r\n1,2\r\n"
+  }
+}
+```
+
+Text-ish content types (`text/*`, `application/json`, …) decode using the `Content-Type` charset (or `response.charset`, default UTF-8) and return `"encoding": "utf-8"` with Unicode text in `content`. If that decode fails (unknown charset or invalid bytes), the payload falls back to `"encoding": "base64"` like binary downloads. Binary payloads use `"encoding": "base64"` with ASCII base64 in `content`.
+
+Large downloads are rejected once the body exceeds `MCP_ACTION_MAX_FILE_BYTES` (default 5 MiB) to protect MCP transports.
+
 ### 📦 Bulk Operations
 
 ```
