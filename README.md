@@ -21,7 +21,7 @@ Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add
 
 ## ✨ Features
 
-- 📦 **Zero dependencies** — only Django and Pydantic required
+- 📦 **Only two dependencies** — Django and Pydantic, nothing else. No MCP SDK, no extra HTTP stack, no supply-chain sprawl
 - 🔐 **Token authentication** — secure Bearer token auth with configurable expiry
 - 🛡️ **Django admin permissions** — respects existing view/add/change/delete permissions
 - 🔒 **Field filtering** — control which fields are exposed via `mcp_fields` and `mcp_exclude_fields`
@@ -32,6 +32,7 @@ Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add
 - 🔗 **Related objects** — traverse foreign keys and reverse relations
 - 📜 **Change history** — access Django admin's history log
 - 🔎 **Autocomplete** — search suggestions for foreign key fields
+- 🧭 **MCP Prompts & Resources** — workflow guides plus read-only data access via `models://` and `data://` URIs
 
 ---
 
