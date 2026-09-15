@@ -74,15 +74,22 @@ async def handle_related(
         except (model.DoesNotExist, ValueError, TypeError):
             return {"error": f"{model_name} not found"}
 
-        # Check if the relation exists
-        if not hasattr(obj, relation):
-            # Try to find in related fields
-            for field in model._meta.get_fields():
-                if hasattr(field, "get_accessor_name"):
-                    if field.get_accessor_name() == relation:
-                        break
+        # Only actual relations are served: plain fields, properties, and
+        # methods must not be reachable here — that would bypass
+        # mcp_fields/mcp_exclude_fields serialization filtering (issue #90)
+        relation_names = set()
+        for field in model._meta.get_fields():
+            if not field.is_relation:
+                continue
+            if field.concrete:
+                relation_names.add(field.name)  # forward FK/O2O/M2M
             else:
-                return {"error": f"Relation '{relation}' not found on model"}
+                accessor = getattr(field, "get_accessor_name", lambda: None)()
+                if accessor:  # reverse relations; None for related_name="+"
+                    relation_names.add(accessor)
+
+        if relation not in relation_names:
+            return {"error": f"Relation '{relation}' not found on model"}
 
         related_attr = getattr(obj, relation)
 

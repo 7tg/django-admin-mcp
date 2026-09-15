@@ -133,19 +133,20 @@ class TestEdgeCasesAndErrors:
         assert response["type"] == "single"
         assert response["result"]["name"] == "Single"
 
-    async def test_related_simple_value(self):
-        """Test related navigation for simple field value."""
+    async def test_related_simple_value_is_rejected(self):
+        """Simple fields are not relations and must be rejected (issue #90)."""
 
         author = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: Author.objects.create(name="Value Test", email="value@rel.com"),
         )
 
-        # Access a simple field like 'name'
+        # Accessing a simple field like 'name' must not disclose its value
         result = await MCPAdminMixin.handle_tool_call("related_author", {"id": author.id, "relation": "name"})
         response = json.loads(result[0].text)
-        assert response["type"] == "value"
-        assert response["value"] == "Value Test"
+        assert "error" in response
+        assert "not found" in response["error"].lower()
+        assert "Value Test" not in result[0].text
 
     async def test_bulk_missing_operation(self):
         """Test bulk without operation parameter."""

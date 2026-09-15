@@ -109,13 +109,11 @@ Response:
 }
 ```
 
-Non-relational attributes return a `type: "value"` wrapper with the attribute's string representation:
+Only actual relations (forward FK/O2O/M2M fields and reverse accessors) can be fetched. Passing a plain field, property, or method name returns an error:
 
 ```json
 {
-  "relation": "title",
-  "type": "value",
-  "value": "Getting Started with Django"
+  "error": "Relation 'title' not found on model"
 }
 ```
 

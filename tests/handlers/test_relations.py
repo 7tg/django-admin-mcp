@@ -274,8 +274,8 @@ class TestHandleRelated:
 
     @pytest.mark.django_db
     @pytest.mark.asyncio
-    async def test_simple_field_value(self):
-        """Test fetching a simple field value (treated as value type)."""
+    async def test_simple_field_value_is_rejected(self):
+        """Plain fields are not relations and must be rejected (issue #90)."""
         uid = unique_id()
         author = await create_author(f"Test Author {uid}", f"test_{uid}@example.com")
         request = create_mock_request()
@@ -285,8 +285,8 @@ class TestHandleRelated:
             request,
         )
         data = json.loads(result[0].text)
-        assert data["type"] == "value"
-        assert f"Test Author {uid}" in data["value"]
+        assert "error" in data
+        assert "not found" in data["error"].lower()
 
 
 class TestHandleHistory:
@@ -553,3 +553,66 @@ class TestHandleAutocomplete:
         assert "text" in result_item
         assert isinstance(result_item["id"], int)
         assert isinstance(result_item["text"], str)
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestRelatedRelationValidation:
+    """related_<model> must only serve actual relations (issue #90)."""
+
+    @staticmethod
+    async def _superuser_request(uid):
+        user = await sync_to_async(User.objects.create_superuser)(
+            username=f"relguard_{uid}", email=f"relguard_{uid}@example.com", password="x"
+        )
+        return create_mock_request(user)
+
+    async def test_plain_field_is_rejected_as_relation(self):
+        """Non-relation model fields must not be readable via related_."""
+        uid = unique_id()
+        author = await create_author(f"Rel Guard {uid}", f"relguard_{uid}@example.com")
+        await sync_to_async(Author.objects.filter(pk=author.pk).update)(bio=f"secret bio {uid}")
+        request = await self._superuser_request(uid)
+
+        result = await handle_related("author", {"id": author.pk, "relation": "bio"}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" in data
+        assert "not found" in data["error"].lower()
+        assert f"secret bio {uid}" not in result[0].text
+
+    async def test_arbitrary_attribute_is_rejected_as_relation(self):
+        """Model methods/properties must not be reachable via related_."""
+        uid = unique_id()
+        author = await create_author(f"Attr Guard {uid}", f"attrguard_{uid}@example.com")
+        request = await self._superuser_request(uid)
+
+        result = await handle_related("author", {"id": author.pk, "relation": "save"}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" in data
+        assert "not found" in data["error"].lower()
+
+    async def test_reverse_fk_relation_still_works(self):
+        uid = unique_id()
+        author = await create_author(f"Rev OK {uid}", f"revok_{uid}@example.com")
+        article = await create_article(f"Rev Article {uid}", "content", author)
+        request = await self._superuser_request(uid)
+
+        result = await handle_related("author", {"id": author.pk, "relation": "articles"}, request)
+        data = json.loads(result[0].text)
+
+        assert data["type"] == "many"
+        assert {row["id"] for row in data["results"]} == {article.pk}
+
+    async def test_forward_fk_relation_still_works(self):
+        uid = unique_id()
+        author = await create_author(f"Fwd OK {uid}", f"fwdok_{uid}@example.com")
+        article = await create_article(f"Fwd Article {uid}", "content", author)
+        request = await self._superuser_request(uid)
+
+        result = await handle_related("article", {"id": article.pk, "relation": "author"}, request)
+        data = json.loads(result[0].text)
+
+        assert data["type"] == "single"
+        assert data["result"]["id"] == author.pk
