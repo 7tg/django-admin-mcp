@@ -35,8 +35,8 @@ These models:
 - Show their field structure
 - Are not advertised in `tools/list`
 
-!!! warning "`mcp_expose` controls advertisement, not reachability"
-    Registering a model with the mixin makes its handlers callable: a client that explicitly issues `tools/call` for `list_author` will get a response even without `mcp_expose = True`. Django permissions are the enforcement boundary — do not rely on `mcp_expose` to protect data.
+!!! note "`mcp_expose` controls both advertisement and reachability"
+    Without `mcp_expose = True`, tools are neither advertised in `tools/list` nor callable: a client that explicitly issues `tools/call` for `list_author` gets the same "Model not found" error as for an unregistered model. Django permissions additionally gate every call on exposed models.
 
 ### Level 2 — Fully Exposed Models
 

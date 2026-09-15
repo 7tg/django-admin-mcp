@@ -46,17 +46,22 @@ path('admin-api/', include('django_admin_mcp.urls')),
 
 ### Optional Settings
 
-Two optional Django settings tune request limits:
+Three optional Django settings tune request behavior:
 
 ```python title="settings.py"
-# Maximum page size for list_* tools. Requested limits above this
-# value are silently capped. Default: 1000
+# Maximum page size for list_*, related_*, history_*, and autocomplete_*
+# tools. Requested limits above this value are silently capped. Default: 1000
 MCP_MAX_LIST_LIMIT = 1000
 
 # Maximum size of file downloads returned by admin actions
 # (HttpResponse/StreamingHttpResponse bodies). Larger responses are
 # rejected with an error. Default: 5 MiB
 MCP_ACTION_MAX_FILE_BYTES = 5 * 1024 * 1024
+
+# Write resolution for MCPToken.last_used_at, in seconds. Within this
+# window of the recorded timestamp, further uses are not written to the
+# database. Set to 0 to record every use. Default: 60
+MCP_LAST_USED_RESOLUTION = 60
 ```
 
 !!! note "Token expiry is not a Django setting"
@@ -84,8 +89,8 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 Default: `False`
 
-!!! warning "`mcp_expose` controls advertisement, not reachability"
-    Non-exposed models are hidden from `tools/list`, but a direct `tools/call` for a registered model still executes. Django permissions are the enforcement boundary.
+!!! note "`mcp_expose` controls both advertisement and reachability"
+    Non-exposed models are hidden from `tools/list`, and a direct `tools/call` for them is rejected with the same "Model not found" error as for unregistered models.
 
 ### mcp_fields
 

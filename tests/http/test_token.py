@@ -141,3 +141,52 @@ class TestMCPExpose:
                 admin_instance.mcp_expose = original_mcp_expose
             elif hasattr(admin_instance, "mcp_expose"):
                 delattr(admin_instance, "mcp_expose")
+
+
+@pytest.mark.django_db
+class TestMarkUsedThrottling:
+    """mark_used() must not write on every request (issue #98)."""
+
+    def test_first_use_writes_last_used_at(self):
+        token = MCPTokenFactory()
+        assert token.last_used_at is None
+
+        token.mark_used()
+
+        token.refresh_from_db()
+        assert token.last_used_at is not None
+
+    def test_recent_last_used_at_is_not_rewritten(self):
+        token = MCPTokenFactory()
+        token.mark_used()
+        token.refresh_from_db()
+        first = token.last_used_at
+
+        token.mark_used()
+
+        token.refresh_from_db()
+        assert token.last_used_at == first
+
+    def test_stale_last_used_at_is_refreshed(self):
+        token = MCPTokenFactory()
+        stale = timezone.now() - timedelta(hours=1)
+        type(token).objects.filter(pk=token.pk).update(last_used_at=stale)
+        token.refresh_from_db()
+
+        token.mark_used()
+
+        token.refresh_from_db()
+        assert token.last_used_at > stale
+
+    def test_zero_resolution_writes_every_time(self, settings):
+        settings.MCP_LAST_USED_RESOLUTION = 0
+        token = MCPTokenFactory()
+        token.mark_used()
+        token.refresh_from_db()
+        first = token.last_used_at
+
+        token.mark_used()
+
+        token.refresh_from_db()
+        assert token.last_used_at >= first
+        assert token.last_used_at != first

@@ -125,6 +125,9 @@ MCP_MAX_LIST_LIMIT = 1000
 
 # Max size of file downloads returned by admin actions (default: 5 MiB)
 MCP_ACTION_MAX_FILE_BYTES = 5 * 1024 * 1024
+
+# Write resolution for MCPToken.last_used_at in seconds (0 = every use)
+MCP_LAST_USED_RESOLUTION = 60
 ```
 
 See the [Settings Reference](../reference/settings.md) for details.

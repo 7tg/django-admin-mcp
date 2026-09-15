@@ -279,9 +279,22 @@ class MCPToken(models.Model):
 
         return f"{self.TOKEN_PREFIX}{self.token_key}.{token_secret}"
 
+    # Default write resolution for last_used_at, in seconds (issue #98)
+    LAST_USED_RESOLUTION_SECONDS = 60
+
     def mark_used(self):
-        """Mark token as recently used."""
-        self.last_used_at = timezone.now()
+        """Mark token as recently used.
+
+        The write is throttled: within MCP_LAST_USED_RESOLUTION seconds
+        (default 60) of the recorded timestamp nothing is saved, so busy
+        MCP clients don't add a database write to every request. Set the
+        setting to 0 to record every use.
+        """
+        now = timezone.now()
+        resolution = getattr(settings, "MCP_LAST_USED_RESOLUTION", self.LAST_USED_RESOLUTION_SECONDS)
+        if self.last_used_at is not None and (now - self.last_used_at) < timedelta(seconds=resolution):
+            return
+        self.last_used_at = now
         self.save(update_fields=["last_used_at"])
 
     def is_expired(self):
