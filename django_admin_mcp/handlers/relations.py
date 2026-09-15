@@ -15,6 +15,7 @@ from django.http import HttpRequest
 from django_admin_mcp.handlers.base import (
     check_permission,
     get_admin_queryset,
+    is_missing_id,
     json_response,
     resolve_registered_admin,
     safe_error_message,
@@ -65,7 +66,7 @@ async def handle_related(
     if pagination_error:
         return json_response({"error": pagination_error})
 
-    if not obj_id:
+    if is_missing_id(obj_id):
         return json_response({"error": "id parameter is required"})
 
     if not relation:
@@ -177,6 +178,7 @@ async def handle_history(
         arguments: Dictionary containing:
             - id: int or str (primary key of the instance)
             - limit: int (default 50, max history entries to return)
+            - offset: int (default 0, pagination offset)
         request: HttpRequest with user set for permission checking.
         model: Resolved Django model class (injected by decorator).
         model_admin: Resolved ModelAdmin instance (injected by decorator).
@@ -191,11 +193,11 @@ async def handle_history(
         - For errors: error message
     """
     obj_id = arguments.get("id")
-    limit, _offset, pagination_error = validate_pagination(arguments, default_limit=50)
+    limit, offset, pagination_error = validate_pagination(arguments, default_limit=50)
     if pagination_error:
         return json_response({"error": pagination_error})
 
-    if not obj_id:
+    if is_missing_id(obj_id):
         return json_response({"error": "id parameter is required"})
 
     @sync_to_async
@@ -218,11 +220,11 @@ async def handle_history(
         # Get content type for this model
         content_type = ContentType.objects.get_for_model(model)
 
-        # Get log entries for this object
+        # Get log entries for this object, honoring the offset (issue #110)
         log_entries = LogEntry.objects.filter(
             content_type=content_type,
             object_id=str(obj_id),
-        ).order_by("-action_time")[:limit]
+        ).order_by("-action_time")[offset : offset + limit]
 
         action_names = {
             ADDITION: "created",

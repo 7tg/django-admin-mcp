@@ -233,6 +233,16 @@ def validate_pagination(
     return min(limit, max_limit), offset, None
 
 
+def is_missing_id(obj_id: Any) -> bool:
+    """
+    True when an id argument is absent (None or empty string).
+
+    A falsy primary key like 0 is legitimate and must not be treated as
+    missing (issue #110).
+    """
+    return obj_id is None or obj_id == ""
+
+
 def resolve_registered_admin(model: type[models.Model]) -> Any | None:
     """
     Return the registered MCP admin for a model, or None.

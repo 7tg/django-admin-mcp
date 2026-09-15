@@ -20,6 +20,7 @@ from django_admin_mcp.handlers.base import (
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
+    is_missing_id,
     json_response,
     normalize_fk_fields,
     safe_error_message,
@@ -564,7 +565,7 @@ async def handle_bulk_update(
             try:
                 obj_id = item.get("id")
                 data = item.get("data", {})
-                if not obj_id:
+                if is_missing_id(obj_id):
                     results["errors"].append({"index": i, "error": "id is required for update"})
                     continue
 
@@ -651,9 +652,8 @@ async def handle_bulk_delete(
         items = arguments.get("items", [])
         user = _get_bulk_user(request)
         results: dict[str, list] = {"success": [], "errors": []}
-        ids = items if isinstance(items, list) else []
 
-        for i, obj_id in enumerate(ids):
+        for i, obj_id in enumerate(items):
             try:
                 # Scoped to the admin queryset (issue #88)
                 obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
@@ -718,5 +718,10 @@ async def handle_bulk(
     handler = handlers.get(operation)
     if not handler:
         return json_response({"error": "operation must be 'create', 'update', or 'delete'"})
+
+    # A non-list items must be an explicit error, not a success-shaped no-op
+    # (issue #110)
+    if not isinstance(arguments.get("items"), list):
+        return json_response({"error": "items must be a list"})
 
     return await handler(model_name, arguments, request)

@@ -23,6 +23,7 @@ from django_admin_mcp.handlers.base import (
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
+    is_missing_id,
     json_response,
     normalize_fk_fields,
     resolve_registered_admin,
@@ -599,7 +600,7 @@ async def handle_get(
         include_inlines = arguments.get("include_inlines", False)
         include_related = arguments.get("include_related", False)
 
-        if not obj_id:
+        if is_missing_id(obj_id):
             return json_response({"error": "id parameter is required"})
 
         @sync_to_async
@@ -778,7 +779,7 @@ async def handle_update(
         data = arguments.get("data", {})
         inlines_data = arguments.get("inlines", {})
 
-        if not obj_id:
+        if is_missing_id(obj_id):
             return json_response({"error": "id parameter is required"})
 
         # Validate that only model fields are being updated (protect against mass assignment)
@@ -908,7 +909,7 @@ async def handle_delete(
     try:
         obj_id = arguments.get("id")
 
-        if not obj_id:
+        if is_missing_id(obj_id):
             return json_response({"error": "id parameter is required"})
 
         user = getattr(request, "user", None)
