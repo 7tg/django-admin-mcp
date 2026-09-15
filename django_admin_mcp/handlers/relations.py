@@ -8,6 +8,7 @@ viewing change history, and providing autocomplete suggestions.
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from django.http import HttpRequest
 
@@ -54,8 +55,8 @@ async def handle_related(
     Returns:
         List of TextContent with JSON response containing:
         - For many relations: relation, type, count, total_count, results
-        - For single relations: relation, type, result
-        - For simple values: relation, type, value
+        - For single relations: relation, type, result (null when the
+          relation is empty)
         - For errors: error message
     """
     obj_id = arguments.get("id")
@@ -95,7 +96,16 @@ async def handle_related(
         if relation not in relation_names:
             return {"error": f"Relation '{relation}' not found on model"}
 
-        related_attr = getattr(obj, relation)
+        try:
+            related_attr = getattr(obj, relation)
+        except ObjectDoesNotExist:
+            # Empty reverse one-to-one — a normal "no related object" state,
+            # not an internal error (issue #106)
+            return {"relation": relation, "type": "single", "result": None}
+
+        if related_attr is None:
+            # Null forward FK/O2O (issue #106)
+            return {"relation": relation, "type": "single", "result": None}
 
         def denied_unless_viewable(related_model):
             """Permission check on the related model's admin (issue #91)."""
@@ -140,13 +150,8 @@ async def handle_related(
                 "type": "single",
                 "result": serialize_instance(related_attr),
             }
-        else:
-            # It's a simple field value
-            return {
-                "relation": relation,
-                "type": "value",
-                "value": str(related_attr),
-            }
+        else:  # pragma: no cover — relations resolve to managers, instances, or None
+            return {"relation": relation, "type": "single", "result": None}
 
     result = await get_related()
     return json_response(result)
