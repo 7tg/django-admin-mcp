@@ -22,6 +22,7 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from django_admin_mcp import __version__
 from django_admin_mcp.handlers.base import sanitize_pydantic_errors
 from django_admin_mcp.models import MCPToken
+from django_admin_mcp.prompts import PromptError, get_prompt, list_prompts
 from django_admin_mcp.protocol import (
     InitializeResponse,
     InitializeResult,
@@ -39,6 +40,7 @@ from django_admin_mcp.protocol import (
     ToolsListResponse,
     ToolsListResult,
 )
+from django_admin_mcp.resources import ResourceError, list_resource_templates, list_resources, read_resource
 from django_admin_mcp.tools import call_tool, get_tools
 
 
@@ -131,11 +133,26 @@ def _validate_tools_list(request: HttpRequest) -> JsonResponse | None:
     return None
 
 
-async def _execute_tool(request_obj: ToolsCallRequest, token) -> list[TextContent]:
-    """Run a tool call with a request carrying the token's user for permission checks."""
+def _request_for_token(token) -> HttpRequest:
+    """Build a synthetic request carrying the token's user for permission checks."""
     tool_request = HttpRequest()
     tool_request.user = token.user if token else None  # type: ignore[assignment]
-    return await call_tool(request_obj.name, request_obj.arguments, tool_request)
+    return tool_request
+
+
+async def _execute_tool(request_obj: ToolsCallRequest, token) -> list[TextContent]:
+    """Run a tool call with a request carrying the token's user for permission checks."""
+    return await call_tool(request_obj.name, request_obj.arguments, _request_for_token(token))
+
+
+def _jsonrpc_result(request_id, result: Any) -> JsonResponse:
+    """JSON-RPC success envelope."""
+    return JsonResponse(JsonRpcResponse(id=request_id, result=result).model_dump())
+
+
+def _jsonrpc_error(request_id, code: int, message: str) -> JsonResponse:
+    """JSON-RPC error envelope."""
+    return JsonResponse(JsonRpcResponse(id=request_id, error=JsonRpcError(code=code, message=message)).model_dump())
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -258,6 +275,29 @@ async def mcp_endpoint(request):
         except ValidationError as e:
             return _invalid_request_response(e)
         return await handle_call_tool_request(request, request_obj, token=token, request_id=body.id)
+    elif method == "prompts/list":
+        return _jsonrpc_result(body.id, {"prompts": list_prompts()})
+    elif method == "prompts/get":
+        params = body.params or {}
+        try:
+            prompt = get_prompt(params.get("name", ""), params.get("arguments") or {})
+        except PromptError as e:
+            return _jsonrpc_error(body.id, -32602, str(e))
+        return _jsonrpc_result(body.id, prompt)
+    elif method == "resources/list":
+        resources = await list_resources(_request_for_token(token))
+        return _jsonrpc_result(body.id, {"resources": resources})
+    elif method == "resources/templates/list":
+        return _jsonrpc_result(body.id, {"resourceTemplates": list_resource_templates()})
+    elif method == "resources/read":
+        uri = (body.params or {}).get("uri")
+        if not uri:
+            return _jsonrpc_error(body.id, -32602, "uri parameter is required")
+        try:
+            contents = await read_resource(uri, _request_for_token(token))
+        except ResourceError as e:
+            return _jsonrpc_error(body.id, -32002, str(e))
+        return _jsonrpc_result(body.id, {"contents": [contents]})
     else:
         return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
 

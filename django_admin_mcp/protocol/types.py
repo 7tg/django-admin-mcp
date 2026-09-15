@@ -82,6 +82,8 @@ class ServerCapabilities(BaseModel):
     """Server capabilities."""
 
     tools: dict[str, Any] = Field(default_factory=dict)
+    prompts: dict[str, Any] = Field(default_factory=dict)
+    resources: dict[str, Any] = Field(default_factory=dict)
 
 
 class InitializeResult(BaseModel):
