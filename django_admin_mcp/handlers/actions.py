@@ -12,7 +12,7 @@ from urllib.parse import unquote
 
 from asgiref.sync import sync_to_async
 from django.db import transaction
-from django.http import HttpRequest, HttpResponse, StreamingHttpResponse
+from django.http import HttpRequest, HttpResponse, QueryDict, StreamingHttpResponse
 from pydantic import TypeAdapter
 
 from django_admin_mcp.handlers.base import (
@@ -211,6 +211,76 @@ def serialize_action_result(result: Any) -> Any:
     return str(result)
 
 
+# Truncation limit for intermediate confirmation page content in responses
+_CONFIRMATION_PAGE_MAX_CHARS = 4000
+
+
+def _prepare_action_request(
+    request: HttpRequest,
+    action_name: str,
+    ids: list[Any],
+    confirm: bool,
+    confirmation_data: dict[str, Any],
+) -> None:
+    """
+    Populate request.POST with Django's standard admin action fields.
+
+    Actions written for the admin changelist read the selection and
+    confirmation state from ``request.POST``. When ``confirm`` is set, the
+    common confirmation markers (``post``, ``confirm``, ``apply``) and any
+    ``confirmation_data`` fields are included so Django-style two-step
+    actions execute instead of rendering their intermediate page.
+    """
+    post = QueryDict(mutable=True)
+    post["action"] = action_name
+    post["index"] = "0"
+    post["select_across"] = "0"
+    post.setlist("_selected_action", [str(pk) for pk in ids])
+    if confirm:
+        post["post"] = "yes"  # delete_selected-style marker
+        post["confirm"] = "yes"
+        post["apply"] = "yes"
+        for key, value in confirmation_data.items():
+            post[key] = str(value)
+    post._mutable = False
+    request.method = "POST"
+    request.POST = post  # type: ignore[assignment]
+
+
+def _is_html_response(result: Any) -> bool:
+    """True when an action returned an HTML page (intermediate confirmation)."""
+    if not isinstance(result, (HttpResponse, StreamingHttpResponse)):
+        return False
+    content_type = _response_header(result, "Content-Type") or getattr(result, "content_type", "") or ""
+    return content_type.split(";")[0].strip().lower() == "text/html"
+
+
+def _confirmation_response(result: Any, action_name: str) -> dict[str, Any]:
+    """Build the requires_confirmation payload from an intermediate HTML page."""
+    render = getattr(result, "render", None)
+    if callable(render) and getattr(result, "is_rendered", True) is False:
+        result = render()
+
+    try:
+        body = _http_response_body(result)
+        content = body.decode(getattr(result, "charset", None) or "utf-8", errors="replace")
+    except ActionFileTooLargeError:
+        content = ""
+    if len(content) > _CONFIRMATION_PAGE_MAX_CHARS:
+        content = content[:_CONFIRMATION_PAGE_MAX_CHARS] + "..."
+
+    return {
+        "success": False,
+        "requires_confirmation": True,
+        "action": action_name,
+        "message": (
+            f"Action '{action_name}' requires confirmation. Call again with "
+            "confirm=true (and optional confirmation_data for extra form fields) to execute."
+        ),
+        "confirmation_page": {"content_type": "text/html", "content": content},
+    }
+
+
 def _get_admin_actions(model_admin, request):
     """Get resolved actions dict from ModelAdmin, handling missing user.
 
@@ -334,6 +404,8 @@ async def handle_action(
     try:
         action_name = arguments.get("action")
         ids = arguments.get("ids", [])
+        confirm = bool(arguments.get("confirm", False))
+        confirmation_data = arguments.get("confirmation_data") or {}
 
         if not action_name:
             return json_response({"error": "action parameter is required"})
@@ -377,7 +449,13 @@ async def handle_action(
                 actions_dict = _get_admin_actions(model_admin, request)
                 if action_name in actions_dict:
                     func, name, description = actions_dict[action_name]
+                    # Provide Django's standard action POST fields so two-step
+                    # confirmation actions work over MCP (issue #63)
+                    _prepare_action_request(request, action_name, ids, confirm, confirmation_data)
                     result = func(model_admin, request, queryset)
+                    if _is_html_response(result):
+                        # Intermediate confirmation page — report the two-step flow
+                        return _confirmation_response(result, action_name)
                     try:
                         serialized = serialize_action_result(result)
                     except ActionFileTooLargeError as e:

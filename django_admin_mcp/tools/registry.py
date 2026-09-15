@@ -299,6 +299,17 @@ def get_model_tools(model: type[models.Model]) -> list[Tool]:
                         "items": {"type": ["integer", "string"]},
                         "description": "List of IDs to apply the action to",
                     },
+                    "confirm": {
+                        "type": "boolean",
+                        "description": (
+                            "Set to true to confirm and execute an action that "
+                            "reported requires_confirmation on a previous call"
+                        ),
+                    },
+                    "confirmation_data": {
+                        "type": "object",
+                        "description": "Extra form fields for the action's confirmation step",
+                    },
                 },
                 "required": ["action", "ids"],
             },

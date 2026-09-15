@@ -256,7 +256,10 @@ def _update_inlines(
                 {
                     "model": inline_model_name,
                     "id": None,
-                    "error": f"Cannot have more than {max_num} {inline_model_name} objects (would result in {resulting_count})",
+                    "error": (
+                        f"Cannot have more than {max_num} {inline_model_name} objects "
+                        f"(would result in {resulting_count})"
+                    ),
                     "code": "max_num_exceeded",
                 }
             )
@@ -268,7 +271,10 @@ def _update_inlines(
                 {
                     "model": inline_model_name,
                     "id": None,
-                    "error": f"Cannot have fewer than {min_num} {inline_model_name} objects (would result in {resulting_count})",
+                    "error": (
+                        f"Cannot have fewer than {min_num} {inline_model_name} objects "
+                        f"(would result in {resulting_count})"
+                    ),
                     "code": "min_num_violated",
                 }
             )
