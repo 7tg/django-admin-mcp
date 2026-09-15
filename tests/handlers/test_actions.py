@@ -281,6 +281,41 @@ class TestHandleAction:
         assert "error" in parsed
         assert "Permission denied" in parsed["error"]
 
+    @pytest.mark.asyncio
+    async def test_delete_selected_requires_delete_permission(self):
+        """Users with change but not delete must not run delete_selected."""
+        from django.contrib.auth.models import Permission  # noqa: PLC0415
+
+        uid = unique_id()
+        author = await create_author(
+            name=f"NoDelete Author {uid}",
+            email=f"nodelete_{uid}@example.com",
+        )
+
+        @sync_to_async
+        def create_change_only_user():
+            user = User.objects.create_user(
+                username=f"change_only_{uid}",
+                email=f"change_only_{uid}@example.com",
+                password="testpass",
+                is_staff=True,
+            )
+            change_perm = Permission.objects.get(codename="change_author")
+            user.user_permissions.add(change_perm)
+            return user
+
+        user = await create_change_only_user()
+        request = create_mock_request(user)
+        result = await handle_action(
+            "author",
+            {"action": "delete_selected", "ids": [author.pk]},
+            request,
+        )
+        parsed = json.loads(result[0].text)
+        assert parsed.get("code") == "permission_denied"
+        assert "delete" in parsed["error"].lower()
+        assert await author_exists(author.pk)
+
 
 @pytest.mark.django_db(transaction=True)
 class TestHandleBulk:
