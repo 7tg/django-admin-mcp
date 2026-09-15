@@ -8,8 +8,9 @@ from unittest.mock import patch
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.contrib import admin as django_admin
 from django.contrib.admin.models import ADDITION, CHANGE, DELETION, LogEntry
-from django.contrib.auth.models import AnonymousUser, User
+from django.contrib.auth.models import AnonymousUser, Permission, User
 from django.contrib.contenttypes.models import ContentType
 
 from django_admin_mcp.handlers import (
@@ -1018,3 +1019,90 @@ class TestSaveModelIntegration:
             return create_mock_request(user)
 
         return await create_user()
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestIncludeRelatedPermissions:
+    """include_related/include_inlines must check view permission on the related model (issue #91)."""
+
+    @staticmethod
+    @sync_to_async
+    def _request_with_perms(uid, *codenames):
+        user = User.objects.create_user(username=f"incperm_{uid}", email=f"incperm_{uid}@example.com", password="x")
+        user.user_permissions.add(*Permission.objects.filter(codename__in=codenames))
+        return create_mock_request(User.objects.get(pk=user.pk))
+
+    @staticmethod
+    @sync_to_async
+    def _author_with_article(uid):
+        author = Author.objects.create(name=f"Inc Author {uid}", email=f"inc_{uid}@example.com")
+        article = Article.objects.create(title=f"Inc Article {uid}", content="c", author=author)
+        return author, article
+
+    async def test_include_related_omits_models_without_view_permission(self):
+        uid = unique_id()
+        author, _ = await self._author_with_article(uid)
+        request = await self._request_with_perms(uid, "view_author")  # no view_article
+
+        result = await handle_get("author", {"id": author.pk, "include_related": True}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" not in data
+        assert "articles" not in (data.get("_related") or {})
+        assert f"Inc Article {uid}" not in result[0].text
+
+    async def test_include_related_serves_models_with_view_permission(self):
+        uid = unique_id()
+        author, article = await self._author_with_article(uid)
+        request = await self._request_with_perms(uid, "view_author", "view_article")
+
+        result = await handle_get("author", {"id": author.pk, "include_related": True}, request)
+        data = json.loads(result[0].text)
+
+        related = data.get("_related") or {}
+        assert {row["id"] for row in related.get("articles", [])} == {article.pk}
+
+    async def test_include_inlines_omits_models_without_view_permission(self):
+        uid = unique_id()
+        author, _ = await self._author_with_article(uid)
+        request = await self._request_with_perms(uid, "view_author")  # no view_article
+
+        result = await handle_get("author", {"id": author.pk, "include_inlines": True}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" not in data
+        assert "article" not in (data.get("_inlines") or {})
+        assert f"Inc Article {uid}" not in result[0].text
+
+    async def test_include_inlines_serves_models_with_view_permission(self):
+        uid = unique_id()
+        author, article = await self._author_with_article(uid)
+        request = await self._request_with_perms(uid, "view_author", "view_article")
+
+        result = await handle_get("author", {"id": author.pk, "include_inlines": True}, request)
+        data = json.loads(result[0].text)
+
+        inlines = data.get("_inlines") or {}
+        assert {row["id"] for row in inlines.get("article", [])} == {article.pk}
+
+    async def test_include_related_respects_related_admin_queryset(self):
+        uid = unique_id()
+        author, visible = await self._author_with_article(uid)
+        hidden = await sync_to_async(Article.objects.create)(
+            title=f"Inc Hidden {uid}", content="c", author_id=author.pk
+        )
+        request = await self._request_with_perms(uid, "view_author", "view_article")
+
+        article_admin = django_admin.site._registry[Article]
+
+        def scoped_queryset(request):
+            return Article.objects.exclude(pk=hidden.pk)
+
+        with patch.object(article_admin, "get_queryset", side_effect=scoped_queryset):
+            result = await handle_get("author", {"id": author.pk, "include_related": True}, request)
+        data = json.loads(result[0].text)
+
+        returned_ids = {row["id"] for row in (data.get("_related") or {}).get("articles", [])}
+        assert visible.pk in returned_ids
+        assert hidden.pk not in returned_ids

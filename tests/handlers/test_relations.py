@@ -4,11 +4,13 @@ Tests for django_admin_mcp.handlers.relations module.
 
 import json
 import uuid
+from unittest.mock import patch
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.contrib import admin as django_admin
 from django.contrib.admin.models import ADDITION, CHANGE, LogEntry
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 from django.contrib.contenttypes.models import ContentType
 
 from django_admin_mcp.handlers import (
@@ -616,3 +618,72 @@ class TestRelatedRelationValidation:
 
         assert data["type"] == "single"
         assert data["result"]["id"] == author.pk
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestRelatedModelPermissions:
+    """Related data must require view permission on the related model (issue #91)."""
+
+    @staticmethod
+    @sync_to_async
+    def _request_with_perms(uid, *codenames):
+        user = User.objects.create_user(username=f"relperm_{uid}", email=f"relperm_{uid}@example.com", password="x")
+        user.user_permissions.add(*Permission.objects.filter(codename__in=codenames))
+        return create_mock_request(User.objects.get(pk=user.pk))
+
+    async def test_related_denied_without_view_permission_on_related_model(self):
+        uid = unique_id()
+        author = await create_author(f"Perm Author {uid}", f"perm_{uid}@example.com")
+        await create_article(f"Hidden Article {uid}", "content", author)
+        request = await self._request_with_perms(uid, "view_author")  # no view_article
+
+        result = await handle_related("author", {"id": author.pk, "relation": "articles"}, request)
+        data = json.loads(result[0].text)
+
+        assert data.get("code") == "permission_denied"
+        assert f"Hidden Article {uid}" not in result[0].text
+
+    async def test_related_allowed_with_view_permission_on_related_model(self):
+        uid = unique_id()
+        author = await create_author(f"Perm2 Author {uid}", f"perm2_{uid}@example.com")
+        article = await create_article(f"Visible Article {uid}", "content", author)
+        request = await self._request_with_perms(uid, "view_author", "view_article")
+
+        result = await handle_related("author", {"id": author.pk, "relation": "articles"}, request)
+        data = json.loads(result[0].text)
+
+        assert data["type"] == "many"
+        assert {row["id"] for row in data["results"]} == {article.pk}
+
+    async def test_related_many_respects_related_admin_queryset(self):
+        uid = unique_id()
+        author = await create_author(f"Scope Author {uid}", f"scope_{uid}@example.com")
+        visible = await create_article(f"Scope Visible {uid}", "content", author)
+        hidden = await create_article(f"Scope Hidden {uid}", "content", author)
+        request = await self._request_with_perms(uid, "view_author", "view_article")
+
+        article_admin = django_admin.site._registry[Article]
+
+        def scoped_queryset(request):
+            return Article.objects.exclude(pk=hidden.pk)
+
+        with patch.object(article_admin, "get_queryset", side_effect=scoped_queryset):
+            result = await handle_related("author", {"id": author.pk, "relation": "articles"}, request)
+        data = json.loads(result[0].text)
+
+        returned_ids = {row["id"] for row in data["results"]}
+        assert visible.pk in returned_ids
+        assert hidden.pk not in returned_ids
+
+    async def test_related_single_denied_without_view_permission_on_related_model(self):
+        uid = unique_id()
+        author = await create_author(f"Single Perm {uid}", f"single_{uid}@example.com")
+        article = await create_article(f"Single Article {uid}", "content", author)
+        request = await self._request_with_perms(uid, "view_article")  # no view_author
+
+        result = await handle_related("article", {"id": article.pk, "relation": "author"}, request)
+        data = json.loads(result[0].text)
+
+        assert data.get("code") == "permission_denied"
+        assert f"Single Perm {uid}" not in result[0].text

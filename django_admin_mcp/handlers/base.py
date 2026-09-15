@@ -115,6 +115,19 @@ def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | N
     return None, None
 
 
+def resolve_registered_admin(model: type[models.Model]) -> Any | None:
+    """
+    Return the registered MCP admin for a model, or None.
+
+    Guards against model_name collisions across apps / proxy mismatches by
+    requiring the registered entry to share the model's concrete model.
+    """
+    registered_model, model_admin = get_model_admin(model._meta.model_name or "")
+    if registered_model is not None and registered_model._meta.concrete_model is model._meta.concrete_model:
+        return model_admin
+    return None
+
+
 def create_mock_request(user=None) -> HttpRequest:
     """
     Create a mock request object for permission checking.
@@ -256,10 +269,7 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
         Dictionary representation of the model instance with filtered fields.
     """
     if model_admin is None:
-        registered_model, resolved_admin = get_model_admin(instance._meta.model_name or "")
-        # Guard against model_name collisions across apps / proxy mismatches
-        if registered_model is not None and registered_model._meta.concrete_model is instance._meta.concrete_model:
-            model_admin = resolved_admin
+        model_admin = resolve_registered_admin(type(instance))
 
     # Determine which fields to include/exclude
     fields_to_include = None

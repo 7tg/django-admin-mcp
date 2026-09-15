@@ -17,11 +17,13 @@ from pydantic import TypeAdapter
 
 from django_admin_mcp.handlers.base import (
     check_inline_permission,
+    check_permission,
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
     json_response,
     normalize_fk_fields,
+    resolve_registered_admin,
     safe_error_message,
     serialize_instance,
 )
@@ -150,13 +152,17 @@ def _get_valid_ordering_fields(model: type[models.Model]) -> set:
     return valid_fields
 
 
-def _get_inline_data(obj: models.Model, admin: Any) -> dict[str, list[dict[str, Any]]]:
+def _get_inline_data(obj: models.Model, admin: Any, request: HttpRequest) -> dict[str, list[dict[str, Any]]]:
     """
     Get inline related objects for a model instance.
+
+    Inlines whose model the requesting user may not view are omitted, and rows
+    come from the registered admin's queryset scope (issue #91).
 
     Args:
         obj: The parent model instance.
         admin: The ModelAdmin instance with inline definitions.
+        request: HttpRequest with user for permission checking.
 
     Returns:
         Dictionary mapping inline model names to list of serialized instances.
@@ -174,6 +180,11 @@ def _get_inline_data(obj: models.Model, admin: Any) -> dict[str, list[dict[str, 
         inline_model = inline_class.model
         fk_name = getattr(inline_class, "fk_name", None)
 
+        # Omit inlines the user may not view (issue #91)
+        inline_admin = resolve_registered_admin(inline_model)
+        if not check_permission(request, inline_admin, "view"):
+            continue
+
         # Find the FK field that points to our parent model
         fk_field = None
         for field in inline_model._meta.get_fields():
@@ -183,10 +194,10 @@ def _get_inline_data(obj: models.Model, admin: Any) -> dict[str, list[dict[str, 
                     break
 
         if fk_field:
-            # Get related objects
+            # Get related objects within the inline admin's queryset scope
             related_name = fk_field.name
             filter_kwargs = {related_name: obj}
-            related_objects = inline_model.objects.filter(**filter_kwargs)
+            related_objects = get_admin_queryset(inline_model, inline_admin, request).filter(**filter_kwargs)
             inlines_data[inline_model._meta.model_name] = [
                 serialize_instance(related_obj) for related_obj in related_objects
             ]
@@ -567,7 +578,7 @@ async def handle_get(
 
             # Include inlines if requested
             if include_inlines and model_admin:
-                result["_inlines"] = _get_inline_data(obj, model_admin)
+                result["_inlines"] = _get_inline_data(obj, model_admin, request)
 
             # Include related objects if requested
             if include_related:
@@ -580,9 +591,18 @@ async def handle_get(
                             if hasattr(obj, accessor_name):
                                 related_manager = getattr(obj, accessor_name)
                                 if hasattr(related_manager, "all"):
+                                    # Omit related models the user may not view,
+                                    # and honor their admin queryset scope (issue #91)
+                                    related_model = field.related_model
+                                    related_admin = resolve_registered_admin(related_model)
+                                    if not check_permission(request, related_admin, "view"):
+                                        continue
+                                    related_qs = related_manager.all() & get_admin_queryset(
+                                        related_model, related_admin, request
+                                    )
                                     related_data[accessor_name] = [
                                         serialize_instance(r)
-                                        for r in related_manager.all()[:10]  # Limit to 10
+                                        for r in related_qs[:10]  # Limit to 10
                                     ]
                 if related_data:
                     result["_related"] = related_data

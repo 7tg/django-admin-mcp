@@ -12,8 +12,10 @@ from django.db.models import Q
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
+    check_permission,
     get_admin_queryset,
     json_response,
+    resolve_registered_admin,
     safe_error_message,
     serialize_instance,
 )
@@ -93,10 +95,26 @@ async def handle_related(
 
         related_attr = getattr(obj, relation)
 
+        def denied_unless_viewable(related_model):
+            """Permission check on the related model's admin (issue #91)."""
+            related_admin = resolve_registered_admin(related_model)
+            if not check_permission(request, related_admin, "view"):
+                return {
+                    "error": f"Permission denied: cannot view {related_model._meta.model_name}",
+                    "code": "permission_denied",
+                }
+            return None
+
         # Handle different relation types
         if hasattr(related_attr, "all"):
             # Many relation (ManyToMany, reverse FK)
-            queryset = related_attr.all()
+            related_model = related_attr.model
+            denied = denied_unless_viewable(related_model)
+            if denied:
+                return denied
+            related_admin = resolve_registered_admin(related_model)
+            # Intersect with the related admin's queryset scope (issue #91)
+            queryset = related_attr.all() & get_admin_queryset(related_model, related_admin, request)
             total_count = queryset.count()
             related_objects = queryset[offset : offset + limit]
             return {
@@ -108,6 +126,13 @@ async def handle_related(
             }
         elif hasattr(related_attr, "_meta"):
             # Single relation (FK, OneToOne)
+            related_model = type(related_attr)
+            denied = denied_unless_viewable(related_model)
+            if denied:
+                return denied
+            related_admin = resolve_registered_admin(related_model)
+            if not get_admin_queryset(related_model, related_admin, request).filter(pk=related_attr.pk).exists():
+                return {"error": f"Relation '{relation}' not found on model"}
             return {
                 "relation": relation,
                 "type": "single",
