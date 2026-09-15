@@ -5,7 +5,7 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-09-15
 
 ### Changed — BREAKING
 - **Token-level permissions are now enforced.** Authorization answers from the token's effective permissions — its own `permissions` and `groups` fields intersected with the linked user's Django permissions — via a permission proxy placed on `request.user`. A token can narrow its user's access but never exceed it: a token with no grants has no access even when bound to a superuser, a grant the linked user lacks stays ineffective, and deactivating the linked user disables the token's access. The linked user remains the audit identity for `LogEntry` records. **Upgrade note:** existing tokens had access equal to their user's permissions; after upgrading they must also be granted the needed permissions/groups on the token itself, or their requests will be denied.
@@ -141,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Python | Django |
 |---------|--------|--------|
+| 0.5.0 | 3.10+ | 3.2+ |
 | 0.4.0 | 3.10+ | 3.2+ |
 | 0.3.x | 3.10+ | 3.2+ |
 | 0.2.x | 3.10+ | 3.2+ |
@@ -149,6 +150,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## Upgrade Guide
+
+### From 0.4.x to 0.5.0
+
+Authorization changed from the linked user's permissions to the token's own permissions (capped by the user's). Before or immediately after upgrading:
+
+1. Update the package and run migrations:
+   ```bash
+   pip install --upgrade django-admin-mcp
+   python manage.py migrate django_admin_mcp
+   ```
+
+2. Grant each existing token the permissions or groups it needs (in the MCP Token admin, or via `token.permissions` / `token.groups`). Tokens without grants are denied every operation, regardless of their user's permissions — including superusers.
+
+3. Optionally revisit `expires_at`: blank in the admin form now means "never expires" instead of the 90-day default.
 
 ### From 0.1.x to 0.2.x
 
