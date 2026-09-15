@@ -222,7 +222,7 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
         Dictionary representation of the model instance with filtered fields.
     """
     if model_admin is None:
-        registered_model, resolved_admin = get_model_admin(instance._meta.model_name)
+        registered_model, resolved_admin = get_model_admin(instance._meta.model_name or "")
         # Guard against model_name collisions across apps / proxy mismatches
         if registered_model is not None and registered_model._meta.concrete_model is instance._meta.concrete_model:
             model_admin = resolved_admin
@@ -296,9 +296,9 @@ def get_admin_queryset(
     on ``request``, not changelist URL shape — MCP requests use a synthetic path.
     """
     if model_admin is None:
-        return model.objects.all()
+        return model.objects.all()  # type: ignore[attr-defined]
     if getattr(model_admin, "mcp_use_admin_queryset", True) is False:
-        return model.objects.all()
+        return model.objects.all()  # type: ignore[attr-defined]
     return model_admin.get_queryset(request)
 
 
