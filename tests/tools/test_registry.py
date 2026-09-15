@@ -216,6 +216,25 @@ class TestGetModelTools:
         assert "required" in get_tool.inputSchema
         assert "id" in get_tool.inputSchema["required"]
 
+    @pytest.mark.django_db
+    def test_list_tool_description_covers_all_safe_lookups(self, django_setup_with_admin):
+        """The list_* description must advertise every whitelisted filter lookup."""
+        from django_admin_mcp.handlers.crud import SAFE_FILTER_LOOKUPS
+
+        tools = get_model_tools(Author)
+        list_tool = next(t for t in tools if t.name == "list_author")
+
+        for lookup in SAFE_FILTER_LOOKUPS - {"exact"}:  # exact is the implicit default
+            assert f"__{lookup}" in list_tool.description, f"Missing lookup {lookup}"
+
+    @pytest.mark.django_db
+    def test_autocomplete_schema_default_matches_handler(self, django_setup_with_admin):
+        """The advertised autocomplete limit default must match the handler default (10)."""
+        tools = get_model_tools(Author)
+        autocomplete_tool = next(t for t in tools if t.name == "autocomplete_author")
+
+        assert autocomplete_tool.inputSchema["properties"]["limit"]["default"] == 10
+
 
 class TestGetFindModelsTool:
     """Test get_find_models_tool function."""

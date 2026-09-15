@@ -145,8 +145,9 @@ def get_model_tools(model: type[models.Model]) -> list[Tool]:
             description=(
                 f"List {verbose_name} instances with filtering, searching, "
                 f"ordering, and pagination.\n\n"
-                f"Filter lookups: field (exact), field__icontains, field__gte, "
-                f"field__lte, field__in, field__isnull\n\n"
+                f"Filter lookups: field (exact), field__contains, field__icontains, "
+                f"field__gt, field__gte, field__lt, field__lte, field__in, "
+                f"field__isnull\n\n"
                 f"Available fields:\n{fields_doc}"
             ),
             inputSchema={
@@ -406,8 +407,8 @@ def get_model_tools(model: type[models.Model]) -> list[Tool]:
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Maximum number of suggestions to return (default: 20)",
-                        "default": 20,
+                        "description": "Maximum number of suggestions to return (default: 10)",
+                        "default": 10,
                     },
                 },
             },

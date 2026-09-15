@@ -279,7 +279,7 @@ async def handle_find_models(
                     "verbose_name": verbose_name,
                     "verbose_name_plural": verbose_name_plural,
                     "app_label": model._meta.app_label,
-                    "tools_exposed": True,
+                    "tools_exposed": bool(getattr(model_admin, "mcp_expose", False)),
                 }
             )
 

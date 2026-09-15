@@ -66,7 +66,7 @@ def authenticate_token(request):
     """
     Authenticate request using Bearer token with O(1) lookup.
 
-    Token format: mcp_<key>_<secret>
+    Token format: mcp_<key>.<secret>
     - key: used for indexed database lookup
     - secret: verified against stored hash
 

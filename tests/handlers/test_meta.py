@@ -290,6 +290,22 @@ class TestHandleFindModels:
         # Article should not match "auth"
         assert "article" not in model_names
 
+    async def test_tools_exposed_reflects_mcp_expose(self):
+        """Discoverable-only models (mcp_expose falsy) report tools_exposed=False."""
+        from django_admin_mcp.mixin import MCPAdminMixin  # noqa: PLC0415
+
+        model_admin = MCPAdminMixin._registered_models["author"]["admin"]
+        model_admin.mcp_expose = False  # instance attr shadows the class attr
+        try:
+            request = create_mock_request()
+            result = await handle_find_models("", {}, request)
+            data = json.loads(result[0].text)
+
+            author_info = next(m for m in data["models"] if m["model_name"] == "author")
+            assert author_info["tools_exposed"] is False
+        finally:
+            del model_admin.mcp_expose
+
 
 # Unique counter for test isolation
 _counter = 0
