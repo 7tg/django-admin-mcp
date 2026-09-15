@@ -27,7 +27,6 @@ from django_admin_mcp.handlers.base import (
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
 
-
 # Lookups allowed in list filters. Anything else (regex, relation traversal, ...)
 # is skipped to prevent resource-intensive queries and data disclosure via
 # filtering on fields of related models the caller may not have access to.

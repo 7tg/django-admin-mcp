@@ -3,7 +3,7 @@ Tests that the package version is consistent everywhere it is declared.
 """
 
 import json
-import tomllib
+import re
 from pathlib import Path
 
 import django
@@ -21,9 +21,11 @@ skip_if_django_lt_42 = pytest.mark.skipif(
 
 def test_dunder_version_matches_pyproject():
     """__version__ must match the version published in pyproject.toml."""
+    # Parsed with a regex instead of tomllib, which requires Python 3.11+
     pyproject_path = Path(__file__).resolve().parent.parent / "pyproject.toml"
-    pyproject = tomllib.loads(pyproject_path.read_text())
-    assert django_admin_mcp.__version__ == pyproject["project"]["version"]
+    match = re.search(r'^version = "([^"]+)"$', pyproject_path.read_text(), re.MULTILINE)
+    assert match is not None, "version not found in pyproject.toml"
+    assert django_admin_mcp.__version__ == match.group(1)
 
 
 @skip_if_django_lt_42
