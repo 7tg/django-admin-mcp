@@ -8,12 +8,17 @@ from django_admin_mcp.handlers.base import async_check_permission, get_model_adm
 
 
 def require_registered_model(fn):
-    """Resolve model_name to model/model_admin, returning an error if not registered."""
+    """Resolve model_name to model/model_admin, returning an error if not registered.
+
+    Models registered without ``mcp_expose = True`` are rejected with the same
+    "not found" response as unregistered models: tools for them are not
+    advertised and must not be callable either (issue #89).
+    """
 
     @wraps(fn)
     async def wrapper(model_name, arguments, request):
         model, model_admin = get_model_admin(model_name)
-        if model is None:
+        if model is None or not getattr(model_admin, "mcp_expose", False):
             return json_response({"error": f"Model '{model_name}' not found"})
         return await fn(model_name, arguments, request, model=model, model_admin=model_admin)
 

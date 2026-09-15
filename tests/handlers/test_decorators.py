@@ -4,13 +4,17 @@ Tests for django_admin_mcp.handlers.decorators module.
 
 import json
 import uuid
+from contextlib import contextmanager
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.contrib import admin
 from django.contrib.auth.models import User
 
 from django_admin_mcp.handlers.base import create_mock_request
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
+from django_admin_mcp.tools import call_tool
+from tests.models import CatalogItemB
 
 
 def unique_id():
@@ -135,3 +139,42 @@ class TestRequirePermission:
         result = await view_handler("nonexistent", {}, request)
         parsed = json.loads(result[0].text)
         assert "not found" in parsed["error"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+class TestMcpExposeEnforcement:
+    """Models with mcp_expose=False must not be callable at all (issue #89)."""
+
+    async def test_call_tool_rejects_non_exposed_model(self):
+        @contextmanager
+        def non_exposed(model):
+            model_admin = admin.site._registry[model]
+            had_instance_attr = "mcp_expose" in model_admin.__dict__
+            original = model_admin.__dict__.get("mcp_expose")
+            model_admin.mcp_expose = False
+            try:
+                yield
+            finally:
+                if had_instance_attr:
+                    model_admin.mcp_expose = original
+                else:
+                    delattr(model_admin, "mcp_expose")
+
+        uid = unique_id()
+        request = create_mock_request(user=await create_superuser(uid))
+
+        with non_exposed(CatalogItemB):
+            result = await call_tool("list_catalogitemb", {}, request)
+            data = json.loads(result[0].text)
+
+        assert data == {"error": "Model 'catalogitemb' not found"}
+
+    async def test_call_tool_allows_exposed_model(self):
+        uid = unique_id()
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await call_tool("list_catalogitemb", {}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" not in data
