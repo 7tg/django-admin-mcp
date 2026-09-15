@@ -103,7 +103,7 @@ class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 ### 2. Create an API Token
 
-Go to Django admin at `/admin/django_admin_mcp/mcptoken/` and create a token. Each token is bound to a Django user and gets exactly that user's permissions — use a dedicated user with only the permissions the agent needs.
+Go to Django admin at `/admin/django_admin_mcp/mcptoken/` and create a token. Grant the token exactly the permissions the agent needs via its **Permissions** and **Groups** fields — tokens start with no access, and the linked user is only the audit identity (its own permissions are not inherited).
 
 ### 3. Configure Your MCP Client
 
@@ -330,13 +330,14 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 ### Token Authentication
 
 - Tokens are created in Django admin (format: `mcp_<key>.<secret>`; only a salted hash of the secret is stored)
-- Each token is bound to a Django user; requests are authorized with that user's permissions and audit-logged under them
-- Token expiry is configurable (default: 90 days)
+- Each token carries its own permissions and groups; the linked Django user is the audit identity actions are logged under — its permissions are not inherited
+- Tokens start with no permissions (principle of least privilege); even a superuser-bound token has no access until granted
+- Token expiry is configurable (blank in the admin form = never expires; programmatic creation defaults to 90 days)
 - Revoke tokens by deactivating or deleting them in admin
 
 ### Permission Checking
 
-All operations go through `ModelAdmin.has_*_permission()` against the token's linked user:
+All operations go through `ModelAdmin.has_*_permission()`, answered from the token's permissions:
 
 | Operation | Required Permission |
 |-----------|-------------------|
@@ -345,7 +346,7 @@ All operations go through `ModelAdmin.has_*_permission()` against the token's li
 | `update_*` | **change** |
 | `delete_*` | **delete** |
 
-If the linked user lacks the permission, the operation returns an error. Bind tokens to a dedicated least-privilege user rather than a superuser.
+If the token lacks the permission, the operation returns an error.
 
 ---
 

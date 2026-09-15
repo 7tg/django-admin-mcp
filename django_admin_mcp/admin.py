@@ -2,6 +2,7 @@
 Admin configuration for django-admin-mcp models
 """
 
+from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
@@ -13,9 +14,26 @@ from django_admin_mcp import MCPAdminMixin
 from django_admin_mcp.models import MCPToken
 
 
+class MCPTokenAdminForm(forms.ModelForm):
+    """Admin form for MCP tokens: a blank expires_at means an indefinite token."""
+
+    class Meta:
+        model = MCPToken
+        fields = ["name", "is_active", "expires_at", "user", "groups", "permissions"]
+
+    def clean(self):
+        # The admin form always submits expires_at, so blank means "indefinite".
+        # Suppress the model's fallback 90-day default (which only exists for
+        # programmatic creation without an expires_at kwarg).
+        self.instance._expires_at_explicit = True
+        return super().clean()
+
+
 @admin.register(MCPToken)
 class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
     """Admin for MCP authentication tokens."""
+
+    form = MCPTokenAdminForm
 
     # Enable MCP exposure with restricted fields for security
     mcp_expose = True
@@ -50,8 +68,10 @@ class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
             "Permissions",
             {
                 "fields": ("user", "groups", "permissions"),
-                "description": "Assign a user, groups, or specific permissions to control access. "
-                "Tokens with no permissions have no access (principle of least privilege).",
+                "description": "Groups and permissions control what the token can access; "
+                "the user is the audit identity actions are logged under (its own permissions "
+                "are not inherited). Tokens with no permissions have no access "
+                "(principle of least privilege).",
             },
         ),
         (

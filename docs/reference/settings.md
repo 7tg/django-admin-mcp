@@ -60,7 +60,7 @@ MCP_ACTION_MAX_FILE_BYTES = 5 * 1024 * 1024
 ```
 
 !!! note "Token expiry is not a Django setting"
-    The default token lifetime (90 days) is fixed in the `MCPToken` model. Set `expires_at` per token to override it.
+    The 90-day default for programmatic creation is fixed in the `MCPToken` model. Set `expires_at` per token to override it; in the admin form, a blank **Expires At** means the token never expires.
 
 ---
 
@@ -219,11 +219,11 @@ Token behavior is configured per-token in Django admin:
 | `token_key` | CharField | Auto-generated | Public key for O(1) lookup |
 | `token_hash` | CharField | Auto-generated | SHA-256 hash of the secret |
 | `salt` | CharField | Auto-generated | Per-token salt for hashing |
-| `user` | ForeignKey | Required | Django user the token acts as (permissions and audit logging) |
+| `user` | ForeignKey | Required | Django user for audit logging (permissions not inherited) |
 | `is_active` | Boolean | `True` | Enable/disable token |
-| `expires_at` | DateTime | 90 days | Expiration date |
-| `groups` | M2M | Empty | Groups assigned to the token |
-| `permissions` | M2M | Empty | Direct permissions assigned to the token |
+| `expires_at` | DateTime | See below | Expiration date |
+| `groups` | M2M | Empty | Groups granting permissions to the token |
+| `permissions` | M2M | Empty | Direct permissions granted to the token |
 | `created_at` | DateTime | Auto | Creation timestamp |
 | `last_used_at` | DateTime | Auto | Updated on every authenticated request |
 
@@ -231,15 +231,14 @@ Token format: `mcp_<key>.<secret>` — the key is stored in plaintext for lookup
 
 ### Token Expiration
 
-The 90-day default applies whenever `expires_at` is not passed explicitly at creation — including when the field is left blank in the Django admin form. Options:
-
-- **Set date** — Token expires at the specified datetime
-- **Never expire** — Create the token programmatically with an explicit `MCPToken(expires_at=None, ...)`
+- **Admin form** — leaving **Expires At** blank creates a token that never expires
+- **Programmatic creation** — omitting the `expires_at` kwarg defaults to 90 days; an explicit `MCPToken(expires_at=None, ...)` never expires
+- **Set date** — the token expires at the specified datetime
 
 ### Permission Sources
 
-!!! warning "Authorization uses the linked user's permissions"
-    At request time, permission checks run through `ModelAdmin.has_*_permission()` against the token's linked **user** (`token.user`). The token's own `permissions` and `groups` fields are **not currently consulted** during authorization — grant Django permissions to the linked user to control what a token can do. A token bound to a superuser has full access.
+!!! important "Authorization uses the token's own permissions"
+    At request time, permission checks run through `ModelAdmin.has_*_permission()`, answered from the token's `permissions` and `groups` fields. The linked user's Django permissions are **not** inherited — the user is the audit identity only, and even a superuser-bound token has no access until permissions are granted on the token.
 
 ---
 

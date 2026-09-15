@@ -33,12 +33,13 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
 3. Click **Add MCP Token**
 4. Fill in:
     - **Name**: A descriptive name (e.g., "MCP Token")
-    - **User**: Select the user the token will act as — the token gets exactly this user's Django permissions
+    - **User**: The user actions are audit-logged under (its own permissions are not inherited)
+    - **Permissions** / **Groups**: What the token is allowed to do — tokens start with no access
 5. Click **Save**
 6. Copy the generated token (displayed only once after creation)
 
 !!! warning "Token Security"
-    The token is only displayed once after creation — store it securely. Access is governed by the linked user's Django permissions, so bind tokens to a dedicated user that has only the permissions the agent needs — not to a superuser.
+    The token is only displayed once after creation — store it securely. Access is governed by the permissions and groups assigned to the token itself; grant only what the agent needs (even a superuser-bound token has no access until granted).
 
 ## Configure Your MCP Client
 

@@ -98,25 +98,24 @@ Tokens are configured in Django admin. Each token has:
 | `token_key` | Public key for O(1) lookup (auto-generated) | Auto-generated |
 | `token_hash` | SHA-256 hash of the secret (auto-generated) | Auto-generated |
 | `salt` | Per-token salt for hashing (auto-generated) | Auto-generated |
-| `user` | Django user the token acts as (permissions + audit logging) | Required |
+| `user` | Django user for audit logging (permissions not inherited) | Required |
 | `is_active` | Enable/disable the token | `True` |
-| `expires_at` | Token expiration date | 90 days from creation |
-| `groups` | Django groups for permissions | Empty |
-| `permissions` | Direct permission assignments | Empty |
+| `expires_at` | Token expiration date | Blank in admin = never; 90 days when omitted in code |
+| `groups` | Groups granting permissions to the token | Empty |
+| `permissions` | Direct permissions granted to the token | Empty |
 
 Token format: `mcp_<key>.<secret>` — the key is stored in plaintext for lookup, the secret is hashed with a per-token salt.
 
 ### Token Expiry
 
-By default, tokens expire 90 days after creation. You can:
-
-- Set a custom expiration date
-- Create indefinite tokens programmatically with an explicit `MCPToken(expires_at=None, ...)` — leaving the field blank in the admin form applies the 90-day default
+- Leaving **Expires At** blank in the admin form creates a token that never expires
+- Programmatic creation without an `expires_at` kwarg defaults to 90 days; pass an explicit `MCPToken(expires_at=None, ...)` for an indefinite token
+- Set any datetime for a custom expiration
 
 ### Permission Assignment
 
-!!! warning "Permissions come from the linked user"
-    At request time, all checks run through `ModelAdmin.has_*_permission()` against the token's linked **user**. The token's `permissions` and `groups` fields are not currently consulted during authorization — grant Django permissions to the linked user to control access. A token bound to a superuser has full access.
+!!! important "Permissions live on the token"
+    At request time, all checks run through `ModelAdmin.has_*_permission()`, answered from the token's own `permissions` and `groups`. The linked user's Django permissions are **not** inherited — tokens start with no access, and even a superuser-bound token has none until permissions are granted on the token.
 
 ## Optional Django Settings
 

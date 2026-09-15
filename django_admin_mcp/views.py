@@ -21,7 +21,7 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from django_admin_mcp import __version__
 from django_admin_mcp.handlers.base import sanitize_pydantic_errors
-from django_admin_mcp.models import MCPToken
+from django_admin_mcp.models import MCPToken, TokenUser
 from django_admin_mcp.prompts import PromptError, get_prompt, list_prompts
 from django_admin_mcp.protocol import (
     InitializeResponse,
@@ -134,14 +134,20 @@ def _validate_tools_list(request: HttpRequest) -> JsonResponse | None:
 
 
 def _request_for_token(token) -> HttpRequest:
-    """Build a synthetic request carrying the token's user for permission checks."""
+    """
+    Build a synthetic request for permission checks.
+
+    The request carries a ``TokenUser`` proxy: permission checks answer from
+    the token's own permissions/groups, while identity attributes (for audit
+    logging) delegate to the linked user.
+    """
     tool_request = HttpRequest()
-    tool_request.user = token.user if token else None  # type: ignore[assignment]
+    tool_request.user = TokenUser(token) if token else None  # type: ignore[assignment]
     return tool_request
 
 
 async def _execute_tool(request_obj: ToolsCallRequest, token) -> list[TextContent]:
-    """Run a tool call with a request carrying the token's user for permission checks."""
+    """Run a tool call with a request that authorizes via the token's permissions."""
     return await call_tool(request_obj.name, request_obj.arguments, _request_for_token(token))
 
 

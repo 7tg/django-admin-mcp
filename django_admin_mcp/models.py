@@ -358,3 +358,70 @@ class MCPToken(models.Model):
                 perms.add(f"{perm.content_type.app_label}.{perm.codename}")
 
         return perms
+
+    def has_module_perms(self, app_label):
+        """
+        Check if the token holds any permission in the given app.
+
+        Mirrors Django's ``User.has_module_perms`` so admin module-level
+        checks (e.g. ``has_module_permission``) work against tokens.
+
+        Args:
+            app_label: The app label to check (e.g., 'blog')
+
+        Returns:
+            bool: True if any direct or group permission belongs to the app
+        """
+        if self.permissions.filter(content_type__app_label=app_label).exists():
+            return True
+        return self.groups.filter(permissions__content_type__app_label=app_label).exists()
+
+
+class TokenUser:
+    """
+    Permission proxy placed on MCP requests as ``request.user``.
+
+    Answers Django's permission API (``has_perm``, ``has_perms``,
+    ``has_module_perms``, ``get_all_permissions``) from the token's own
+    permissions and groups, while delegating every other attribute
+    (``pk``, ``username``, ...) to the linked user so audit logging and
+    admin hooks keep working.
+
+    The linked user's own permissions are never consulted — a token bound
+    to a superuser has no implicit access (principle of least privilege).
+    """
+
+    def __init__(self, token: MCPToken):
+        self._token = token
+        self._user = token.user
+        self._perm_cache: set[str] | None = None
+
+    def __getattr__(self, name):
+        return getattr(self._user, name)
+
+    def __str__(self):
+        return str(self._user)
+
+    @property
+    def is_superuser(self):
+        # Token permissions are the sole source of authority; the linked
+        # user's superuser status must not bypass them.
+        return False
+
+    def _permissions(self) -> set[str]:
+        if self._perm_cache is None:
+            self._perm_cache = self._token.get_all_permissions()
+        return self._perm_cache
+
+    def has_perm(self, perm, obj=None):
+        return perm in self._permissions()
+
+    def has_perms(self, perm_list, obj=None):
+        return all(self.has_perm(perm, obj) for perm in perm_list)
+
+    def has_module_perms(self, app_label):
+        prefix = f"{app_label}."
+        return any(perm.startswith(prefix) for perm in self._permissions())
+
+    def get_all_permissions(self, obj=None):
+        return set(self._permissions())

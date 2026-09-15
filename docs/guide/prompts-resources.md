@@ -33,7 +33,7 @@ An unknown prompt name or a missing required argument returns JSON-RPC error `-3
 ## Resources
 
 Resources expose read-only data through URI schemes. Listings are filtered
-by the token user's module and view permissions, and reads go through the
+by the token's module and view permissions, and reads go through the
 same permission checks as the tools.
 
 | URI | Content |

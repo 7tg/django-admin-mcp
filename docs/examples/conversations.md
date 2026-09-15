@@ -347,15 +347,14 @@ User: Delete all articles
 
 Agent: [calls bulk_article with operation="delete", items=[...]]
 
-I can't delete articles - the Django user this API token is bound to
-doesn't have delete permission.
+I can't delete articles - this API token doesn't have delete permission.
 
 To fix this:
 1. Go to Django admin
-2. Open the Django user the MCP token is linked to
-3. Grant that user the "blog.delete_article" permission (directly or via a group)
+2. Open the MCP token under Django Admin MCP > MCP Tokens
+3. Grant it the "blog.delete_article" permission (directly or via a group)
 
-Or use a token bound to a user with delete access.
+Or use a token that has delete access.
 ```
 
 ### Validation Error

@@ -13,8 +13,9 @@ Django Admin MCP uses token-based authentication for all API requests. This guid
 
     - **Name** — Descriptive identifier (e.g., "MCP - Development")
     - **Is Active** — Enable/disable the token
-    - **Expires At** — Expiration date (leaving it blank applies the 90-day default)
-    - **User** — The Django user the token acts as: requests are authorized with this user's permissions and audit-logged under it (required)
+    - **Expires At** — Expiration date (leave blank for a token that never expires)
+    - **User** — The Django user actions are audit-logged under (required; the user's own permissions are **not** used for authorization)
+    - **Groups** / **Permissions** — What the token is allowed to do: these token-level assignments are the sole source of authorization
 
 5. Click **Save**
 6. Copy the generated token — it is only displayed once after creation
@@ -25,14 +26,19 @@ An existing token's change page also offers a **Regenerate Token** button that i
 
 ```python
 from django_admin_mcp.models import MCPToken
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 
-# Create a dedicated user carrying exactly the permissions the agent needs
+# The user is for audit logging; it does not grant any access
 user = User.objects.get(username='mcp-agent')
 
 token = MCPToken.objects.create(
     name='API Token',
     user=user,
+)
+
+# Grant the token exactly the permissions the agent needs
+token.permissions.add(
+    Permission.objects.get(codename='view_article', content_type__app_label='blog'),
 )
 
 # Get the plaintext token (only available immediately after creation)
@@ -62,10 +68,11 @@ Tokens have an optional expiration date:
 
 | Configuration | Behavior |
 |---------------|----------|
-| `expires_at` passed explicitly at creation | Used as-is; an explicit `None` means the token never expires |
-| `expires_at` not passed (including left blank in the admin form) | Defaults to 90 days from creation |
+| Left blank in the admin form | The token never expires |
+| `expires_at` passed explicitly in code | Used as-is; an explicit `None` means the token never expires |
+| `expires_at` not passed at all in code | Defaults to 90 days from creation |
 
-To create an indefinite token, pass the value explicitly in code: `MCPToken.objects.create(name='...', user=user, expires_at=None)`.
+To create an indefinite token in code, pass the value explicitly: `MCPToken.objects.create(name='...', user=user, expires_at=None)`.
 
 Check token validity:
 
@@ -102,22 +109,22 @@ This is automatically updated on each authenticated request.
 
 ## Permission Assignment
 
-!!! important "Permissions come from the linked user"
-    At request time, every check runs against the Django permissions of the token's linked **user**. The token's own `permissions` and `groups` fields are not currently consulted during authorization. Control a token's access by managing its user's permissions — and never bind an agent token to a superuser.
+!!! important "Permissions live on the token"
+    At request time, every check runs against the token's own `permissions` and `groups`. The linked user's Django permissions are **not** inherited — even a token bound to a superuser has no access until permissions are granted on the token. Tokens start with no permissions (principle of least privilege).
 
-### User Permissions
+### Direct Permissions
 
 ```python
 from django.contrib.auth.models import Permission
 
-token = MCPToken.objects.select_related('user').get(name='My Token')
+token = MCPToken.objects.get(name='My Token')
 
-# Add view permission for Article to the linked user
+# Grant view permission for Article to the token
 view_article = Permission.objects.get(
     codename='view_article',
     content_type__app_label='blog'
 )
-token.user.user_permissions.add(view_article)
+token.permissions.add(view_article)
 ```
 
 ### Group Permissions
@@ -126,33 +133,35 @@ token.user.user_permissions.add(view_article)
 from django.contrib.auth.models import Group
 
 editors = Group.objects.get(name='Editors')
-token.user.groups.add(editors)
+token.groups.add(editors)
 ```
 
 ### Check Permissions
 
 ```python
-# Effective permissions are the linked user's
-perms = token.user.get_all_permissions()
+# Effective permissions: direct + group permissions on the token
+perms = token.get_all_permissions()
 print(f"Permissions: {perms}")
-```
 
-!!! tip "Permission caching"
-    Django caches a user's permissions on the user instance — re-fetch the user (or the token) after changing permissions to see the update.
+# Single checks
+token.has_perm('blog.view_article')
+token.has_module_perms('blog')
+```
 
 ## Security Best Practices
 
 ### Principle of Least Privilege
 
-Bind each token to a dedicated user carrying only the permissions needed:
+Grant each token only the permissions it needs:
 
 ```python
 from django.contrib.auth.models import User, Permission
 from django.contrib.contenttypes.models import ContentType
 from blog.models import Article, Author
 
-reader = User.objects.create_user('mcp-readonly')
-reader.user_permissions.add(
+audit_user = User.objects.get(username='mcp-agent')  # audit trail only
+readonly_token = MCPToken.objects.create(name='Read Only', user=audit_user)
+readonly_token.permissions.add(
     Permission.objects.get(
         codename='view_article',
         content_type=ContentType.objects.get_for_model(Article),
@@ -162,7 +171,6 @@ reader.user_permissions.add(
         content_type=ContentType.objects.get_for_model(Author),
     ),
 )
-readonly_token = MCPToken.objects.create(name='Read Only', user=reader)
 ```
 
 ### Use Expiration Dates
@@ -195,6 +203,9 @@ new_token = MCPToken.objects.create(
     name='Production Token v2',
     user=old_token.user,
 )
+# Carry over the old token's access
+new_token.permissions.set(old_token.permissions.all())
+new_token.groups.set(old_token.groups.all())
 
 old_token.is_active = False
 old_token.save()

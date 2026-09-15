@@ -132,6 +132,33 @@ class TestTokenPermissions:
         assert "tests.change_article" in all_perms  # from group
         assert "tests.add_article" in all_perms  # direct
 
+    def test_has_module_perms_via_direct_permission(self):
+        """Test has_module_perms is True for an app where the token holds a direct permission."""
+        token = MCPTokenFactory()
+        content_type = ContentType.objects.get_for_model(Article)
+        view_perm = Permission.objects.get(content_type=content_type, codename="view_article")
+        token.permissions.add(view_perm)
+
+        assert token.has_module_perms("tests")
+        assert not token.has_module_perms("auth")
+
+    def test_has_module_perms_via_group(self):
+        """Test has_module_perms is True for an app where a token group holds a permission."""
+        token = MCPTokenFactory()
+        group = Group.objects.create(name="Module Perm Group")
+        content_type = ContentType.objects.get_for_model(Article)
+        change_perm = Permission.objects.get(content_type=content_type, codename="change_article")
+        group.permissions.add(change_perm)
+        token.groups.add(group)
+
+        assert token.has_module_perms("tests")
+
+    def test_has_module_perms_denied_without_permissions(self):
+        """Test has_module_perms is False for tokens without any permissions."""
+        token = MCPTokenFactory()
+
+        assert not token.has_module_perms("tests")
+
     def test_has_perms_checks_multiple_permissions(self):
         """Test has_perms checks all given permissions."""
         token = MCPTokenFactory()

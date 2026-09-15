@@ -7,7 +7,7 @@ import json
 import django
 import pytest
 from asgiref.sync import sync_to_async
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 from django.test import AsyncClient
 
 from tests.factories import MCPTokenFactory
@@ -19,12 +19,15 @@ skip_if_django_lt_42 = pytest.mark.skipif(
 
 @sync_to_async
 def make_superuser_token():
+    """Full-access token: permissions are enforced on the token, not the linked user."""
     superuser = User.objects.create_superuser(
         username=f"proto_super_{User.objects.count()}",
         email="proto_super@example.com",
         password="test",
     )
-    return MCPTokenFactory(user=superuser)
+    token = MCPTokenFactory(user=superuser)
+    token.permissions.set(Permission.objects.all())
+    return token
 
 
 async def rpc(token, method, params=None, request_id=1):

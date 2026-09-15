@@ -267,8 +267,8 @@ Tool calls that fail a permission check return HTTP 200 with an error object ins
 {"error": "Permission denied: cannot view article", "code": "permission_denied"}
 ```
 
-- The token's linked Django user lacks the required permission
-- Grant the permission to that user (directly or via its groups)
+- The token lacks the required permission
+- Grant the permission to the token (via its `permissions` or `groups` fields in the MCP Token admin)
 
 ### No Tools Available
 

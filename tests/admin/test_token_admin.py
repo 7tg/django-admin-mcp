@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib import admin
+from django.test import RequestFactory
 from django.utils import timezone
 
 from django_admin_mcp.admin import MCPTokenAdmin
@@ -132,3 +133,53 @@ class TestMCPTokenAdmin:
         admin_instance = MCPTokenAdmin(MCPToken, admin.site)
 
         assert "regenerate_token_button" in admin_instance.readonly_fields
+
+    def test_admin_form_blank_expires_at_creates_indefinite_token(self):
+        """Leaving expires_at blank in the admin form must create an indefinite token."""
+        user = UserFactory()
+        admin_instance = MCPTokenAdmin(MCPToken, admin.site)
+        request = RequestFactory().get("/")
+        request.user = user
+
+        form_class = admin_instance.get_form(request)
+        form = form_class(
+            data={
+                "name": "Blank expiry token",
+                "is_active": "on",
+                # The admin renders expires_at as a split date/time widget
+                "expires_at_0": "",
+                "expires_at_1": "",
+                "user": str(user.pk),
+            }
+        )
+
+        assert form.is_valid(), form.errors
+        token = form.save()
+
+        assert token.pk is not None
+        assert token.expires_at is None
+
+    def test_admin_form_explicit_expires_at_is_kept(self):
+        """A date entered in the admin form is stored as given."""
+        user = UserFactory()
+        admin_instance = MCPTokenAdmin(MCPToken, admin.site)
+        request = RequestFactory().get("/")
+        request.user = user
+        expiry = timezone.now() + timedelta(days=30)
+
+        form_class = admin_instance.get_form(request)
+        form = form_class(
+            data={
+                "name": "Dated token",
+                "is_active": "on",
+                # The admin renders expires_at as a split date/time widget
+                "expires_at_0": expiry.strftime("%Y-%m-%d"),
+                "expires_at_1": expiry.strftime("%H:%M:%S"),
+                "user": str(user.pk),
+            }
+        )
+
+        assert form.is_valid(), form.errors
+        token = form.save()
+
+        assert token.expires_at is not None

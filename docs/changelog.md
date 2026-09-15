@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — BREAKING
+- **Token-level permissions are now enforced.** Authorization answers from the token's own `permissions` and `groups` fields (via a permission proxy placed on `request.user`); the linked user's Django permissions are no longer consulted, and a token bound to a superuser has no implicit access. The linked user remains the audit identity for `LogEntry` records. **Upgrade note:** existing tokens that relied on their user's permissions must be granted equivalent permissions/groups on the token itself before upgrading, or their requests will be denied.
+- Leaving **Expires At** blank in the admin form now creates a token that never expires, matching the field's help text. Programmatic creation without an `expires_at` kwarg still defaults to 90 days.
+
+### Added
+- `MCPToken.has_module_perms(app_label)` — module-level permission check mirroring Django's `User.has_module_perms`, used by `find_models` discovery
+- `TokenUser` permission proxy (`django_admin_mcp.models.TokenUser`) answering Django's permission API from token permissions while delegating identity attributes to the linked user
+
 ### Fixed
 - `find_models` now reports `tools_exposed` based on each admin's `mcp_expose` flag instead of always `true`
 - The advertised `autocomplete_*` limit default now matches the handler default (10, was 20 in the schema)
