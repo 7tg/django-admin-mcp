@@ -129,6 +129,10 @@ def _build_search_query(model: type[models.Model], search_fields: list[str], sea
 
     q = Q()
     for field in search_fields:
+        # Strip admin operator prefixes (^, =, @) — this fallback only runs
+        # without a ModelAdmin, where get_search_results is unavailable
+        if field.startswith(("^", "=", "@")):
+            field = field[1:]
         # Use icontains for text search
         lookup = f"{field}__icontains"
         q |= Q(**{lookup: search_term})
@@ -500,10 +504,16 @@ async def handle_list(
                 filter_q = _build_filter_query(model, filters)
                 queryset = queryset.filter(filter_q)
 
-            # Apply search
-            if search and search_fields:
-                search_q = _build_search_query(model, search_fields, search)
-                queryset = queryset.filter(search_q)
+            # Apply search through the admin's own pipeline: it handles the
+            # ^/=/@ operator prefixes, field__lookup forms, and custom
+            # get_search_results overrides (issue #103)
+            if search:
+                if model_admin is not None:
+                    queryset, may_have_duplicates = model_admin.get_search_results(request, queryset, search)
+                    if may_have_duplicates:
+                        queryset = queryset.distinct()
+                elif search_fields:
+                    queryset = queryset.filter(_build_search_query(model, search_fields, search))
 
             # Apply ordering
             ordering = order_by if order_by else default_ordering

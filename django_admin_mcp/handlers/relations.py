@@ -296,23 +296,30 @@ async def handle_autocomplete(
         queryset = get_admin_queryset(model, model_admin, request)
 
         # Use admin's search_fields if available
-        search_fields = []
+        admin_search_fields = []
         if model_admin:
-            search_fields = list(getattr(model_admin, "search_fields", []))
+            admin_search_fields = list(getattr(model_admin, "search_fields", []))
 
-        # If no search_fields, try to find text fields to search
-        if not search_fields:
+        # If no admin search_fields, try to find text fields to search
+        fallback_fields = []
+        if not admin_search_fields:
             for field in model._meta.get_fields():
                 if hasattr(field, "get_internal_type"):
                     if field.get_internal_type() in ("CharField", "TextField"):
-                        search_fields.append(field.name)
-                        if len(search_fields) >= 3:  # Limit to 3 fields
+                        fallback_fields.append(field.name)
+                        if len(fallback_fields) >= 3:  # Limit to 3 fields
                             break
 
-        # Apply search if term provided
-        if term and search_fields:
+        # Apply search if term provided. Admin-declared search_fields go
+        # through get_search_results, which handles the ^/=/@ operator
+        # prefixes and custom overrides (issue #103)
+        if term and model_admin is not None and admin_search_fields:
+            queryset, may_have_duplicates = model_admin.get_search_results(request, queryset, term)
+            if may_have_duplicates:
+                queryset = queryset.distinct()
+        elif term and fallback_fields:
             q = Q()
-            for field in search_fields:
+            for field in fallback_fields:
                 q |= Q(**{f"{field}__icontains": term})
             queryset = queryset.filter(q)
 
