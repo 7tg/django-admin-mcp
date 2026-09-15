@@ -42,13 +42,16 @@ class TestTokenPermissions:
         assert not token.has_perm("tests.delete_article")
 
     def test_token_with_direct_permissions(self):
-        """Test that token can have direct permissions."""
-        token = MCPTokenFactory()
-
-        # Add specific permissions
+        """Test that token can have direct permissions (within the user cap)."""
         content_type = ContentType.objects.get_for_model(Article)
         view_perm = Permission.objects.get(content_type=content_type, codename="view_article")
         add_perm = Permission.objects.get(content_type=content_type, codename="add_article")
+
+        # has_perm answers from the effective permissions (issue #109), so the
+        # user must also hold what the token is granted
+        user = UserFactory()
+        user.user_permissions.add(view_perm, add_perm)
+        token = MCPTokenFactory(user=user)
         token.permissions.add(view_perm, add_perm)
 
         # Should have assigned permissions
@@ -59,14 +62,17 @@ class TestTokenPermissions:
         assert not token.has_perm("tests.delete_article")
 
     def test_token_with_group_permissions(self):
-        """Test that token inherits permissions from groups."""
-        token = MCPTokenFactory()
-
-        # Create group with permissions
-        group = Group.objects.create(name="Article Editors")
+        """Test that token inherits permissions from groups (within the user cap)."""
         content_type = ContentType.objects.get_for_model(Article)
         view_perm = Permission.objects.get(content_type=content_type, codename="view_article")
         change_perm = Permission.objects.get(content_type=content_type, codename="change_article")
+
+        user = UserFactory()
+        user.user_permissions.add(view_perm, change_perm)
+        token = MCPTokenFactory(user=user)
+
+        # Create group with permissions
+        group = Group.objects.create(name="Article Editors")
         group.permissions.add(view_perm, change_perm)
 
         # Add group to token
@@ -81,21 +87,22 @@ class TestTokenPermissions:
 
     def test_token_combines_group_and_direct_permissions(self):
         """Test that token combines permissions from groups and direct permissions (not user)."""
-        # Create user with view permission (should NOT be inherited)
+        # Create user holding view/change/add (the cap); view is NOT granted
+        # on the token, so it must not leak through from the user
         user = UserFactory()
         content_type = ContentType.objects.get_for_model(Article)
         view_perm = Permission.objects.get(content_type=content_type, codename="view_article")
-        user.user_permissions.add(view_perm)
+        change_perm = Permission.objects.get(content_type=content_type, codename="change_article")
+        add_perm = Permission.objects.get(content_type=content_type, codename="add_article")
+        user.user_permissions.add(view_perm, change_perm, add_perm)
 
         # Create group with change permission
         group = Group.objects.create(name="Article Editors")
-        change_perm = Permission.objects.get(content_type=content_type, codename="change_article")
         group.permissions.add(change_perm)
 
         # Create token with user and add direct permission
         token = MCPTokenFactory(user=user)
         token.groups.add(group)
-        add_perm = Permission.objects.get(content_type=content_type, codename="add_article")
         token.permissions.add(add_perm)
 
         # Should have group and direct permissions only
@@ -134,9 +141,11 @@ class TestTokenPermissions:
 
     def test_has_module_perms_via_direct_permission(self):
         """Test has_module_perms is True for an app where the token holds a direct permission."""
-        token = MCPTokenFactory()
         content_type = ContentType.objects.get_for_model(Article)
         view_perm = Permission.objects.get(content_type=content_type, codename="view_article")
+        user = UserFactory()
+        user.user_permissions.add(view_perm)
+        token = MCPTokenFactory(user=user)
         token.permissions.add(view_perm)
 
         assert token.has_module_perms("tests")
@@ -144,10 +153,12 @@ class TestTokenPermissions:
 
     def test_has_module_perms_via_group(self):
         """Test has_module_perms is True for an app where a token group holds a permission."""
-        token = MCPTokenFactory()
-        group = Group.objects.create(name="Module Perm Group")
         content_type = ContentType.objects.get_for_model(Article)
         change_perm = Permission.objects.get(content_type=content_type, codename="change_article")
+        user = UserFactory()
+        user.user_permissions.add(change_perm)
+        token = MCPTokenFactory(user=user)
+        group = Group.objects.create(name="Module Perm Group")
         group.permissions.add(change_perm)
         token.groups.add(group)
 
@@ -200,12 +211,12 @@ class TestTokenPermissions:
 
     def test_has_perms_checks_multiple_permissions(self):
         """Test has_perms checks all given permissions."""
-        token = MCPTokenFactory()
-
-        # Add view and add permissions
         content_type = ContentType.objects.get_for_model(Article)
         view_perm = Permission.objects.get(content_type=content_type, codename="view_article")
         add_perm = Permission.objects.get(content_type=content_type, codename="add_article")
+        user = UserFactory()
+        user.user_permissions.add(view_perm, add_perm)
+        token = MCPTokenFactory(user=user)
         token.permissions.add(view_perm, add_perm)
 
         # Should pass when all permissions are present

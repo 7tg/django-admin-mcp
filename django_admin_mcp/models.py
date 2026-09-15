@@ -309,55 +309,52 @@ class MCPToken(models.Model):
 
     def has_perm(self, perm):
         """
-        Check if token has a specific permission.
+        Check if the token can exercise a specific permission.
+
+        Answers from ``get_effective_permissions()``: the token's own grants
+        (permissions + groups) capped by the linked user's permissions — the
+        same authority the ``TokenUser`` proxy applies to MCP requests, so
+        this method is safe to use for authorization (issue #109).
 
         Args:
             perm: Permission string in format 'app_label.codename' (e.g., 'blog.change_article')
                   or Permission object
 
         Returns:
-            bool: True if token has permission, False otherwise
+            bool: True if the token can exercise the permission, False otherwise
         """
-        # Parse permission if it's a string
         if isinstance(perm, str):
-            if "." in perm:
-                app_label, codename = perm.split(".", 1)
-            else:
+            if "." not in perm:
                 # If no app_label, we can't check it
                 return False
+            perm_string = perm
         else:
-            app_label = perm.content_type.app_label
-            codename = perm.codename
+            perm_string = f"{perm.content_type.app_label}.{perm.codename}"
 
-        # Check direct permissions
-        if self.permissions.filter(content_type__app_label=app_label, codename=codename).exists():
-            return True
-
-        # Check group permissions
-        if self.groups.filter(
-            permissions__content_type__app_label=app_label,
-            permissions__codename=codename,
-        ).exists():
-            return True
-
-        # Default: deny access (principle of least privilege)
-        return False
+        return perm_string in self.get_effective_permissions()
 
     def has_perms(self, perm_list):
         """
-        Check if token has all permissions in the list.
+        Check if the token can exercise all permissions in the list.
+
+        Like ``has_perm``, answers from the effective (user-capped)
+        permissions.
 
         Args:
             perm_list: List of permission strings
 
         Returns:
-            bool: True if token has all permissions, False otherwise
+            bool: True if the token can exercise every permission, False otherwise
         """
         return all(self.has_perm(perm) for perm in perm_list)
 
     def get_all_permissions(self):
         """
-        Get all permissions available to this token.
+        Get the token's raw grants (direct permissions + groups), uncapped.
+
+        This is introspection of what was granted on the token, NOT what it
+        can exercise — use ``get_effective_permissions()`` (or ``has_perm``)
+        for any authorization decision.
 
         Returns:
             set: Set of permission strings in 'app_label.codename' format
@@ -394,20 +391,21 @@ class MCPToken(models.Model):
 
     def has_module_perms(self, app_label):
         """
-        Check if the token holds any permission in the given app.
+        Check if the token can exercise any permission in the given app.
 
         Mirrors Django's ``User.has_module_perms`` so admin module-level
-        checks (e.g. ``has_module_permission``) work against tokens.
+        checks (e.g. ``has_module_permission``) work against tokens. Answers
+        from the effective (user-capped) permissions, matching the
+        ``TokenUser`` proxy (issue #109).
 
         Args:
             app_label: The app label to check (e.g., 'blog')
 
         Returns:
-            bool: True if any direct or group permission belongs to the app
+            bool: True if any effective permission belongs to the app
         """
-        if self.permissions.filter(content_type__app_label=app_label).exists():
-            return True
-        return self.groups.filter(permissions__content_type__app_label=app_label).exists()
+        prefix = f"{app_label}."
+        return any(perm.startswith(prefix) for perm in self.get_effective_permissions())
 
 
 class TokenUser:
