@@ -2,10 +2,15 @@
 Tests for MCPAdminMixin functionality
 """
 
+import logging
+from types import SimpleNamespace
+
 import pytest
+from django.apps import apps
+from django.db import models as dj_models
 
 from django_admin_mcp import MCPAdminMixin
-from tests.models import Article
+from tests.models import Article, Author
 
 
 @pytest.mark.django_db
@@ -70,3 +75,46 @@ class TestMCPAdminMixin:
         assert find_models_tool.name == "find_models"
         assert "properties" in find_models_tool.inputSchema
         assert "query" in find_models_tool.inputSchema["properties"]
+
+
+class TestModelNameCollision:
+    """Cross-app model_name collisions must not be silently dropped (issue #99)."""
+
+    def _make_colliding_author(self):
+        meta = type("Meta", (), {"app_label": "collision_test"})
+        clone = type(
+            "Author",
+            (dj_models.Model,),
+            {"__module__": "tests.collision_models", "Meta": meta},
+        )
+
+        def cleanup():
+            apps.all_models["collision_test"].pop("author", None)
+            apps.clear_cache()
+
+        return clone, cleanup
+
+    def test_collision_with_different_model_warns_and_keeps_first(self, caplog):
+        assert MCPAdminMixin._registered_models["author"]["model"] is Author
+
+        clone, cleanup = self._make_colliding_author()
+        try:
+            with caplog.at_level(logging.WARNING, logger="django_admin_mcp"):
+                MCPAdminMixin.register_model_tools(SimpleNamespace(model=clone))
+
+            # First registration wins...
+            assert MCPAdminMixin._registered_models["author"]["model"] is Author
+            # ...and the dropped registration is reported
+            assert any(
+                "collision" in record.message.lower() and "author" in record.message.lower()
+                for record in caplog.records
+            )
+        finally:
+            cleanup()
+
+    def test_reregistering_same_model_does_not_warn(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="django_admin_mcp"):
+            MCPAdminMixin.register_model_tools(SimpleNamespace(model=Author))
+
+        assert not caplog.records
+        assert MCPAdminMixin._registered_models["author"]["model"] is Author

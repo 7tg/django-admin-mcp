@@ -5,6 +5,7 @@ This mixin enables MCP (Model Context Protocol) functionality for Django admin c
 When added to a ModelAdmin class, it exposes the model's CRUD operations through MCP tools.
 """
 
+import logging
 from typing import Any
 
 from django.db import models
@@ -12,6 +13,8 @@ from django.db import models
 from django_admin_mcp.handlers import create_mock_request
 from django_admin_mcp.protocol.types import TextContent, Tool
 from django_admin_mcp.tools import call_tool, get_find_models_tool, get_model_tools
+
+logger = logging.getLogger("django_admin_mcp")
 
 
 class MCPAdminMixin:
@@ -62,12 +65,29 @@ class MCPAdminMixin:
 
     @classmethod
     def register_model_tools(cls, model_admin_instance):
-        """Register MCP tools for a model admin instance."""
+        """Register MCP tools for a model admin instance.
+
+        The registry (and MCP tool names) use the bare ``model_name``, so two
+        models with the same class name in different apps collide; the first
+        registration wins and later ones are dropped with a warning (issue #99).
+        """
         model = model_admin_instance.model
         model_name = model._meta.model_name
 
         # Skip if already registered
         if model_name in cls._registered_models:
+            existing = cls._registered_models[model_name]["model"]
+            if existing._meta.concrete_model is not model._meta.concrete_model:
+                logger.warning(
+                    "MCP model name collision: '%s' is already registered for %s.%s; "
+                    "ignoring %s.%s (tool names use the bare model name, so only "
+                    "one model per name can be exposed)",
+                    model_name,
+                    existing._meta.app_label,
+                    existing.__name__,
+                    model._meta.app_label,
+                    model.__name__,
+                )
             return
 
         cls._registered_models[model_name] = {
