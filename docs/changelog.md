@@ -5,6 +5,26 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **All row lookups now honor `ModelAdmin.get_queryset()` scoping.** `update_*`, `delete_*`, `bulk_*`, `related_*`, `history_*`, and `autocomplete_*` previously used `model.objects` directly, so rows hidden from the admin changelist (multi-tenant filters, soft-delete, proxy scoping) could still be read, updated, or deleted by pk ([#88](https://github.com/7tg/django-admin-mcp/issues/88))
+- **`mcp_expose = False` models are no longer callable.** Tools for non-exposed models were hidden from `tools/list` but executed when called by name; they now return the same "Model not found" error as unregistered models ([#89](https://github.com/7tg/django-admin-mcp/issues/89))
+- **`related_*` only serves actual relations.** Any attribute name (plain fields, properties, methods) was previously returned as a string value, bypassing `mcp_fields`/`mcp_exclude_fields`; non-relation names are now rejected ([#90](https://github.com/7tg/django-admin-mcp/issues/90))
+- **Related and inline reads check permissions on the related model.** `related_*` returns `permission_denied` and `include_related`/`include_inlines` omit models the token may not view; related rows also come from the related admin's queryset scope ([#91](https://github.com/7tg/django-admin-mcp/issues/91))
+- **Inline updates and deletes are scoped to the parent object.** Inline items in `update_*` were looked up by pk alone, allowing any row of the inline model to be modified or deleted through an unrelated parent ([#92](https://github.com/7tg/django-admin-mcp/issues/92))
+- **Admin token regeneration requires POST and change permission.** The regenerate view previously invalidated and reissued credentials on a plain GET (CSRF-able) and admitted any active staff user regardless of MCPToken permissions ([#96](https://github.com/7tg/django-admin-mcp/issues/96))
+
+### Fixed
+- `get_*` with `include_related: true` no longer fails with "An internal error occurred" on models that have a forward ForeignKey ([#93](https://github.com/7tg/django-admin-mcp/issues/93))
+- Negative or non-integer `limit`/`offset` in `related_*`, `history_*`, and `autocomplete_*` now return a JSON validation error instead of an unhandled HTTP 500; these handlers also honor the `MCP_MAX_LIST_LIMIT` cap, and `call_tool` gained a last-resort sanitized-error guard ([#94](https://github.com/7tg/django-admin-mcp/issues/94))
+- Bulk and action paths follow the standard admin pipeline: `delete_selected` writes `LogEntry` records and calls `delete_queryset()`; bulk create/update go through `save_model()` and apply the same unknown-field/readonly guards as single-object update; bulk delete calls `delete_model()` ([#95](https://github.com/7tg/django-admin-mcp/issues/95))
+- A cross-app model name collision in the MCP registry is now logged instead of silently dropping the second model's registration ([#99](https://github.com/7tg/django-admin-mcp/issues/99))
+
+### Changed
+- The JSON-RPC endpoint returns spec-compliant error envelopes: parse errors (`-32700`), unknown methods (`-32601`), and invalid params (`-32602`, sanitized details in `error.data`) come back with HTTP 200 instead of bare 400 bodies; tool-result failures return their envelope with 200 instead of 500; `notifications/initialized` returns an empty HTTP 202 ([#97](https://github.com/7tg/django-admin-mcp/issues/97))
+- `MCPToken.last_used_at` writes are throttled to once per `MCP_LAST_USED_RESOLUTION` seconds (default 60; set 0 to record every use) instead of every authenticated request ([#98](https://github.com/7tg/django-admin-mcp/issues/98))
+
 ## [0.5.0] - 2026-09-15
 
 ### Changed — BREAKING

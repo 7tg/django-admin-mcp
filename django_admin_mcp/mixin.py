@@ -48,7 +48,9 @@ class MCPAdminMixin:
             Takes precedence over Django admin's 'exclude' attribute.
             Use this to prevent sensitive data exposure (e.g., passwords, tokens).
             If not set, falls back to 'exclude' or excludes nothing.
-        mcp_use_admin_queryset (bool): When True (default), list/get/action start from
+        mcp_use_admin_queryset (bool): When True (default), every handler that looks
+            up rows (list/get/update/delete/bulk/action/related/history/autocomplete)
+            starts from
             ``ModelAdmin.get_queryset(request)`` so MCP row scope matches the admin
             changelist (proxy filters, soft-delete, multi-tenant scoping, etc.).
             Set to False to use ``model.objects.all()`` instead.

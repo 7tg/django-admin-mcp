@@ -357,7 +357,7 @@ def get_admin_queryset(
     request: HttpRequest,
 ) -> models.QuerySet:
     """
-    Return the queryset MCP list/get/action handlers should use for a model.
+    Return the queryset MCP handlers should use for a model's row lookups.
 
     By default this mirrors Django admin changelists by calling
     ``model_admin.get_queryset(request)``. Set ``mcp_use_admin_queryset = False``

@@ -118,7 +118,7 @@ Default: `None`
 
 ### mcp_use_admin_queryset
 
-When `True` (the default), `list_*`, `get_*`, actions, and bulk operations start from `ModelAdmin.get_queryset(request)`, so proxy filters, soft-delete, and multi-tenant scoping match the admin changelist. Set to `False` to use `model.objects.all()` instead:
+When `True` (the default), every tool that looks up rows (`list_*`, `get_*`, `update_*`, `delete_*`, `bulk_*`, actions, `related_*`, `history_*`, `autocomplete_*`) starts from `ModelAdmin.get_queryset(request)`, so proxy filters, soft-delete, and multi-tenant scoping match the admin changelist. Set to `False` to use `model.objects.all()` instead:
 
 ```python
 class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
