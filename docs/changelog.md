@@ -5,6 +5,25 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **`tools/list` is filtered by the requesting token's permissions.** Models failing the `has_module_permission` / view permission checks are skipped, mirroring `find_models` and `resources/list`; a minimally-privileged token can no longer enumerate every exposed model's tool schemas ([#101](https://github.com/7tg/django-admin-mcp/issues/101))
+- **Fields hidden by `mcp_fields`/`mcp_exclude_fields` disappear from every schema surface.** Tool descriptions, `describe_*`, and the `models://{model}/schema` resource previously listed the name, type, and constraints of deliberately hidden fields (password/token/PII columns); they now apply the same include/exclude resolution as serialization. Reverse relations stay discoverable for `related_*` under an include list ([#102](https://github.com/7tg/django-admin-mcp/issues/102))
+- **Bulk update redacts sensitive values in `LogEntry` messages.** `bulk_<model>` with `operation: "update"` wrote plaintext secrets into `django_admin_log` while the single-update path redacted them; both now share the same redacting serializer (which also drops the stray quote the old truncation branch appended) ([#104](https://github.com/7tg/django-admin-mcp/issues/104))
+- **Inline writes honor the inline admin's `fields`, `exclude`, and `readonly_fields`.** The inline form is now resolved through the inline's `get_formset()` like the Django admin, and keys targeting readonly or undeclared fields are rejected with the same error shapes as top-level update instead of being silently written ([#105](https://github.com/7tg/django-admin-mcp/issues/105))
+- **`MCPToken.has_perm`/`has_perms`/`has_module_perms` are capped by the linked user's permissions.** These public methods answered from the token's raw grants, bypassing the 0.5.0 cap rule that MCP requests already enforce; they now answer from `get_effective_permissions()`, matching the `TokenUser` proxy. `get_all_permissions()` remains raw-grant introspection and is documented as such ([#109](https://github.com/7tg/django-admin-mcp/issues/109))
+
+### Fixed
+- Admin hooks calling `self.message_user()` in `save_model`/`delete_model`/actions no longer crash MCP writes with `MessageFailure`: the synthetic MCP requests now carry an in-memory messages storage. This also un-breaks the `create_mcptoken` tool, which could never succeed ([#100](https://github.com/7tg/django-admin-mcp/issues/100))
+- `search_fields` operator prefixes (`^`, `=`, `@`) and `field__lookup` forms no longer break `list_*` search and `autocomplete_*`: searching goes through `ModelAdmin.get_search_results()`, so custom overrides are honored too ([#103](https://github.com/7tg/django-admin-mcp/issues/103))
+- `related_*` on a null forward FK/O2O returns `{type: "single", result: null}` instead of the undocumented `value` branch stringifying `None`, and an empty reverse one-to-one returns the same null result instead of "An internal error occurred" ([#106](https://github.com/7tg/django-admin-mcp/issues/106))
+- Grouped (tupled) entries in the admin's `fields` — e.g. `fields = [("name", "email")]` — no longer make `get_*`/`list_*` return empty objects; include/exclude lists are flattened before use ([#107](https://github.com/7tg/django-admin-mcp/issues/107))
+- Input-validation gaps: a legitimate `pk=0` is looked up instead of rejected as missing; `bulk_*` with a non-list `items` returns `{"error": "items must be a list"}` instead of a success-shaped no-op; `history_*` honors the `offset` it accepts ([#110](https://github.com/7tg/django-admin-mcp/issues/110))
+
+### Changed
+- JSON-RPC notifications never receive a response body: the whole `notifications/` namespace (e.g. `notifications/cancelled`, `notifications/roots/list_changed`) and any request without an `id` return an empty HTTP 202, per JSON-RPC 2.0. Unknown request methods with an `id` keep the `-32601` error envelope ([#108](https://github.com/7tg/django-admin-mcp/issues/108))
+
 ## [0.6.0] - 2026-09-15
 
 ### Security
