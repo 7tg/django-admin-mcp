@@ -438,8 +438,19 @@ async def handle_list(
         List of TextContent with JSON response containing count, total_count, results.
     """
     try:
+        # Deferred import: settings access requires Django to be configured
+        from django.conf import settings  # noqa: PLC0415
+
         limit = arguments.get("limit", 100)
         offset = arguments.get("offset", 0)
+        if not isinstance(limit, int) or limit < 0:
+            return json_response({"error": "limit must be a non-negative integer"})
+        if not isinstance(offset, int) or offset < 0:
+            return json_response({"error": "offset must be a non-negative integer"})
+        # Cap page size to guard against resource exhaustion (issue #47)
+        max_limit = int(getattr(settings, "MCP_MAX_LIST_LIMIT", 1000))
+        limit = min(limit, max_limit)
+
         filters = arguments.get("filters", {})
         search = arguments.get("search", "")
         order_by = arguments.get("order_by", [])
