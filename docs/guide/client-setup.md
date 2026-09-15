@@ -242,6 +242,32 @@ Error: Connection refused
 - Check the token is active (`is_active=True`)
 - Ensure the token hasn't expired
 
+### 🕵️ Unauthorized with MCP Inspector (OAuth discovery 404s)
+
+If you connect with `npx @modelcontextprotocol/inspector` and see a `401` on
+`/mcp/` followed by requests to `/.well-known/oauth-protected-resource`,
+`/.well-known/oauth-authorization-server`, and `/register` returning `404`:
+
+```
+Unauthorized: /mcp/
+Not Found: /.well-known/oauth-protected-resource
+Not Found: /.well-known/oauth-authorization-server
+Not Found: /register
+```
+
+This is expected. Django Admin MCP uses **static Bearer tokens**, not OAuth —
+after a `401`, the Inspector automatically tries OAuth discovery, which this
+server doesn't implement. To fix it, pass the token explicitly:
+
+1. In the Inspector sidebar, select transport **Streamable HTTP** and enter
+   your server URL (e.g. `http://localhost:8000/mcp/`)
+2. Open **Authentication** and set **Header Name** to `Authorization` and
+   **Bearer Token** to your token (`mcp_...`)
+3. Click **Connect**
+
+The `/.well-known/*` 404 messages disappear once the Bearer token is sent
+with each request.
+
 ### 🚫 Permission Denied
 
 ```
