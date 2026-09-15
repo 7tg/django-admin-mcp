@@ -11,6 +11,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.contrib.admin.sites import site
+from django.contrib.messages.storage.base import BaseStorage
 from django.core.exceptions import FieldError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, OperationalError, models
@@ -26,6 +27,28 @@ logger = logging.getLogger("django_admin_mcp")
 
 # Pydantic TypeAdapter for JSON serialization - reused across all json_response calls
 _JSON_ADAPTER = TypeAdapter(dict[str, Any])
+
+
+class MCPMessageStorage(BaseStorage):
+    """
+    In-memory messages storage for synthetic MCP requests (issue #100).
+
+    Admin hooks commonly call ``ModelAdmin.message_user()``; without a storage
+    on the request that raises ``MessageFailure`` and rolls back the write.
+    Messages are collected in memory and discarded with the request.
+    """
+
+    def _get(self, *args, **kwargs):
+        return [], True
+
+    def _store(self, messages, response, *args, **kwargs):
+        return []
+
+
+def attach_messages_storage(request: HttpRequest) -> HttpRequest:
+    """Give a synthetic request a messages storage so message_user() works."""
+    request._messages = MCPMessageStorage(request)  # type: ignore[attr-defined]
+    return request
 
 
 class MCPRequest(HttpRequest):
@@ -44,6 +67,7 @@ class MCPRequest(HttpRequest):
         self.META = {"SCRIPT_NAME": ""}
         self.GET = {}
         self.POST = {}
+        attach_messages_storage(self)
 
 
 def json_response(data: dict) -> list[TextContent]:

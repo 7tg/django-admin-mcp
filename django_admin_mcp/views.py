@@ -20,7 +20,7 @@ from django.views.decorators.http import require_http_methods
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from django_admin_mcp import __version__
-from django_admin_mcp.handlers.base import sanitize_pydantic_errors
+from django_admin_mcp.handlers.base import attach_messages_storage, sanitize_pydantic_errors
 from django_admin_mcp.models import MCPToken, TokenUser
 from django_admin_mcp.prompts import PromptError, get_prompt, list_prompts
 from django_admin_mcp.protocol import (
@@ -142,7 +142,8 @@ def _request_for_token(token) -> HttpRequest:
     """
     tool_request = HttpRequest()
     tool_request.user = TokenUser(token) if token else None  # type: ignore[assignment]
-    return tool_request
+    # Admin hooks may call message_user(); give the request a storage (issue #100)
+    return attach_messages_storage(tool_request)
 
 
 async def _execute_tool(request_obj: ToolsCallRequest, token) -> list[TextContent]:
