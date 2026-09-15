@@ -224,10 +224,7 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
     if model_admin is None:
         registered_model, resolved_admin = get_model_admin(instance._meta.model_name)
         # Guard against model_name collisions across apps / proxy mismatches
-        if (
-            registered_model is not None
-            and registered_model._meta.concrete_model is instance._meta.concrete_model
-        ):
+        if registered_model is not None and registered_model._meta.concrete_model is instance._meta.concrete_model:
             model_admin = resolved_admin
 
     # Determine which fields to include/exclude
