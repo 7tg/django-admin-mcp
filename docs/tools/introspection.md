@@ -1,10 +1,10 @@
-# 🔍 Model Introspection
+# Model Introspection
 
 Django Admin MCP provides tools to discover models and inspect their structure programmatically.
 
-## 🌐 find_models
+## find_models
 
-Discovers all registered models. Results are filtered by the token's `view` permission.
+Discovers all registered models. Results are filtered by `has_module_permission()` first — hidden modules are excluded entirely, mirroring the Django admin index — then by the token's `view` permission.
 
 ### Parameters
 
@@ -19,8 +19,10 @@ Discovers all registered models. Results are filtered by the token's `view` perm
 ```json
 {
   "method": "tools/call",
-  "name": "find_models",
-  "arguments": {}
+  "params": {
+    "name": "find_models",
+    "arguments": {}
+  }
 }
 ```
 
@@ -29,9 +31,11 @@ Discovers all registered models. Results are filtered by the token's `view` perm
 ```json
 {
   "method": "tools/call",
-  "name": "find_models",
-  "arguments": {
-    "query": "article"
+  "params": {
+    "name": "find_models",
+    "arguments": {
+      "query": "article"
+    }
   }
 }
 ```
@@ -44,15 +48,15 @@ Discovers all registered models. Results are filtered by the token's `view` perm
   "models": [
     {
       "model_name": "article",
-      "verbose_name": "Article",
-      "verbose_name_plural": "Articles",
+      "verbose_name": "article",
+      "verbose_name_plural": "articles",
       "app_label": "blog",
       "tools_exposed": true
     },
     {
       "model_name": "author",
-      "verbose_name": "Author",
-      "verbose_name_plural": "Authors",
+      "verbose_name": "author",
+      "verbose_name_plural": "authors",
       "app_label": "blog",
       "tools_exposed": false
     }
@@ -69,11 +73,11 @@ Discovers all registered models. Results are filtered by the token's `view` perm
 | `verbose_name` | Human-readable singular name |
 | `verbose_name_plural` | Human-readable plural name |
 | `app_label` | Django app containing the model |
-| `tools_exposed` | Whether CRUD tools are available |
+| `tools_exposed` | Whether per-model tools are generated (reflects the admin's `mcp_expose` flag; discoverable-only models report `false`) |
 
 ---
 
-## 📐 describe_\<model\>
+## describe_\<model\>
 
 Returns detailed field definitions and metadata for a model.
 
@@ -86,108 +90,103 @@ None required.
 ```json
 {
   "method": "tools/call",
-  "name": "describe_article",
-  "arguments": {}
+  "params": {
+    "name": "describe_article",
+    "arguments": {}
+  }
 }
 ```
 
 ### Response
 
+Every field with a `related_model` (forward FK/M2M **and** reverse relations) is listed under `relationships`; all other concrete fields go under `fields`.
+
 ```json
 {
   "model_name": "article",
-  "verbose_name": "Article",
-  "verbose_name_plural": "Articles",
+  "verbose_name": "article",
+  "verbose_name_plural": "articles",
   "app_label": "blog",
   "fields": [
     {
       "name": "id",
       "type": "AutoField",
+      "verbose_name": "ID",
       "required": false,
-      "readonly": true,
       "primary_key": true,
-      "description": "Primary key"
+      "unique": true,
+      "editable": true
     },
     {
       "name": "title",
       "type": "CharField",
+      "verbose_name": "title",
       "required": true,
-      "readonly": false,
       "max_length": 200,
-      "description": "Article title"
+      "editable": true
     },
     {
-      "name": "content",
-      "type": "TextField",
+      "name": "status",
+      "type": "CharField",
+      "verbose_name": "status",
       "required": false,
-      "readonly": false,
-      "description": "Article content"
-    },
-    {
-      "name": "author",
-      "type": "ForeignKey",
-      "required": true,
-      "readonly": false,
-      "related_model": "blog.author",
-      "description": "Article author"
-    },
-    {
-      "name": "categories",
-      "type": "ManyToManyField",
-      "required": false,
-      "readonly": false,
-      "related_model": "blog.category",
-      "description": "Article categories"
+      "max_length": 20,
+      "choices": [
+        {"value": "draft", "label": "Draft"},
+        {"value": "published", "label": "Published"}
+      ],
+      "default": "draft",
+      "editable": true
     },
     {
       "name": "published",
       "type": "BooleanField",
+      "verbose_name": "published",
       "required": false,
-      "readonly": false,
       "default": false,
-      "description": "Is published"
+      "editable": true
     },
     {
       "name": "created_at",
       "type": "DateTimeField",
+      "verbose_name": "created at",
       "required": false,
-      "readonly": true,
-      "auto_now_add": true,
-      "description": "Creation timestamp"
-    },
-    {
-      "name": "updated_at",
-      "type": "DateTimeField",
-      "required": false,
-      "readonly": true,
-      "auto_now": true,
-      "description": "Last update timestamp"
+      "editable": false
     }
   ],
-  "relationships": {
-    "forward": [
-      {
-        "name": "author",
-        "type": "ForeignKey",
-        "related_model": "blog.author"
-      },
-      {
-        "name": "categories",
-        "type": "ManyToManyField",
-        "related_model": "blog.category"
-      }
-    ],
-    "reverse": [
-      {
-        "name": "comments",
-        "type": "reverse_fk",
-        "related_model": "blog.comment",
-        "related_name": "article"
-      }
-    ]
-  },
+  "relationships": [
+    {
+      "name": "author",
+      "type": "ForeignKey",
+      "verbose_name": "author",
+      "required": true,
+      "related_model": "author",
+      "related_app": "blog",
+      "on_delete": "CASCADE",
+      "editable": true
+    },
+    {
+      "name": "categories",
+      "type": "ManyToManyField",
+      "verbose_name": "categories",
+      "required": false,
+      "related_model": "category",
+      "related_app": "blog",
+      "editable": true
+    },
+    {
+      "name": "comment",
+      "type": "Unknown",
+      "verbose_name": "comment",
+      "required": false,
+      "related_model": "comment",
+      "related_app": "blog",
+      "on_delete": "CASCADE"
+    }
+  ],
   "admin_config": {
     "list_display": ["title", "author", "published", "created_at"],
+    "list_filter": ["published", "created_at"],
     "search_fields": ["title", "content"],
     "ordering": ["-created_at"],
     "readonly_fields": ["created_at", "updated_at"]
@@ -195,23 +194,35 @@ None required.
 }
 ```
 
-### 📋 Field Properties
+`relationships` is a **flat list** of the same field-metadata dicts as `fields` — there is no `forward`/`reverse` grouping and no `related_name` key. `type` values are Django internal types (`ForeignKey`, `ManyToManyField`, `OneToOneField`); reverse relations (which have no internal type) get `"type": "Unknown"`.
 
-Each field includes relevant properties:
+`admin_config` always emits `list_display`, `list_filter`, `search_fields`, `ordering`, and `readonly_fields`. It conditionally includes `fieldsets` (as `[{"name", "fields", "classes"}]`), `date_hierarchy`, and `inlines` (as `[{"model", "fk_name"}]`). Non-string entries (callables, filter classes) are stringified to dotted paths.
 
-| Property | Description |
-|----------|-------------|
-| `name` | Field name |
-| `type` | Django field type |
-| `required` | Whether the field is required |
-| `readonly` | Whether the field is read-only |
-| `max_length` | Maximum length (CharField) |
-| `choices` | Available choices (ChoiceField) |
-| `related_model` | Related model (FK/M2M) |
-| `default` | Default value |
-| `description` | Field help text or verbose name |
+### Field Properties
 
-### 🏷️ Field Types
+Field metadata keys, as emitted by the handler:
+
+| Property | Presence | Description |
+|----------|----------|-------------|
+| `name` | always | Field name |
+| `type` | always | Django internal field type (`"Unknown"` for reverse relations) |
+| `verbose_name` | always | Human-readable name |
+| `required` | always | `true` when the field has no `null`, no `blank`, and no default |
+| `editable` | if the field has the attribute | Whether the field is editable |
+| `unique` | only when `true` | Unique constraint |
+| `primary_key` | only when `true` | Primary key flag |
+| `max_length` | when set | Maximum length (CharField etc.) |
+| `help_text` | when set | Field help text |
+| `choices` | when set | List of `{"value", "label"}` objects |
+| `default` | non-callable defaults only | Default value |
+| `has_default` | callable defaults only | `true` when the default is a callable |
+| `related_model` | FK/M2M/reverse | Bare related model name (e.g. `"author"`) |
+| `related_app` | FK/M2M/reverse | App label of the related model (e.g. `"blog"`) |
+| `on_delete` | FK/reverse FK | `on_delete` behavior name (e.g. `"CASCADE"`) |
+
+There are no `readonly`, `description`, or `auto_now`/`auto_now_add` keys.
+
+### Field Types
 
 Common field types returned:
 
@@ -237,9 +248,9 @@ Common field types returned:
 
 ---
 
-## 💡 Use Cases
+## Use Cases
 
-### 🔎 Schema Discovery
+### Schema Discovery
 
 Before creating records, discover required fields:
 
@@ -251,9 +262,12 @@ describe_article() -> fields with required=true
 create_article(data={"title": "...", "author_id": 5})
 ```
 
-### 🖥️ Dynamic Form Generation
+!!! note "Required FK fields live under relationships"
+    Required foreign key fields appear in the `relationships` list, not in `fields`. To discover all required inputs for `create_*`, read `required` from **both** lists.
 
-Use field metadata to generate forms:
+### Dynamic Form Generation
+
+Use field metadata to generate forms. FK/M2M fields are in `relationships`, not `fields` — a loop over `fields` will never see a `ForeignKey`:
 
 ```javascript
 const description = await callTool('describe_article');
@@ -263,30 +277,31 @@ for (const field of description.fields) {
     createTextInput(field.name, field.max_length);
   } else if (field.type === 'BooleanField') {
     createCheckbox(field.name, field.default);
-  } else if (field.type === 'ForeignKey') {
-    createSelect(field.name, field.related_model);
+  }
+}
+
+for (const rel of description.relationships) {
+  if (rel.type === 'ForeignKey') {
+    createSelect(rel.name, `${rel.related_app}.${rel.related_model}`);
   }
 }
 ```
 
-### 🔗 Relationship Mapping
+### Relationship Mapping
 
-Discover how models are connected:
+Discover how models are connected. `related_model` is the bare model name, with the app label in a separate `related_app` key:
 
 ```json
 {
-  "relationships": {
-    "forward": [
-      {"name": "author", "related_model": "blog.author"}
-    ],
-    "reverse": [
-      {"name": "comments", "related_model": "blog.comment"}
-    ]
-  }
+  "relationships": [
+    {"name": "author", "type": "ForeignKey", "related_model": "author", "related_app": "blog"},
+    {"name": "categories", "type": "ManyToManyField", "related_model": "category", "related_app": "blog"},
+    {"name": "comment", "type": "Unknown", "related_model": "comment", "related_app": "blog"}
+  ]
 }
 ```
 
-### ⚙️ Understanding Admin Configuration
+### Understanding Admin Configuration
 
 See how the admin is configured:
 
@@ -294,22 +309,24 @@ See how the admin is configured:
 {
   "admin_config": {
     "list_display": ["title", "author", "published"],
+    "list_filter": ["published"],
     "search_fields": ["title", "content"],
-    "ordering": ["-created_at"]
+    "ordering": ["-created_at"],
+    "readonly_fields": []
   }
 }
 ```
 
 ---
 
-## 🔒 Permission Requirements
+## Permission Requirements
 
 | Tool | Required Permission |
 |------|---------------------|
-| `find_models` | Filters results by `view_<model>` |
+| `find_models` | Filters results by `has_module_permission()` and `view_<model>` |
 | `describe_*` | `view_<model>` |
 
-## 🔗 Next Steps
+## Next Steps
 
 - [Relationships](relationships.md) — Access related data
 - [CRUD Operations](crud.md) — Work with data

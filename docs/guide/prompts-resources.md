@@ -1,10 +1,10 @@
-# 🧭 Prompts & Resources
+# Prompts & Resources
 
 Beyond tools, Django Admin MCP implements two more MCP primitives on the
 JSON-RPC endpoint: **Prompts** (reusable workflow guides) and **Resources**
 (read-only data access via URIs).
 
-## 💬 Prompts
+## Prompts
 
 Prompts help agents work with your admin effectively.
 
@@ -19,16 +19,18 @@ Prompts help agents work with your admin effectively.
 # List prompts
 curl -X POST https://example.com/mcp/ \
   -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
-  -d '{"method": "prompts/list", "id": 1}'
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "prompts/list"}'
 
 # Get a prompt with arguments
 curl -X POST https://example.com/mcp/ \
   -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
-  -d '{"method": "prompts/get", "id": 2,
+  -d '{"jsonrpc": "2.0", "id": 2, "method": "prompts/get",
        "params": {"name": "understand_model", "arguments": {"model_name": "article"}}}'
 ```
 
-## 📚 Resources
+An unknown prompt name or a missing required argument returns JSON-RPC error `-32602`. Prompts without arguments ignore any arguments passed.
+
+## Resources
 
 Resources expose read-only data through URI schemes. Listings are filtered
 by the token user's module and view permissions, and reads go through the
@@ -44,18 +46,24 @@ same permission checks as the tools.
 # List available resources
 curl -X POST https://example.com/mcp/ \
   -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
-  -d '{"method": "resources/list", "id": 1}'
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "resources/list"}'
 
 # Read a model schema
 curl -X POST https://example.com/mcp/ \
   -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
-  -d '{"method": "resources/read", "id": 2,
+  -d '{"jsonrpc": "2.0", "id": 2, "method": "resources/read",
        "params": {"uri": "models://article/schema"}}'
 ```
 
 Dynamic URIs are advertised via `resources/templates/list`.
 
-## ✅ Action Confirmation Flow
+Notes:
+
+- `resources/list` only advertises `mcp_expose = True` models, but `resources/read` resolves any mixin-registered model (permission checks still apply) — mirroring how `tools/list` and `tools/call` behave.
+- The `{id}` segment of `data://{model}/{id}` is passed through as a string; extra path segments produce an error.
+- A missing `uri` parameter returns JSON-RPC error `-32602`; read failures (unknown model, not found, permission denied) return `-32002`.
+
+## Action Confirmation Flow
 
 Admin actions that render an intermediate confirmation page are supported
 with a two-step workflow:

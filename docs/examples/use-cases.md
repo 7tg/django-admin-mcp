@@ -1,8 +1,8 @@
-# 🎯 Use Cases
+# Use Cases
 
 This page explores real-world scenarios where Django Admin MCP shines.
 
-## 📰 Content Management
+## Content Management
 
 ### Blog Administration
 
@@ -46,7 +46,7 @@ Agent: [lists articles filtered by author and date]
 
 ---
 
-## 🛒 E-commerce Operations
+## E-commerce Operations
 
 ### Order Management
 
@@ -69,6 +69,12 @@ Customer service uses the agent to handle orders:
 - "Mark all orders from yesterday as processed"
 - "Export orders pending shipment"
 
+!!! note "Exports via admin actions"
+    When an admin action returns a file (for example a CSV export), the
+    `action_*` tool returns it as a structured file payload — UTF-8 text or
+    base64-encoded content — capped at `MCP_ACTION_MAX_FILE_BYTES`
+    (default 5 MiB). Larger files return an error instead.
+
 ### Inventory Management
 
 ```
@@ -87,7 +93,7 @@ Agent: [analyzes sales data]
 
 ---
 
-## 👤 User Administration
+## User Administration
 
 ### Account Management
 
@@ -102,60 +108,83 @@ IT teams manage user accounts:
 **Account Actions:**
 
 - "Deactivate user #123"
-- "Reset permissions for marketing team"
-- "Add user to the 'premium' group"
+- "Mark the marketing team's accounts as inactive"
 
 ### Access Control
 
+These examples assume the `User` model is exposed through an admin that uses
+`MCPAdminMixin`. The generated tools cover CRUD on user records — they do not
+provide relation-traversal filters (such as "users with permission X") or a
+permission-management tool, so permission changes themselves still happen in
+Django admin.
+
 ```
-User: Who has admin access to the billing section?
+User: Find the account for alice@company.com
 
-Agent: [queries users with specific permissions]
+Agent: [calls list_user with filters={"email": "alice@company.com"}]
 
-User: Remove billing access from user #456
+User: Deactivate that account
 
-Agent: [removes permissions]
+Agent: [calls update_user with id=456, data={"is_active": false}]
 
 User: Show me the change history for user #789
 
-Agent: [displays audit log]
+Agent: [calls history_user with id=789, displays audit log]
 ```
+
+To answer a question like "who has billing access", the agent can list users
+page by page and check each user's serialized fields client-side, but it
+cannot filter by permission on the server.
 
 ---
 
-## 📊 Data Analysis
+## Data Analysis
 
 ### Report Generation
 
-Analysts query data through natural language:
+Analysts query data through natural language. The generated tools do not
+perform aggregation (no sums, averages, or group-by) — the agent fetches
+records with `list_*` and computes the numbers itself:
 
 **Sales Reports:**
 
-- "How many orders were placed last month?"
-- "What's the total revenue by category?"
-- "Show me top 10 customers by order value"
+- "How many orders were placed last month?" — a `list_order` call with date
+  filters returns `total_count` without fetching every row
+- "What's the total revenue by category?" — the agent pages through orders
+  with `list_order` and sums amounts per category client-side
+- "Show me top 10 customers by order value" — the agent fetches order pages
+  and ranks customers itself
 
 **Content Analytics:**
 
-- "Which articles got the most comments?"
-- "Show me publication frequency by author"
-- "Find trending topics this quarter"
+- "Which articles got the most comments?" — the agent lists articles and
+  counts related comments client-side
+- "Show me publication frequency by author" — computed from paged
+  `list_article` results
 
 ### Trend Analysis
 
 ```
 User: Compare this month's signups to last month
 
-Agent: [queries user creation dates, calculates comparison]
+Agent: [calls list_user twice with date_joined__gte/date_joined__lt bounds,
+compares the total_count values]
 
 User: Show me the growth trend for the past 6 months
 
-Agent: [aggregates monthly data, presents trend]
+Agent: [calls list_user once per month with date range filters, charts the
+total_count values]
 ```
+
+!!! note
+    Each `list_*` page is capped at `MCP_MAX_LIST_LIMIT` (default 1000)
+    items, so computing aggregates over large datasets requires paging with
+    `offset` and may be slow. Prefer filtered `total_count` reads where a
+    count is all you need.
 
 ---
 
-## 🤖 Automation Workflows
+## Automation Workflows
 
 ### Scheduled Tasks
 
@@ -187,7 +216,7 @@ Agent: [bulk updates users with sync timestamp]
 
 ---
 
-## 🧪 Development & Testing
+## Development & Testing
 
 ### Data Seeding
 
@@ -223,7 +252,7 @@ Agent: [queries audit logs]
 
 ---
 
-## 🎧 Customer Support
+## Customer Support
 
 ### Ticket Resolution
 
@@ -259,9 +288,9 @@ Agent: [updates ticket with internal comment]
 
 ---
 
-## 💡 Best Practices
+## Best Practices
 
-### 🔍 Use Filters Effectively
+### Use Filters Effectively
 
 Instead of fetching all records:
 
@@ -270,10 +299,14 @@ Instead of fetching all records:
 list_article(limit=1000)
 
 # Fast: filter on the server
-list_article(filters={"published": true, "author_id": 5})
+list_article(filters={"published": true, "author": 5})
 ```
 
-### 🔎 Leverage Autocomplete
+Note that `limit` values above `MCP_MAX_LIST_LIMIT` (default 1000) are
+silently clamped to that maximum — use `offset` to page through larger
+result sets.
+
+### Leverage Autocomplete
 
 When creating records with foreign keys:
 
@@ -284,17 +317,17 @@ autocomplete_author(term="jane")
 create_article(data={"author_id": 5, ...})
 ```
 
-### 📦 Use Bulk Operations
+### Use Bulk Operations
 
 For multiple updates:
 
 ```
-# Slow: individual updates
+# Many round-trips: individual updates
 update_article(id=1, data={"status": "archived"})
 update_article(id=2, data={"status": "archived"})
 update_article(id=3, data={"status": "archived"})
 
-# Fast: bulk update
+# One round-trip: bulk update
 bulk_article(operation="update", items=[
   {"id": 1, "data": {"status": "archived"}},
   {"id": 2, "data": {"status": "archived"}},
@@ -302,7 +335,14 @@ bulk_article(operation="update", items=[
 ])
 ```
 
-### 📜 Check History for Auditing
+The advantage is a single request instead of many — not fewer database
+queries. On the server, bulk update still processes items one by one with
+full form validation, a per-item lookup and save, and a per-item log entry.
+Each item also commits independently: if item 2 fails, items 1 and 3 are
+still applied (there is no cross-item rollback), and the response reports
+per-item successes and errors.
+
+### Check History for Auditing
 
 Before making critical changes:
 
@@ -315,9 +355,9 @@ update_article(id=42, data={...})
 
 ---
 
-## 🔗 Integration Tips
+## Integration Tips
 
-### 🤝 Combine with Other MCP Servers
+### Combine with Other MCP Servers
 
 Django Admin MCP works alongside other MCP servers:
 
@@ -325,7 +365,7 @@ Django Admin MCP works alongside other MCP servers:
 - **Database MCP** — Run complex SQL queries
 - **Git MCP** — Track configuration changes
 
-### 🔄 Build Custom Workflows
+### Build Custom Workflows
 
 Chain operations for complex workflows:
 

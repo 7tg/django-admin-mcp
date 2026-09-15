@@ -1,21 +1,12 @@
-# 🖥️ Client Setup
+# Client Setup
 
 This guide covers configuring MCP clients to connect to Django Admin MCP.
 
-## 🤖 MCP Client
+## MCP Client
 
 Any MCP-compatible client can interact with Django Admin MCP.
 
-### 📁 Configuration File Locations
-
-MCP clients typically look for configuration in these locations:
-
-| Location | Scope | Priority |
-|----------|-------|----------|
-| `.mcp.json` | Project | Highest |
-| `~/.claude/claude_desktop_config.json` | Global | Lower |
-
-### 📂 Project Configuration
+### Project Configuration (Claude Code)
 
 Create `.mcp.json` in your project root:
 
@@ -23,6 +14,7 @@ Create `.mcp.json` in your project root:
 {
   "mcpServers": {
     "django-admin": {
+      "type": "http",
       "url": "http://localhost:8000/mcp/",
       "headers": {
         "Authorization": "Bearer YOUR_TOKEN_HERE"
@@ -35,24 +27,7 @@ Create `.mcp.json` in your project root:
 !!! tip "Project-Specific Tokens"
     Use project configuration for project-specific tokens. Add `.mcp.json` to `.gitignore` to avoid committing tokens.
 
-### 🌐 Global Configuration
-
-For a single Django project across all sessions:
-
-```json title="~/.claude/claude_desktop_config.json"
-{
-  "mcpServers": {
-    "django-admin": {
-      "url": "http://localhost:8000/mcp/",
-      "headers": {
-        "Authorization": "Bearer YOUR_TOKEN_HERE"
-      }
-    }
-  }
-}
-```
-
-### 🔗 Multiple Servers
+### Multiple Servers
 
 Configure multiple Django projects:
 
@@ -60,12 +35,14 @@ Configure multiple Django projects:
 {
   "mcpServers": {
     "blog-admin": {
+      "type": "http",
       "url": "http://localhost:8000/mcp/",
       "headers": {
         "Authorization": "Bearer BLOG_TOKEN"
       }
     },
     "shop-admin": {
+      "type": "http",
       "url": "http://localhost:8001/mcp/",
       "headers": {
         "Authorization": "Bearer SHOP_TOKEN"
@@ -75,7 +52,7 @@ Configure multiple Django projects:
 }
 ```
 
-### 🔄 Applying Configuration
+### Applying Configuration
 
 After editing the configuration:
 
@@ -83,7 +60,7 @@ After editing the configuration:
 2. The MCP server should connect automatically
 3. Tools will be available for use
 
-### ✅ Verifying Connection
+### Verifying Connection
 
 Ask the agent to list available tools:
 
@@ -97,33 +74,42 @@ I have access to the following Django admin tools:
 ...
 ```
 
-## 🛠️ Other MCP Clients
+## Other MCP Clients
 
 Django Admin MCP works with any MCP-compatible client that supports HTTP transport.
 
-### 🌐 Generic HTTP Client
+### Generic HTTP Client
 
-Test with curl:
+The endpoint speaks JSON-RPC 2.0: `tools/call` takes `name` and `arguments` nested under `params`. Test with curl:
 
 ```bash
+# Initialize (MCP handshake)
+curl -X POST http://localhost:8000/mcp/ \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize"}'
+
 # List available tools
 curl -X POST http://localhost:8000/mcp/ \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"method": "tools/list"}'
+  -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}'
 
 # Call a tool
 curl -X POST http://localhost:8000/mcp/ \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
     "method": "tools/call",
-    "name": "find_models",
-    "arguments": {}
+    "params": {"name": "find_models", "arguments": {}}
   }'
 ```
 
-### 🐍 Python Client
+The server also supports `prompts/list`, `prompts/get`, `resources/list`, `resources/templates/list`, and `resources/read` — see [Prompts & Resources](prompts-resources.md).
+
+### Python Client
 
 Using the `requests` library:
 
@@ -142,24 +128,25 @@ headers = {
 response = requests.post(
     BASE_URL,
     headers=headers,
-    json={"method": "tools/list"}
+    json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
 )
-tools = response.json()["tools"]
+tools = response.json()["result"]["tools"]
 
 # Call a tool
 response = requests.post(
     BASE_URL,
     headers=headers,
     json={
+        "jsonrpc": "2.0",
+        "id": 2,
         "method": "tools/call",
-        "name": "list_article",
-        "arguments": {"limit": 10}
-    }
+        "params": {"name": "list_article", "arguments": {"limit": 10}},
+    },
 )
-result = response.json()
+result = response.json()["result"]  # {"content": [{"type": "text", "text": "<json>"}]}
 ```
 
-### 📜 JavaScript/TypeScript Client
+### JavaScript/TypeScript Client
 
 ```typescript
 const BASE_URL = "http://localhost:8000/mcp/";
@@ -173,26 +160,29 @@ async function callTool(name: string, args: object = {}) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
       method: "tools/call",
-      name,
-      arguments: args,
+      params: { name, arguments: args },
     }),
   });
-  return response.json();
+  const body = await response.json();
+  return body.result; // {"content": [{"type": "text", "text": "<json>"}]}
 }
 
 // Usage
 const articles = await callTool("list_article", { limit: 10 });
 ```
 
-## 🌍 Environment-Specific Setup
+## Environment-Specific Setup
 
-### 🧪 Development
+### Development
 
 ```json title=".mcp.json"
 {
   "mcpServers": {
     "django-admin": {
+      "type": "http",
       "url": "http://localhost:8000/mcp/",
       "headers": {
         "Authorization": "Bearer DEV_TOKEN"
@@ -202,12 +192,13 @@ const articles = await callTool("list_article", { limit: 10 });
 }
 ```
 
-### 🚀 Staging/Production
+### Staging/Production
 
 ```json title=".mcp.json"
 {
   "mcpServers": {
     "django-admin": {
+      "type": "http",
       "url": "https://staging.example.com/mcp/",
       "headers": {
         "Authorization": "Bearer STAGING_TOKEN"
@@ -220,19 +211,19 @@ const articles = await callTool("list_article", { limit: 10 });
 !!! warning "Production Security"
     Always use HTTPS in production to protect tokens in transit.
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
-### ❌ Connection Refused
+### Connection Refused
 
 ```
 Error: Connection refused
 ```
 
 - Verify Django server is running
-- Check the URL and port are correct
+- Check the URL and port are correct — `curl http://localhost:8000/mcp/health/` should return `{"status": "ok", "service": "django-admin-mcp"}` without a token
 - Ensure no firewall is blocking the connection
 
-### 🔐 Authentication Failed
+### Authentication Failed
 
 ```
 {"error": "Invalid or missing authentication token"}
@@ -242,7 +233,7 @@ Error: Connection refused
 - Check the token is active (`is_active=True`)
 - Ensure the token hasn't expired
 
-### 🕵️ Unauthorized with MCP Inspector (OAuth discovery 404s)
+### Unauthorized with MCP Inspector (OAuth discovery 404s)
 
 If you connect with `npx @modelcontextprotocol/inspector` and see a `401` on
 `/mcp/` followed by requests to `/.well-known/oauth-protected-resource`,
@@ -268,24 +259,25 @@ server doesn't implement. To fix it, pass the token explicitly:
 The `/.well-known/*` 404 messages disappear once the Bearer token is sent
 with each request.
 
-### 🚫 Permission Denied
+### Permission Denied
 
+Tool calls that fail a permission check return HTTP 200 with an error object inside the JSON-RPC result:
+
+```json
+{"error": "Permission denied: cannot view article", "code": "permission_denied"}
 ```
-{"error": "Permission denied: blog.view_article"}
-```
 
-- Token lacks required permissions
-- Add the permission to the token or its groups
+- The token's linked Django user lacks the required permission
+- Grant the permission to that user (directly or via its groups)
 
-### 📭 No Tools Available
+### No Tools Available
 
-If `tools/list` returns an empty list:
+`tools/list` always includes `find_models`, even with zero exposed models — so a truly empty tool list means the request itself failed. If only `find_models` appears:
 
-- No models have `MCPAdminMixin`
-- No models have `mcp_expose = True`
+- No models have `MCPAdminMixin` with `mcp_expose = True`
 - Check your admin configuration
 
-## 🔗 Next Steps
+## Next Steps
 
 - [Tools Overview](../tools/overview.md) — Learn about available tools
 - [Examples](../examples/conversations.md) — See example interactions

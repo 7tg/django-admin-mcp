@@ -1,8 +1,8 @@
-# 💬 Example Conversations
+# Example Conversations
 
 This page shows real-world example conversations between users and agents using Django Admin MCP.
 
-## 🔍 Model Discovery
+## Model Discovery
 
 ### Exploring Available Models
 
@@ -13,17 +13,24 @@ Agent: [calls find_models]
 
 I found the following models available through Django Admin MCP:
 
-**Fully Exposed (with CRUD tools):**
+**Fully Exposed (tools_exposed: true, with CRUD tools):**
 - article - 12 tools available
 - category - 12 tools available
 - comment - 12 tools available
 
-**Discoverable Only:**
-- author - no direct tools, but visible in find_models
-- user - no direct tools
+**Discoverable Only (tools_exposed: false):**
+- author - registered with MCPAdminMixin but mcp_expose is not enabled,
+  so it is visible in find_models without direct tools
 
 Would you like me to describe any of these models in detail?
 ```
+
+!!! note
+    `find_models` only lists models whose admin uses `MCPAdminMixin`. Models
+    registered with a plain `ModelAdmin` — such as Django's stock `UserAdmin`
+    for `user` — do not appear in the results at all. Models registered with
+    the mixin but without `mcp_expose = True` appear with
+    `tools_exposed: false`.
 
 ### Understanding Model Structure
 
@@ -54,7 +61,7 @@ The admin is configured with:
 
 ---
 
-## 📝 CRUD Operations
+## CRUD Operations
 
 ### Listing Records
 
@@ -150,7 +157,7 @@ Deleted article #43 "Introduction to Python".
 
 ---
 
-## ⚡ Admin Actions
+## Admin Actions
 
 ### Listing Available Actions
 
@@ -176,17 +183,17 @@ User: Mark articles 1, 2, and 3 as published
 
 Agent: [calls action_article with action="mark_as_published", ids=[1, 2, 3]]
 
-Marked 3 articles as published:
-- Article #1: "Getting Started"
-- Article #2: "Advanced Topics"
-- Article #3: "Best Practices"
+The action succeeded. The tool returned:
+
+{"success": true, "action": "mark_as_published", "affected_count": 3,
+ "message": "Executed mark_as_published on 3 objects", "result": null}
 
 All three articles are now live.
 ```
 
 ---
 
-## 📦 Bulk Operations
+## Bulk Operations
 
 ### Bulk Update
 
@@ -214,7 +221,7 @@ All changes have been saved.
 User: Delete all draft articles from 2023
 
 Agent: [calls list_article with filters={"published": false,
-"created_at__year": 2023}]
+"created_at__gte": "2023-01-01", "created_at__lt": "2024-01-01"}]
 
 Found 12 draft articles from 2023. Here they are:
 - #15: "Untitled Draft" (Jan 2023)
@@ -230,9 +237,15 @@ Agent: [calls bulk_article with operation="delete", items=[15, 18, ...]]
 Deleted 12 draft articles from 2023.
 ```
 
+!!! note
+    Date parts like `created_at__year` are not in the whitelist of supported
+    filter lookups (`exact`, `contains`, `icontains`, `gt`, `gte`, `lt`,
+    `lte`, `in`, `isnull`) and are silently dropped, which would match every
+    draft. Use range bounds (`created_at__gte` / `created_at__lt`) instead.
+
 ---
 
-## 🔗 Exploring Relationships
+## Exploring Relationships
 
 ### Getting Related Objects
 
@@ -270,17 +283,19 @@ The article was created on Jan 15 and modified once.
 
 ---
 
-## 🔄 Complex Workflows
+## Complex Workflows
 
 ### Finding and Updating Multiple Related Records
 
 ```
 User: Find all articles by Jane Doe and add the "featured" category to them
 
-Agent: [calls list_article with filters={"author__name": "Jane Doe"}]
+Agent: [calls autocomplete_author with term="Jane"]
+[calls list_article with filters={"author": 5}]
 [calls autocomplete_category with term="featured"]
 
-Found 15 articles by Jane Doe and the "featured" category (ID: 7).
+Found the author Jane Doe (ID: 5), 15 articles by her, and the "featured"
+category (ID: 7).
 
 I'll update each article to add this category...
 
@@ -294,6 +309,12 @@ Added "featured" category to 15 articles by Jane Doe:
 
 All articles are now featured!
 ```
+
+!!! note
+    Relation-traversal filters such as `author__name` are blocked and
+    silently skipped by `list_*` tools. Resolve the related object's ID
+    first (for example with `autocomplete_author`), then filter on the
+    foreign key field itself: `filters={"author": 5}`.
 
 ### Audit and Cleanup
 
@@ -317,7 +338,7 @@ Would you like me to archive these or take another action?
 
 ---
 
-## ❌ Error Handling Examples
+## Error Handling Examples
 
 ### Permission Denied
 
@@ -326,14 +347,15 @@ User: Delete all articles
 
 Agent: [calls bulk_article with operation="delete", items=[...]]
 
-I can't delete articles - the API token doesn't have delete permission.
+I can't delete articles - the Django user this API token is bound to
+doesn't have delete permission.
 
 To fix this:
 1. Go to Django admin
-2. Edit the MCP token
-3. Add "blog.delete_article" permission
+2. Open the Django user the MCP token is linked to
+3. Grant that user the "blog.delete_article" permission (directly or via a group)
 
-Or use a different token with delete access.
+Or use a token bound to a user with delete access.
 ```
 
 ### Validation Error
@@ -346,7 +368,7 @@ Agent: [calls create_article with data={"content": "Some content"}]
 Couldn't create the article - validation failed:
 
 - **title**: This field is required.
-- **author_id**: This field is required.
+- **author**: This field is required.
 
 Please provide a title and author to create the article.
 ```

@@ -1,8 +1,8 @@
-# 📦 Exposing Models
+# Exposing Models
 
 This guide explains how to expose Django models via the MCP protocol using `MCPAdminMixin`.
 
-## 🔧 Basic Usage
+## Basic Usage
 
 Add `MCPAdminMixin` to any ModelAdmin class:
 
@@ -16,11 +16,11 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
 ```
 
-## 🎚️ Two-Level Exposure System
+## Two-Level Exposure System
 
 Django Admin MCP uses a two-level exposure system:
 
-### 🔍 Level 1 — Discoverable Models
+### Level 1 — Discoverable Models
 
 Models with `MCPAdminMixin` (but without `mcp_expose = True`) are **discoverable**:
 
@@ -31,11 +31,14 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 These models:
 
-- Appear in `find_models` results (filtered by `view` permission)
+- Appear in `find_models` results with `tools_exposed: false` (filtered by module and `view` permission)
 - Show their field structure
-- Do NOT expose direct CRUD tools
+- Are not advertised in `tools/list`
 
-### ⚡ Level 2 — Fully Exposed Models
+!!! warning "`mcp_expose` controls advertisement, not reachability"
+    Registering a model with the mixin makes its handlers callable: a client that explicitly issues `tools/call` for `list_author` will get a response even without `mcp_expose = True`. Django permissions are the enforcement boundary — do not rely on `mcp_expose` to protect data.
+
+### Level 2 — Fully Exposed Models
 
 Models with `mcp_expose = True` are **fully exposed**:
 
@@ -61,7 +64,10 @@ These models expose 12 tools:
 | `history_<model>` | view | View change history |
 | `autocomplete_<model>` | view | Search suggestions |
 
-## ⚠️ Mixin Placement
+!!! note
+    `tools/list` itself is not permission-filtered — tools for models the caller cannot access are still advertised and fail with a permission error at call time.
+
+## Mixin Placement
 
 !!! important "Mixin Order Matters"
     `MCPAdminMixin` should come **before** `admin.ModelAdmin` in the inheritance chain:
@@ -76,11 +82,11 @@ class ArticleAdmin(MCPAdminMixin, SomeOtherMixin, admin.ModelAdmin):
     pass
 ```
 
-## ⚙️ Configuring Exposed Behavior
+## Configuring Exposed Behavior
 
-### 📋 List Display and Serialization
+### List Display
 
-Fields in `list_display` are included in list responses:
+`list_display` is reported by `describe_<model>` as admin metadata. It does **not** change which fields `list_<model>` returns — use `mcp_fields`/`mcp_exclude_fields` for that:
 
 ```python
 class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
@@ -88,17 +94,27 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     list_display = ['title', 'author', 'published', 'created_at']
 ```
 
-### 🔎 Search Configuration
+### Search Configuration
 
-`search_fields` enables the search parameter in `list_*` and powers `autocomplete_*`:
+`search_fields` controls which fields `autocomplete_*` searches. Without it, all `CharField`/`TextField` fields are searched:
 
 ```python
 class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
-    search_fields = ['title', 'content', 'author__name']
+    search_fields = ['title', 'content']
 ```
 
-### 📊 Ordering
+### Queryset Scoping
+
+By default (`mcp_use_admin_queryset = True`), `list_*`, `get_*`, admin actions, and bulk operations start from `ModelAdmin.get_queryset(request)` — proxy filters, soft-delete, and multi-tenant scoping match the admin changelist. Set it to `False` to use `model.objects.all()` instead:
+
+```python
+class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    mcp_use_admin_queryset = False  # bypass get_queryset() scoping
+```
+
+### Ordering
 
 `ordering` sets the default order for list results:
 
@@ -108,7 +124,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     ordering = ['-created_at']  # Newest first
 ```
 
-### 🔒 Readonly Fields
+### Readonly Fields
 
 Attempts to update `readonly_fields` return an error:
 
@@ -118,7 +134,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'view_count']
 ```
 
-### 🛡️ Field Filtering
+### Field Filtering
 
 Control which fields are exposed in MCP responses using field filtering. This is critical for preventing sensitive data exposure.
 
@@ -130,7 +146,7 @@ Use `mcp_fields` and `mcp_exclude_fields` for MCP-specific field visibility:
 class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
     # Only expose these fields via MCP
-    mcp_fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_active']
+    mcp_fields = ['username', 'email', 'first_name', 'last_name', 'is_active']
     # Never expose password, even though it exists in the model
 ```
 
@@ -143,7 +159,7 @@ class APIKeyAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_exclude_fields = ['secret_key', 'api_token', 'private_data']
 ```
 
-#### 🔄 Django Admin Field Fallback
+#### Django Admin Field Fallback
 
 If `mcp_fields` or `mcp_exclude_fields` are not set, django-admin-mcp falls back to Django admin's `fields` and `exclude` attributes:
 
@@ -153,51 +169,44 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     fields = ['title', 'content', 'author', 'published']  # Used if mcp_fields not set
 ```
 
-#### 📐 Field Filtering Rules
+#### Field Filtering Rules
 
 1. **MCP-specific takes precedence** — If `mcp_fields` is set, it overrides `fields`
 2. **MCP-specific exclusion takes precedence** — If `mcp_exclude_fields` is set, it overrides `exclude`
 3. **Exclusion wins over inclusion** — If a field is in both `mcp_fields` and `mcp_exclude_fields`, it's excluded
 4. **No configuration = all fields** — If no field configuration is provided, all model fields are exposed
 
-!!! note "Auto-generated fields"
-    Django's `model_to_dict()` automatically excludes fields with `auto_now_add=True` (like `created_at`)
-    from serialization. These fields are not editable and Django doesn't include them by default.
-    Regular date fields like `expires_at` and `last_used_at` are included normally.
+!!! note "Non-editable fields are always excluded"
+    Serialization uses Django's `model_to_dict()`, which skips every `editable=False` field — including auto primary keys, `auto_now_add`/`auto_now` timestamps, and any field declared `editable=False`. This means `list_*`/`get_*` payloads do **not** contain an `id` key; use `get_*`'s input `id` (or `create_*`'s returned `id`) to track object identity. Regular date fields like `expires_at` are included normally.
 
-#### 🔐 Example — Protecting Sensitive Data
+#### Example — Protecting Sensitive Data
 
 ```python
 from django_admin_mcp import MCPAdminMixin
 
-@admin.register(MCPToken)
-class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
+@admin.register(Customer)
+class CustomerAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
-    # Never expose token credentials via MCP
-    mcp_exclude_fields = ['token_key', 'token_hash', 'salt']
+    # Never expose payment credentials via MCP
+    mcp_exclude_fields = ['card_number', 'internal_notes']
 
-    list_display = ['name', 'user', 'is_active', 'created_at']
-    readonly_fields = ['token_key', 'token_hash', 'salt']  # Also readonly in admin
+    list_display = ['name', 'email', 'is_active']
 ```
 
-When listing or getting tokens via MCP, sensitive fields are automatically filtered out:
+When listing or getting customers via MCP, excluded fields are filtered out:
 
 ```json
 {
-  "id": 1,
-  "name": "Production API Token",
-  "user": 1,
+  "name": "Acme Corp",
+  "email": "billing@acme.example",
   "is_active": true,
-  "expires_at": "2026-04-24T16:48:36Z",
-  "last_used_at": null,
-  "groups": [],
-  "permissions": []
-  // token_key, token_hash, and salt are NOT included
-  // created_at is also not included (auto_now_add fields are excluded by Django's model_to_dict)
+  "tags": [1, 3]
 }
 ```
 
-### ⚡ Custom Actions
+Foreign keys serialize as bare primary keys and many-to-many fields as lists of primary keys. `card_number` and `internal_notes` are not included; neither are non-editable fields such as the auto primary key or `auto_now_add` timestamps.
+
+### Custom Actions
 
 Admin actions are automatically exposed:
 
@@ -215,7 +224,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     actions = [publish, unpublish]
 ```
 
-## 🔗 Inline Models
+## Inline Models
 
 Inline models are included in `get_*` responses when `include_inlines` is set to `true`:
 
@@ -229,22 +238,25 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     inlines = [CommentInline]
 ```
 
-When fetching an article with `include_inlines: true`, its comments are included:
+When fetching an article with `include_inlines: true`, its comments are included under the `_inlines` key, grouped by the inline model's lowercase name:
 
 ```json
 {
-  "id": 1,
   "title": "My Article",
-  "comments": [
-    {"id": 1, "text": "Great article!"},
-    {"id": 2, "text": "Thanks for sharing"}
-  ]
+  "_inlines": {
+    "comment": [
+      {"text": "Great article!"},
+      {"text": "Thanks for sharing"}
+    ]
+  }
 }
 ```
 
-## 💡 Best Practices
+Inlines can also be created, updated, and deleted through `update_<model>`'s `inlines` parameter — see [CRUD Operations](../tools/crud.md).
 
-### 🚦 Start Conservative
+## Best Practices
+
+### Start Conservative
 
 Begin with discoverable models, then expose as needed:
 
@@ -258,7 +270,7 @@ class SensitiveDataAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
 ```
 
-### 🔎 Use Meaningful Search Fields
+### Use Meaningful Search Fields
 
 Configure search fields for useful autocomplete:
 
@@ -268,7 +280,7 @@ class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
     search_fields = ['username', 'email', 'first_name', 'last_name']
 ```
 
-### 🛡️ Protect Sensitive Fields
+### Protect Sensitive Fields
 
 Use `mcp_exclude_fields` to prevent sensitive data exposure:
 
@@ -286,11 +298,11 @@ For models with many fields, use `mcp_fields` to explicitly allowlist safe field
 class CustomerAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
     # Only expose non-sensitive customer data
-    mcp_fields = ['id', 'name', 'email', 'company', 'created_at']
+    mcp_fields = ['name', 'email', 'company']
     # This excludes: credit_card, ssn, internal_notes, etc.
 ```
 
-## 🔗 Next Steps
+## Next Steps
 
 - [Token Management](tokens.md) — Configure access tokens
 - [Permissions](permissions.md) — Understand the permission system

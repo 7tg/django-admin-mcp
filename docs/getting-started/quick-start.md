@@ -1,8 +1,8 @@
-# 🚀 Quick Start
+# Quick Start
 
 Get Django Admin MCP working in 5 minutes. This guide assumes you've already [installed](installation.md) the package.
 
-## 1️⃣ Expose Your Models
+## Expose Your Models
 
 Add the `MCPAdminMixin` to any ModelAdmin class. Set `mcp_expose = True` to expose CRUD tools:
 
@@ -26,58 +26,41 @@ class AuthorAdmin(MCPAdminMixin, admin.ModelAdmin):
 !!! tip "Two-Level Exposure"
     Models with just `MCPAdminMixin` are discoverable via `find_models` but don't expose direct CRUD tools. Set `mcp_expose = True` to expose the full tool set.
 
-## 2️⃣ Create an API Token
+## Create an API Token
 
 1. Go to Django admin: `http://localhost:8000/admin/`
 2. Navigate to **Django Admin MCP > MCP Tokens**
 3. Click **Add MCP Token**
 4. Fill in:
     - **Name**: A descriptive name (e.g., "MCP Token")
-    - **User**: Select a user (for audit logging)
-    - **Groups/Permissions**: Assign appropriate permissions
+    - **User**: Select the user the token will act as — the token gets exactly this user's Django permissions
 5. Click **Save**
 6. Copy the generated token (displayed only once after creation)
 
 !!! warning "Token Security"
-    The token is only displayed once after creation — store it securely. Tokens without permissions have no access (principle of least privilege). Make sure to assign the necessary permissions for the models you want to access.
+    The token is only displayed once after creation — store it securely. Access is governed by the linked user's Django permissions, so bind tokens to a dedicated user that has only the permissions the agent needs — not to a superuser.
 
-## 3️⃣ Configure Your MCP Client
+## Configure Your MCP Client
 
 Add the MCP server configuration to your MCP client. Create or edit the configuration file:
 
-=== "Global Config"
-
-    ```json title="~/.claude/claude_desktop_config.json"
-    {
-      "mcpServers": {
-        "django-admin": {
-          "url": "http://localhost:8000/mcp/",
-          "headers": {
-            "Authorization": "Bearer YOUR_TOKEN_HERE"
-          }
-        }
+```json title=".mcp.json"
+{
+  "mcpServers": {
+    "django-admin": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp/",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN_HERE"
       }
     }
-    ```
+  }
+}
+```
 
-=== "Project Config"
+Replace `YOUR_TOKEN_HERE` with the token you created in Step 2. See [Client Setup](../guide/client-setup.md) for other MCP clients.
 
-    ```json title=".mcp.json"
-    {
-      "mcpServers": {
-        "django-admin": {
-          "url": "http://localhost:8000/mcp/",
-          "headers": {
-            "Authorization": "Bearer YOUR_TOKEN_HERE"
-          }
-        }
-      }
-    }
-    ```
-
-Replace `YOUR_TOKEN_HERE` with the token you created in Step 2.
-
-## 4️⃣ Start Using It
+## Start Using It
 
 Restart your MCP client to load the new configuration. Then start interacting:
 
@@ -85,8 +68,8 @@ Restart your MCP client to load the new configuration. Then start interacting:
 User: What models are available in Django admin?
 Agent: [calls find_models tool]
 I found the following models:
-- article (tools exposed: list, get, create, update, delete)
-- author (discoverable, no direct tools)
+- article (tools_exposed: true — list_article, get_article, create_article, ...)
+- author (tools_exposed: false — discoverable only)
 
 User: Show me the latest 10 articles
 Agent: [calls list_article with limit=10]
@@ -97,7 +80,7 @@ Agent: [calls create_article with title="Getting Started with Django"]
 Created article #15: "Getting Started with Django"
 ```
 
-## 🔗 What's Next?
+## What's Next?
 
 - [Exposing Models](../guide/exposing-models.md) — Learn about model exposure options
 - [Token Management](../guide/tokens.md) — Understand token configuration

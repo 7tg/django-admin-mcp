@@ -1,26 +1,27 @@
-# 🤖 Django Admin MCP
+# Django Admin MCP
 
 Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add a mixin to your `ModelAdmin` classes and get instant access to CRUD operations, admin actions, model history, and more.
 
 ---
 
-## ✨ Features
+## Features
 
-- 📦 **Only Two Dependencies** — Django and Pydantic, nothing else. No MCP SDK, no extra HTTP stack, no supply-chain sprawl
-- 🔐 **Token Authentication** — secure Bearer token auth with configurable expiry (default 90 days)
-- 🛡️ **Django Admin Permissions** — respects existing view/add/change/delete permissions
-- 📝 **Full CRUD** — list, get, create, update, delete operations for all exposed models
-- ⚡ **Admin Actions** — execute registered Django admin actions on selected records
-- 📦 **Bulk Operations** — create, update, or delete multiple records at once
-- 🔍 **Model Introspection** — describe model fields and relationships programmatically
-- 🔗 **Related Objects** — traverse foreign keys and reverse relations
-- 📜 **Change History** — access Django admin's history log for audit trails
-- 🔎 **Autocomplete** — search suggestions for foreign key fields
-- 🧭 **MCP Prompts & Resources** — workflow guides plus read-only data access via `models://` and `data://` URIs
+- **Only Two Dependencies** — Django and Pydantic, nothing else. No MCP SDK, no extra HTTP stack, no supply-chain sprawl
+- **Token Authentication** — secure Bearer token auth with configurable expiry (default 90 days)
+- **Django Admin Permissions** — respects existing view/add/change/delete permissions
+- **Field Filtering** — control which fields are exposed via `mcp_fields` and `mcp_exclude_fields`
+- **Full CRUD** — list, get, create, update, delete operations for all exposed models
+- **Admin Actions** — execute registered Django admin actions on selected records, including two-step confirmation flows
+- **Bulk Operations** — create, update, or delete multiple records at once
+- **Model Introspection** — describe model fields and relationships programmatically
+- **Related Objects** — traverse foreign keys and reverse relations
+- **Change History** — access Django admin's history log for audit trails
+- **Autocomplete** — search suggestions for foreign key fields
+- **MCP Prompts & Resources** — workflow guides plus read-only data access via `models://` and `data://` URIs
 
 ---
 
-## 🚀 Quick Example
+## Quick Example
 
 ```python
 from django.contrib import admin
@@ -45,27 +46,21 @@ Agent: [calls update_article with id=42, data={"published": true}]
 
 ---
 
-## 📋 Requirements
+## Requirements
 
 | Dependency | Version |
 |-----------|---------|
-| 🐍 Python | >= 3.10 |
-| 🌐 Django | >= 3.2 |
-| 📐 Pydantic | >= 2.0 |
+| Python | >= 3.10 |
+| Django | >= 3.2 |
+| Pydantic | >= 2.0 |
 
-### ✅ Supported Django Versions
+### Supported Django Versions
 
-| Django Version | Status |
-|----------------|--------|
-| Django 3.2 LTS | ✅ Supported |
-| Django 4.0 | ✅ Supported |
-| Django 4.1 | ✅ Supported |
-| Django 4.2 LTS | ✅ Supported |
-| Django 5.0 | ✅ Supported |
+Django 3.2 LTS · 4.0 · 4.1 · 4.2 LTS · 5.0
 
 ---
 
-## 📄 License
+## License
 
 MIT
 

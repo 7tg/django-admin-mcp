@@ -1,8 +1,8 @@
-# 📝 CRUD Operations
+# CRUD Operations
 
 Django Admin MCP provides full CRUD (Create, Read, Update, Delete) operations for exposed models.
 
-## 📋 list_\<model\>
+## list_\<model\>
 
 Lists model instances with support for pagination, filtering, search, and ordering.
 
@@ -10,11 +10,36 @@ Lists model instances with support for pagination, filtering, search, and orderi
 
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `limit` | integer | Maximum results to return | 100 |
-| `offset` | integer | Number of results to skip | 0 |
+| `limit` | integer | Maximum results to return (must be a non-negative integer) | 100 |
+| `offset` | integer | Number of results to skip (must be a non-negative integer) | 0 |
 | `search` | string | Search query (uses `search_fields`) | — |
 | `order_by` | array | Fields to order by (prefix with `-` for descending) | Model default |
 | `filters` | object | Field filters | — |
+
+`limit` is capped server-side at `MCP_MAX_LIST_LIMIT` (default 1000) via `min(limit, MCP_MAX_LIST_LIMIT)`. Passing a negative value or a non-integer returns `{"error": "limit must be a non-negative integer"}` (and the equivalent for `offset`).
+
+`order_by` accepts direct field names only, with an optional `-` prefix for descending order. Invalid entries are silently dropped.
+
+### Supported filter lookups
+
+Only the following lookups are allowed in `filters`:
+
+| Lookup | Example key | Meaning |
+|--------|-------------|---------|
+| (none) / `exact` | `"published"` or `"published__exact"` | Exact match |
+| `contains` | `"title__contains"` | Case-sensitive substring |
+| `icontains` | `"title__icontains"` | Case-insensitive substring |
+| `gt` / `gte` | `"created_at__gte"` | Greater than (or equal) |
+| `lt` / `lte` | `"created_at__lt"` | Less than (or equal) |
+| `in` | `"status__in"` | Value in a list |
+| `isnull` | `"author__isnull"` | Null check |
+
+Filters apply to **direct model fields only**.
+
+!!! warning "Invalid filters are silently skipped"
+    Any filter with an unknown field, a disallowed lookup (`regex`, `startswith`, `__year`, ...), or relation traversal (e.g. `author__email`) is **silently skipped** — the query runs without that filter, so you may get more results than expected instead of an error.
+
+Filters use **model field names**, not database column names: `{"author": 5}` filters by the FK, while `{"author_id": 5}` is silently dropped (the `_id` suffix works in `create_*` data but not in filters).
 
 ### Examples
 
@@ -23,9 +48,11 @@ Lists model instances with support for pagination, filtering, search, and orderi
 ```json
 {
   "method": "tools/call",
-  "name": "list_article",
-  "arguments": {
-    "limit": 10
+  "params": {
+    "name": "list_article",
+    "arguments": {
+      "limit": 10
+    }
   }
 }
 ```
@@ -35,10 +62,12 @@ Lists model instances with support for pagination, filtering, search, and orderi
 ```json
 {
   "method": "tools/call",
-  "name": "list_article",
-  "arguments": {
-    "limit": 10,
-    "offset": 20
+  "params": {
+    "name": "list_article",
+    "arguments": {
+      "limit": 10,
+      "offset": 20
+    }
   }
 }
 ```
@@ -48,9 +77,11 @@ Lists model instances with support for pagination, filtering, search, and orderi
 ```json
 {
   "method": "tools/call",
-  "name": "list_article",
-  "arguments": {
-    "search": "django tutorial"
+  "params": {
+    "name": "list_article",
+    "arguments": {
+      "search": "django tutorial"
+    }
   }
 }
 ```
@@ -60,9 +91,11 @@ Lists model instances with support for pagination, filtering, search, and orderi
 ```json
 {
   "method": "tools/call",
-  "name": "list_article",
-  "arguments": {
-    "order_by": ["-created_at"]
+  "params": {
+    "name": "list_article",
+    "arguments": {
+      "order_by": ["-created_at"]
+    }
   }
 }
 ```
@@ -72,11 +105,13 @@ Lists model instances with support for pagination, filtering, search, and orderi
 ```json
 {
   "method": "tools/call",
-  "name": "list_article",
-  "arguments": {
-    "filters": {
-      "published": true,
-      "author_id": 5
+  "params": {
+    "name": "list_article",
+    "arguments": {
+      "filters": {
+        "published": true,
+        "author": 5
+      }
     }
   }
 }
@@ -90,6 +125,7 @@ Lists model instances with support for pagination, filtering, search, and orderi
     {
       "id": 1,
       "title": "Getting Started with Django",
+      "author": 5,
       "published": true,
       "created_at": "2024-01-15T10:00:00Z"
     }
@@ -107,7 +143,7 @@ Lists model instances with support for pagination, filtering, search, and orderi
 
 ---
 
-## 🔎 get_\<model\>
+## get_\<model\>
 
 Retrieves a single model instance by ID.
 
@@ -115,8 +151,11 @@ Retrieves a single model instance by ID.
 
 | Parameter | Type | Description | Required |
 |-----------|------|-------------|----------|
-| `id` | integer | Instance primary key | Yes |
-| `include_inlines` | boolean | Include inline model data | No |
+| `id` | integer or string | Instance primary key | Yes |
+| `include_inlines` | boolean | Include inline model data under `_inlines` | No |
+| `include_related` | boolean | Include reverse relations under `_related` | No |
+
+The schema accepts `id` as an integer or a string. `id=0` (or any falsy value) is rejected as missing: `{"error": "id parameter is required"}`.
 
 ### Examples
 
@@ -125,9 +164,11 @@ Retrieves a single model instance by ID.
 ```json
 {
   "method": "tools/call",
-  "name": "get_article",
-  "arguments": {
-    "id": 42
+  "params": {
+    "name": "get_article",
+    "arguments": {
+      "id": 42
+    }
   }
 }
 ```
@@ -137,37 +178,53 @@ Retrieves a single model instance by ID.
 ```json
 {
   "method": "tools/call",
-  "name": "get_article",
-  "arguments": {
-    "id": 42,
-    "include_inlines": true
+  "params": {
+    "name": "get_article",
+    "arguments": {
+      "id": 42,
+      "include_inlines": true,
+      "include_related": true
+    }
   }
 }
 ```
 
 ### Response
 
+Foreign keys serialize as bare primary keys (`"author": 5`), never as nested objects. Many-to-many fields serialize as lists of primary keys.
+
 ```json
 {
   "id": 42,
   "title": "Getting Started with Django",
   "content": "This tutorial covers...",
-  "author": {
-    "id": 5,
-    "name": "Jane Doe"
-  },
+  "author": 5,
+  "categories": [1, 2],
   "published": true,
   "created_at": "2024-01-15T10:00:00Z",
-  "comments": [
-    {"id": 1, "text": "Great article!"},
-    {"id": 2, "text": "Very helpful"}
-  ]
+  "_inlines": {
+    "comment": [
+      {"id": 1, "article": 42, "text": "Great article!"},
+      {"id": 2, "article": 42, "text": "Very helpful"}
+    ]
+  },
+  "_related": {
+    "comments": [
+      {"id": 1, "article": 42, "text": "Great article!"},
+      {"id": 2, "article": 42, "text": "Very helpful"}
+    ]
+  }
 }
 ```
 
+| Key | Description |
+|-----|-------------|
+| `_inlines` | Present with `include_inlines: true`. Maps each inline model name (from the admin's `inlines`) to a list of serialized instances. |
+| `_related` | Present with `include_related: true` (and only if there is any data). Maps each reverse-relation accessor name to a list of serialized instances, hard-capped at **10 objects per relation**. Use `related_<model>` for full pagination. |
+
 ---
 
-## ➕ create_\<model\>
+## create_\<model\>
 
 Creates a new model instance with validation.
 
@@ -184,12 +241,14 @@ Creates a new model instance with validation.
 ```json
 {
   "method": "tools/call",
-  "name": "create_article",
-  "arguments": {
-    "data": {
-      "title": "New Article",
-      "content": "Article content here...",
-      "author_id": 5
+  "params": {
+    "name": "create_article",
+    "arguments": {
+      "data": {
+        "title": "New Article",
+        "content": "Article content here...",
+        "author_id": 5
+      }
     }
   }
 }
@@ -200,12 +259,14 @@ Creates a new model instance with validation.
 ```json
 {
   "method": "tools/call",
-  "name": "create_article",
-  "arguments": {
-    "data": {
-      "title": "New Article",
-      "author_id": 5,
-      "categories": [1, 2, 3]
+  "params": {
+    "name": "create_article",
+    "arguments": {
+      "data": {
+        "title": "New Article",
+        "author_id": 5,
+        "categories": [1, 2, 3]
+      }
     }
   }
 }
@@ -227,6 +288,8 @@ Creates a new model instance with validation.
 }
 ```
 
+When a `ModelAdmin` is registered, creation goes through `ModelAdmin.save_model()` and a `LogEntry` is written for the addition.
+
 ### Validation Errors
 
 If validation fails:
@@ -236,15 +299,19 @@ If validation fails:
   "error": "Validation failed",
   "code": "validation_error",
   "validation_errors": {
-    "title": ["This field is required."],
-    "author_id": ["Select a valid choice."]
+    "errors": [
+      {"field": "title", "messages": ["This field is required."]},
+      {"field": "author", "messages": ["Select a valid choice. That choice is not one of the available choices."]}
+    ],
+    "error_count": 2,
+    "fields_with_errors": ["title", "author"]
   }
 }
 ```
 
 ---
 
-## ✏️ update_\<model\>
+## update_\<model\>
 
 Updates an existing model instance.
 
@@ -252,8 +319,35 @@ Updates an existing model instance.
 
 | Parameter | Type | Description | Required |
 |-----------|------|-------------|----------|
-| `id` | integer | Instance primary key | Yes |
-| `data` | object | Field values to update | Yes |
+| `id` | integer or string | Instance primary key | Yes |
+| `data` | object | Field values to update | No (defaults to `{}`) |
+| `inlines` | object | Inline add/update/delete operations | No |
+
+Only `id` is required. `data` keys must be **model field names**: `author_id` is rejected with `{"error": "Invalid field: author_id"}` (unlike `create_*`, which normalizes `_id` suffixes).
+
+The `inlines` parameter maps inline model names to lists of operations:
+
+```json
+{
+  "inlines": {
+    "comment": [
+      {"id": 1, "data": {"text": "Updated comment"}},
+      {"data": {"text": "New comment"}},
+      {"id": 2, "_delete": true}
+    ]
+  }
+}
+```
+
+- `{"id": X, "data": {...}}` — update an existing inline object
+- `{"data": {...}}` — add a new inline object (the FK to the parent is set automatically)
+- `{"id": X, "_delete": true}` — delete an inline object
+
+### Inline behavior
+
+- Each operation is checked against the inline's own `add`/`change`/`delete` permission; denied items land in `errors` with `"code": "permission_denied"`.
+- The inline's `min_num`/`max_num` are enforced on the resulting object count **before any item is applied**. A violation rejects that inline model's whole batch with an error carrying `"code": "max_num_exceeded"` or `"code": "min_num_violated"`.
+- The success response includes an `inlines` key with `created`, `updated`, `deleted`, and `errors` lists.
 
 ### Examples
 
@@ -262,11 +356,13 @@ Updates an existing model instance.
 ```json
 {
   "method": "tools/call",
-  "name": "update_article",
-  "arguments": {
-    "id": 42,
-    "data": {
-      "title": "Updated Title"
+  "params": {
+    "name": "update_article",
+    "arguments": {
+      "id": 42,
+      "data": {
+        "title": "Updated Title"
+      }
     }
   }
 }
@@ -277,13 +373,15 @@ Updates an existing model instance.
 ```json
 {
   "method": "tools/call",
-  "name": "update_article",
-  "arguments": {
-    "id": 42,
-    "data": {
-      "title": "Updated Title",
-      "content": "Updated content...",
-      "published": true
+  "params": {
+    "name": "update_article",
+    "arguments": {
+      "id": 42,
+      "data": {
+        "title": "Updated Title",
+        "content": "Updated content...",
+        "published": true
+      }
     }
   }
 }
@@ -298,12 +396,30 @@ Updates an existing model instance.
     "id": 42,
     "title": "Updated Title",
     "content": "Updated content...",
+    "author": 5,
     "published": true
   }
 }
 ```
 
-### 🔒 Readonly Fields
+With inline operations, the response also contains:
+
+```json
+{
+  "success": true,
+  "object": {"id": 42, "title": "Updated Title"},
+  "inlines": {
+    "created": [{"model": "comment", "id": 7}],
+    "updated": [{"model": "comment", "id": 1}],
+    "deleted": [{"model": "comment", "id": 2}],
+    "errors": []
+  }
+}
+```
+
+When a `ModelAdmin` is registered, the update goes through `ModelAdmin.save_model()` and a `LogEntry` is written for the change.
+
+### Readonly Fields
 
 Attempts to update readonly fields return an error:
 
@@ -321,7 +437,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 ---
 
-## 🗑️ delete_\<model\>
+## delete_\<model\>
 
 Deletes a model instance.
 
@@ -329,16 +445,18 @@ Deletes a model instance.
 
 | Parameter | Type | Description | Required |
 |-----------|------|-------------|----------|
-| `id` | integer | Instance primary key | Yes |
+| `id` | integer or string | Instance primary key | Yes |
 
 ### Example
 
 ```json
 {
   "method": "tools/call",
-  "name": "delete_article",
-  "arguments": {
-    "id": 42
+  "params": {
+    "name": "delete_article",
+    "arguments": {
+      "id": 42
+    }
   }
 }
 ```
@@ -352,16 +470,18 @@ Deletes a model instance.
 }
 ```
 
+When a `ModelAdmin` is registered, deletion routes through `ModelAdmin.delete_model()`, and a `LogEntry` is written before the deletion (so the audit trail retains the object's representation).
+
 !!! warning "Cascade Deletes"
     Deletion follows Django's cascade rules. Related objects with `on_delete=CASCADE` will also be deleted.
 
 ---
 
-## 🔗 Foreign Key Handling
+## Foreign Key Handling
 
-Foreign keys can be specified in two ways:
+In `create_*` data, foreign keys can be specified in two ways:
 
-**By ID (recommended):**
+**By ID (`_id` suffix):**
 
 ```json
 {
@@ -377,11 +497,13 @@ Foreign keys can be specified in two ways:
 }
 ```
 
-Both are normalized internally to use the correct database column.
+Both are normalized internally to the model field name.
+
+`update_*` accepts **only model field names**: sending `author_id` returns `{"error": "Invalid field: author_id"}`. Filters in `list_*` also require model field names (`{"author": 5}`); `author_id` there is silently dropped.
 
 ---
 
-## 🔗 Many-to-Many Handling
+## Many-to-Many Handling
 
 Many-to-many relationships accept arrays of IDs:
 
@@ -394,23 +516,26 @@ Many-to-many relationships accept arrays of IDs:
 
 ---
 
-## ❌ Error Handling
+## Error Handling
+
+All errors are returned with HTTP 200 as JSON inside the JSON-RPC `result.content[0].text` — there is no `isError` flag.
 
 ### Not Found
 
 ```json
 {
-  "content": [{"type": "text", "text": "Article with id 999 not found"}],
-  "isError": true
+  "error": "article not found"
 }
 ```
+
+The requested id is not included in the message.
 
 ### Permission Denied
 
 ```json
 {
-  "content": [{"type": "text", "text": "Permission denied: blog.add_article"}],
-  "isError": true
+  "error": "Permission denied: cannot add article",
+  "code": "permission_denied"
 }
 ```
 
@@ -418,12 +543,22 @@ Many-to-many relationships accept arrays of IDs:
 
 ```json
 {
-  "content": [{"type": "text", "text": "{\"error\": \"Validation failed\", \"code\": \"validation_error\", \"validation_errors\": {...}}"}],
-  "isError": true
+  "error": "Validation failed",
+  "code": "validation_error",
+  "validation_errors": {
+    "errors": [
+      {"field": "title", "messages": ["This field is required."]}
+    ],
+    "error_count": 1,
+    "fields_with_errors": ["title"]
+  }
 }
 ```
 
-## 🔗 Next Steps
+!!! note "Queryset scoping asymmetry"
+    `list_*` and `get_*` use the admin queryset (`ModelAdmin.get_queryset()`, unless `mcp_use_admin_queryset = False`), but `update_*` and `delete_*` fetch the object with `model.objects.get(pk=...)`. A row hidden from the list by a scoped `get_queryset()` can therefore still be updated or deleted by id.
+
+## Next Steps
 
 - [Admin Actions](actions.md) — Execute admin actions
 - [Model Introspection](introspection.md) — Discover model schemas

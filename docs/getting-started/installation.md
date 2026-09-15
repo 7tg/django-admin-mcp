@@ -1,16 +1,16 @@
-# 📥 Installation
+# Installation
 
 This guide covers installing Django Admin MCP and configuring it in your Django project.
 
-## 📋 Requirements
+## Requirements
 
 Before installing, ensure you have:
 
-- 🐍 Python >= 3.10
-- 🌐 Django >= 3.2
-- 📐 Pydantic >= 2.0
+- Python >= 3.10
+- Django >= 3.2 (tested against 3.2, 4.0, 4.1, 4.2, and 5.0)
+- Pydantic >= 2.0
 
-## 📦 Install the Package
+## Install the Package
 
 Install using pip:
 
@@ -44,7 +44,7 @@ Or with your preferred package manager:
     pipenv install django-admin-mcp
     ```
 
-## ⚙️ Configure Django Settings
+## Configure Django Settings
 
 Add `django_admin_mcp` to your `INSTALLED_APPS`:
 
@@ -64,7 +64,7 @@ INSTALLED_APPS = [
 ]
 ```
 
-## 🔗 Add URL Routes
+## Add URL Routes
 
 Include the MCP URLs in your project's URL configuration:
 
@@ -83,7 +83,7 @@ This exposes two endpoints:
 - `POST /mcp/` — Main MCP protocol endpoint
 - `GET /mcp/health/` — Health check endpoint
 
-## 🗄️ Run Migrations
+## Run Migrations
 
 Create the database tables for token management:
 
@@ -93,7 +93,7 @@ python manage.py migrate django_admin_mcp
 
 This creates the `MCPToken` model table for API authentication.
 
-## ✅ Verify Installation
+## Verify Installation
 
 Start your Django development server:
 
@@ -113,7 +113,7 @@ Expected response:
 {"status": "ok", "service": "django-admin-mcp"}
 ```
 
-## 🚀 Next Steps
+## Next Steps
 
 Now that Django Admin MCP is installed, proceed to:
 

@@ -1,8 +1,8 @@
-# ⚙️ Configuration
+# Configuration
 
 Django Admin MCP is designed to work with minimal configuration. This page covers all available configuration options.
 
-## 🔗 URL Configuration
+## URL Configuration
 
 The MCP endpoint URL is configurable when including the URLs:
 
@@ -18,7 +18,7 @@ urlpatterns = [
 ]
 ```
 
-## 🛠️ Model Admin Configuration
+## Model Admin Configuration
 
 Each ModelAdmin class with `MCPAdminMixin` can be configured independently:
 
@@ -36,6 +36,21 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 | `True` | Full tool set exposed (12 tools) |
 | `False` (default) | Only discoverable via `find_models` |
 
+### mcp_fields / mcp_exclude_fields
+
+Control which fields are serialized in responses:
+
+```python
+class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    mcp_fields = ['username', 'email', 'is_active']   # allowlist (optional)
+    mcp_exclude_fields = ['password', 'security_token']  # denylist, applied last
+```
+
+### mcp_use_admin_queryset
+
+When `True` (the default), list/get, actions, and bulk operations start from `ModelAdmin.get_queryset(request)`, matching the admin changelist (proxy filters, soft-delete, multi-tenant scoping). Set to `False` to use `model.objects.all()` instead.
+
 ### Standard Django Admin Options
 
 Django Admin MCP respects standard ModelAdmin options:
@@ -47,17 +62,16 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     # Used by list_* tool for default ordering
     ordering = ['-created_at']
 
-    # Used by list_* tool for search
+    # Used by autocomplete_* tool; without it, all CharField/TextField
+    # fields are searched
     search_fields = ['title', 'content']
 
-    # Fields shown in list responses
+    # Reported by describe_* as admin metadata (does not change which
+    # fields list_* returns — use mcp_fields/mcp_exclude_fields for that)
     list_display = ['title', 'author', 'published', 'created_at']
 
     # Attempts to update these fields return an error
     readonly_fields = ['created_at', 'updated_at']
-
-    # Used by autocomplete_* tool
-    search_fields = ['title']  # Required for autocomplete to work
 ```
 
 ### Admin Actions
@@ -74,7 +88,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     actions = [mark_as_published]
 ```
 
-## 🔑 Token Configuration
+## Token Configuration
 
 Tokens are configured in Django admin. Each token has:
 
@@ -84,7 +98,7 @@ Tokens are configured in Django admin. Each token has:
 | `token_key` | Public key for O(1) lookup (auto-generated) | Auto-generated |
 | `token_hash` | SHA-256 hash of the secret (auto-generated) | Auto-generated |
 | `salt` | Per-token salt for hashing (auto-generated) | Auto-generated |
-| `user` | Associated Django user (for audit logging) | Required |
+| `user` | Django user the token acts as (permissions + audit logging) | Required |
 | `is_active` | Enable/disable the token | `True` |
 | `expires_at` | Token expiration date | 90 days from creation |
 | `groups` | Django groups for permissions | Empty |
@@ -97,19 +111,26 @@ Token format: `mcp_<key>.<secret>` — the key is stored in plaintext for lookup
 By default, tokens expire 90 days after creation. You can:
 
 - Set a custom expiration date
-- Leave `expires_at` blank for tokens that never expire
+- Create indefinite tokens programmatically with an explicit `MCPToken(expires_at=None, ...)` — leaving the field blank in the admin form applies the 90-day default
 
 ### Permission Assignment
 
-Tokens derive permissions from:
+!!! warning "Permissions come from the linked user"
+    At request time, all checks run through `ModelAdmin.has_*_permission()` against the token's linked **user**. The token's `permissions` and `groups` fields are not currently consulted during authorization — grant Django permissions to the linked user to control access. A token bound to a superuser has full access.
 
-1. **Direct permissions** — assigned directly to the token
-2. **Group permissions** — from groups assigned to the token
+## Optional Django Settings
 
-!!! note "User Permissions Not Inherited"
-    Token permissions are independent of the associated user's permissions. This allows creating limited-access tokens even for superusers.
+```python title="settings.py"
+# Cap on the page size of list_* tools (default: 1000)
+MCP_MAX_LIST_LIMIT = 1000
 
-## 🌍 Environment-Specific Configuration
+# Max size of file downloads returned by admin actions (default: 5 MiB)
+MCP_ACTION_MAX_FILE_BYTES = 5 * 1024 * 1024
+```
+
+See the [Settings Reference](../reference/settings.md) for details.
+
+## Environment-Specific Configuration
 
 For different environments, use Django settings:
 
@@ -123,7 +144,7 @@ DEBUG = True
 
 The MCP endpoint works over both HTTP and HTTPS. In production, always use HTTPS to protect tokens in transit.
 
-## 🔒 CORS Configuration
+## CORS Configuration
 
 If calling the MCP endpoint from a browser (uncommon), configure CORS:
 
@@ -143,7 +164,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 ```
 
-## 🔗 Next Steps
+## Next Steps
 
 - [Exposing Models](../guide/exposing-models.md) — Detailed model exposure guide
 - [Token Management](../guide/tokens.md) — Token lifecycle management

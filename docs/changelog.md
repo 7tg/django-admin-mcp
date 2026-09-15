@@ -1,9 +1,19 @@
-# 📋 Changelog
+# Changelog
 
 All notable changes to Django Admin MCP are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Fixed
+- `find_models` now reports `tools_exposed` based on each admin's `mcp_expose` flag instead of always `true`
+- The advertised `autocomplete_*` limit default now matches the handler default (10, was 20 in the schema)
+- The generated `list_*` tool description now advertises the full filter-lookup whitelist (`contains`, `gt`, and `lt` were missing)
+
+### Documentation
+- Documentation audited against the code: corrected request/response shapes (JSON-RPC envelope, `params`-nested `tools/call`), error payloads, permission semantics (checks run against the token's linked user), serialization details, and settings reference (`MCP_MAX_LIST_LIMIT`, `MCP_ACTION_MAX_FILE_BYTES`); documented the action confirmation flow, file downloads, inline editing, and queryset scoping
 
 ## [0.4.0] - 2026-09-15
 
@@ -81,12 +91,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2025
 
 ### Added
-- 🔐 Hashed token authentication with `mcp_<key>.<secret>` format
-- 🔑 O(1) token lookup via indexed `token_key` field
-- 🛡️ Constant-time secret comparison to prevent timing attacks
-- 📝 `require_registered_model` and `require_permission` decorators
-- 📦 Bulk create support (`handle_bulk_create`)
-- 🔒 `mcp_fields` and `mcp_exclude_fields` for field filtering
+- Hashed token authentication with `mcp_<key>.<secret>` format
+- O(1) token lookup via indexed `token_key` field
+- Constant-time secret comparison to prevent timing attacks
+- `require_registered_model` and `require_permission` decorators
+- Bulk create support (`handle_bulk_create`)
+- `mcp_fields` and `mcp_exclude_fields` for field filtering
 
 ### Changed
 - Split `handle_bulk` into `handle_bulk_create`, `handle_bulk_update`, `handle_bulk_delete`
@@ -118,18 +128,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## 📊 Version History
+## Version History
 
 | Version | Python | Django |
 |---------|--------|--------|
-| 0.3.0 | 3.10+ | 3.2+ |
-| 0.2.1 | 3.10+ | 3.2+ |
-| 0.2.0 | 3.10+ | 3.2+ |
+| 0.4.0 | 3.10+ | 3.2+ |
+| 0.3.x | 3.10+ | 3.2+ |
+| 0.2.x | 3.10+ | 3.2+ |
 | 0.1.0 | 3.10+ | 3.2+ |
 
 ---
 
-## ⬆️ Upgrade Guide
+## Upgrade Guide
 
 ### From 0.1.x to 0.2.x
 
@@ -165,7 +175,7 @@ If you were using a pre-release version:
 
 ---
 
-## 📌 Deprecation Policy
+## Deprecation Policy
 
 - Features are deprecated for at least one minor version before removal
 - Deprecated features will emit warnings

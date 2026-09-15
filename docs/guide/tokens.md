@@ -1,8 +1,8 @@
-# 🔑 Token Management
+# Token Management
 
 Django Admin MCP uses token-based authentication for all API requests. This guide covers creating, managing, and securing tokens.
 
-## 🆕 Creating Tokens
+## Creating Tokens
 
 ### Via Django Admin
 
@@ -12,62 +12,60 @@ Django Admin MCP uses token-based authentication for all API requests. This guid
 4. Configure the token:
 
     - **Name** — Descriptive identifier (e.g., "MCP - Development")
-    - **User** — Associated user for audit logging (required)
     - **Is Active** — Enable/disable the token
-    - **Expires At** — Expiration date (default: 90 days from now)
-    - **Groups** — Assign groups for permission inheritance
-    - **Permissions** — Assign individual permissions
+    - **Expires At** — Expiration date (leaving it blank applies the 90-day default)
+    - **User** — The Django user the token acts as: requests are authorized with this user's permissions and audit-logged under it (required)
 
 5. Click **Save**
 6. Copy the generated token — it is only displayed once after creation
+
+An existing token's change page also offers a **Regenerate Token** button that invalidates the current secret and shows a new plaintext token once.
 
 ### Via Django Shell
 
 ```python
 from django_admin_mcp.models import MCPToken
-from django.contrib.auth.models import User, Permission
+from django.contrib.auth.models import User
 
-# Create a token
-user = User.objects.get(username='admin')
+# Create a dedicated user carrying exactly the permissions the agent needs
+user = User.objects.get(username='mcp-agent')
+
 token = MCPToken.objects.create(
     name='API Token',
     user=user,
 )
 
-# Add permissions
-view_article = Permission.objects.get(codename='view_article')
-token.permissions.add(view_article)
-
 # Get the plaintext token (only available immediately after creation)
 print(f"Token: {token.get_plaintext_token()}")
 ```
 
-## 📋 Token Properties
+## Token Properties
 
-### 🔐 Token Format
+### Token Format
 
 Tokens use a structured `mcp_<key>.<secret>` format:
 
-- The **key** (`token_key`) is stored in plaintext for O(1) lookup
-- The **secret** is hashed with a per-token salt (`token_hash` + `salt`) using SHA-256
+- The **key** (`token_key`, ~16 characters) is stored in plaintext for O(1) lookup
+- The **secret** (~43 characters) is hashed with a per-token salt (`token_hash` + `salt`) using SHA-256
 - Constant-time comparison prevents timing attacks
 
 ```
-mcp_abc12345.secretparthere...
+mcp_h3jN9x2kQpLmVzRw.4tYuIoPaSdFgHjKlZxCvBnM1234567890abcdefg
 ```
 
 !!! warning "Token Security"
     The full token is only displayed once after creation. The secret portion is hashed and cannot be recovered. Store tokens securely.
 
-### ⏰ Expiration
+### Expiration
 
 Tokens have an optional expiration date:
 
 | Configuration | Behavior |
 |---------------|----------|
-| `expires_at` set | Token expires at that datetime |
-| `expires_at` blank | Token never expires |
-| Default | 90 days from creation |
+| `expires_at` passed explicitly at creation | Used as-is; an explicit `None` means the token never expires |
+| `expires_at` not passed (including left blank in the admin form) | Defaults to 90 days from creation |
+
+To create an indefinite token, pass the value explicitly in code: `MCPToken.objects.create(name='...', user=user, expires_at=None)`.
 
 Check token validity:
 
@@ -77,9 +75,9 @@ if token.is_valid():
     print("Token is active and not expired")
 ```
 
-### 🔄 Active Status
+### Active Status
 
-The `is_active` field allows quick enable/disable without deletion:
+The `is_active` field allows quick enable/disable without deletion. Deactivation takes effect immediately — inactive tokens are filtered out at the lookup query, before any validity check:
 
 ```python
 # Disable a token
@@ -91,7 +89,7 @@ token.is_active = True
 token.save()
 ```
 
-### 📊 Usage Tracking
+### Usage Tracking
 
 Each token tracks its last usage:
 
@@ -102,85 +100,72 @@ print(f"Last used: {token.last_used_at}")
 
 This is automatically updated on each authenticated request.
 
-## 🔒 Permission Assignment
+## Permission Assignment
 
-### 🎯 Direct Permissions
+!!! important "Permissions come from the linked user"
+    At request time, every check runs against the Django permissions of the token's linked **user**. The token's own `permissions` and `groups` fields are not currently consulted during authorization. Control a token's access by managing its user's permissions — and never bind an agent token to a superuser.
 
-Assign permissions directly to the token:
+### User Permissions
 
 ```python
 from django.contrib.auth.models import Permission
 
-token = MCPToken.objects.get(name='My Token')
+token = MCPToken.objects.select_related('user').get(name='My Token')
 
-# Add view permission for Article
+# Add view permission for Article to the linked user
 view_article = Permission.objects.get(
     codename='view_article',
     content_type__app_label='blog'
 )
-token.permissions.add(view_article)
-
-# Add multiple permissions
-add_article = Permission.objects.get(codename='add_article')
-change_article = Permission.objects.get(codename='change_article')
-token.permissions.add(add_article, change_article)
+token.user.user_permissions.add(view_article)
 ```
 
-### 👥 Group Permissions
-
-Assign groups to inherit their permissions:
+### Group Permissions
 
 ```python
 from django.contrib.auth.models import Group
 
-token = MCPToken.objects.get(name='My Token')
-
-# Create a group with permissions
 editors = Group.objects.get(name='Editors')
-token.groups.add(editors)
+token.user.groups.add(editors)
 ```
 
-### ✅ Check Permissions
+### Check Permissions
 
 ```python
-token = MCPToken.objects.get(name='My Token')
-
-# Check single permission
-if token.has_perm('blog.view_article'):
-    print("Can view articles")
-
-# Get all permissions
-perms = token.get_all_permissions()
+# Effective permissions are the linked user's
+perms = token.user.get_all_permissions()
 print(f"Permissions: {perms}")
 ```
 
-!!! note "User Permissions Not Inherited"
-    Token permissions are independent of the associated user's permissions. A superuser can have a token with limited access.
+!!! tip "Permission caching"
+    Django caches a user's permissions on the user instance — re-fetch the user (or the token) after changing permissions to see the update.
 
-## 🛡️ Security Best Practices
+## Security Best Practices
 
-### 🔐 Principle of Least Privilege
+### Principle of Least Privilege
 
-Create tokens with only the permissions needed:
+Bind each token to a dedicated user carrying only the permissions needed:
 
 ```python
-# Read-only token
-readonly_token = MCPToken.objects.create(name='Read Only')
-readonly_token.permissions.add(
-    Permission.objects.get(codename='view_article'),
-    Permission.objects.get(codename='view_author'),
-)
+from django.contrib.auth.models import User, Permission
+from django.contrib.contenttypes.models import ContentType
+from blog.models import Article, Author
 
-# Full access token
-full_token = MCPToken.objects.create(name='Full Access')
-full_token.permissions.add(
-    *Permission.objects.filter(
-        content_type__app_label='blog'
-    )
+reader = User.objects.create_user('mcp-readonly')
+reader.user_permissions.add(
+    Permission.objects.get(
+        codename='view_article',
+        content_type=ContentType.objects.get_for_model(Article),
+    ),
+    Permission.objects.get(
+        codename='view_author',
+        content_type=ContentType.objects.get_for_model(Author),
+    ),
 )
+readonly_token = MCPToken.objects.create(name='Read Only', user=reader)
 ```
 
-### ⏰ Use Expiration Dates
+### Use Expiration Dates
 
 Always set expiration for production tokens:
 
@@ -190,28 +175,32 @@ from django.utils import timezone
 
 token = MCPToken.objects.create(
     name='Production Token',
+    user=user,
     expires_at=timezone.now() + timedelta(days=30),
 )
 ```
 
-### 🔄 Rotate Tokens Regularly
+### Rotate Tokens Regularly
 
-Create new tokens and deactivate old ones:
+Regenerate a token in place (also available via the **Regenerate Token** button in admin):
 
 ```python
-# Create new token
+new_plaintext = token.regenerate_token()  # invalidates the old secret immediately
+```
+
+Or create a new token and deactivate the old one:
+
+```python
 new_token = MCPToken.objects.create(
     name='Production Token v2',
     user=old_token.user,
 )
-new_token.permissions.set(old_token.permissions.all())
 
-# Deactivate old token
 old_token.is_active = False
 old_token.save()
 ```
 
-### 📊 Audit Token Usage
+### Audit Token Usage
 
 Monitor token usage via `last_used_at`:
 
@@ -229,7 +218,7 @@ for token in unused:
     print(f"Unused token: {token.name}")
 ```
 
-## 🌐 Using Tokens
+## Using Tokens
 
 Include the token in the Authorization header:
 
@@ -237,10 +226,10 @@ Include the token in the Authorization header:
 curl -X POST http://localhost:8000/mcp/ \
   -H "Authorization: Bearer mcp_yourkey.yoursecret" \
   -H "Content-Type: application/json" \
-  -d '{"method": "tools/list"}'
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
 ```
 
-## 🔗 Next Steps
+## Next Steps
 
 - [Permissions](permissions.md) — Detailed permission system guide
 - [Client Setup](client-setup.md) — Configure MCP clients
