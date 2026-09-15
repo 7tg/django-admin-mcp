@@ -5,6 +5,19 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **MCP Prompts** support: `prompts/list` and `prompts/get` serve workflow guides (`explore_models`, `understand_model`, `crud_guide`, `bulk_operations_guide`) ([#65](https://github.com/7tg/django-admin-mcp/issues/65))
+- **MCP Resources** support: `resources/list`, `resources/templates/list`, and `resources/read` expose model schemas (`models://<model>/schema`) and instance data (`data://<model>/`, `data://<model>/<id>`), permission-filtered ([#66](https://github.com/7tg/django-admin-mcp/issues/66))
+- Two-step **confirmation workflow for admin actions**: actions returning an HTML page report `requires_confirmation: true`; re-calling with `confirm: true` (plus optional `confirmation_data`) executes them. Actions also receive Django's standard POST fields (`action`, `_selected_action`) ([#63](https://github.com/7tg/django-admin-mcp/issues/63))
+- `min_num`/`max_num` inline constraints are enforced when editing inlines via `update_<model>` ([#61](https://github.com/7tg/django-admin-mcp/issues/61), [#62](https://github.com/7tg/django-admin-mcp/issues/62))
+
+### Changed
+- `find_models` respects `ModelAdmin.has_module_permission()`: hidden modules are excluded from discovery ([#64](https://github.com/7tg/django-admin-mcp/issues/64))
+- `list_<model>` validates `limit`/`offset` and caps page size at `MCP_MAX_LIST_LIMIT` (default 1000) ([#47](https://github.com/7tg/django-admin-mcp/issues/47))
+- The two HTTP view code paths now share one auth/parse/validate/execute pipeline ([#43](https://github.com/7tg/django-admin-mcp/issues/43))
+
 ## [0.3.3] - 2026-09-15
 
 ### Added

@@ -45,6 +45,7 @@ nav:
     - Exposing Models: guide/exposing-models.md
     - Token Management: guide/tokens.md
     - Permissions: guide/permissions.md
+    - Prompts & Resources: guide/prompts-resources.md
     - Client Setup: guide/client-setup.md
   - Tools Reference:
     - Overview: tools/overview.md
