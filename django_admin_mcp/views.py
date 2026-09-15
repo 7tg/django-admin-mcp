@@ -2,6 +2,10 @@
 HTTP views for django-admin-mcp
 
 Provides HTTP interface for MCP protocol with token-based authentication.
+
+Two endpoints share the core auth/parse/validate/execute pipeline:
+- ``MCPHTTPView`` (class-based) returns bare JSON responses (legacy shape)
+- ``mcp_endpoint`` (function-based) returns JSON-RPC envelopes per the MCP spec
 """
 
 from typing import Any
@@ -100,6 +104,40 @@ def authenticate_token(request):
         return None
 
 
+def _unauthorized_response() -> JsonResponse:
+    """401 response for missing/invalid tokens."""
+    return JsonResponse({"error": "Invalid or missing authentication token"}, status=401)
+
+
+def _parse_request_body(request: HttpRequest) -> tuple[RequestBody | None, JsonResponse | None]:
+    """Parse the JSON-RPC request body; returns (body, None) or (None, error response)."""
+    try:
+        return RequestBody.model_validate_json(request.body), None
+    except ValidationError:
+        return None, JsonResponse({"error": "Invalid JSON in request body"}, status=400)
+
+
+def _invalid_request_response(exc: ValidationError) -> JsonResponse:
+    """400 response with sanitized Pydantic validation details."""
+    return JsonResponse({"error": "Invalid request", "details": sanitize_pydantic_errors(exc.errors())}, status=400)
+
+
+def _validate_tools_list(request: HttpRequest) -> JsonResponse | None:
+    """Validate a tools/list request body; returns an error response or None."""
+    try:
+        ToolsListRequest.model_validate_json(request.body)
+    except ValidationError as e:
+        return _invalid_request_response(e)
+    return None
+
+
+async def _execute_tool(request_obj: ToolsCallRequest, token) -> list[TextContent]:
+    """Run a tool call with a request carrying the token's user for permission checks."""
+    tool_request = HttpRequest()
+    tool_request.user = token.user if token else None  # type: ignore[assignment]
+    return await call_tool(request_obj.name, request_obj.arguments, tool_request)
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 @method_decorator(transaction.non_atomic_requests, name="dispatch")
 class MCPHTTPView(View):
@@ -107,41 +145,32 @@ class MCPHTTPView(View):
     HTTP view for MCP protocol.
 
     Handles MCP requests over HTTP with token authentication.
+    Responses use the legacy bare-JSON shape (no JSON-RPC envelope).
     """
 
     async def post(self, request):
         """Handle POST requests for MCP operations."""
-        # Authenticate request
         token = await authenticate_token(request)
         if not token:
-            return JsonResponse({"error": "Invalid or missing authentication token"}, status=401)
+            return _unauthorized_response()
 
-        # Parse request body using Pydantic - first parse to determine method
-        try:
-            body = RequestBody.model_validate_json(request.body)
-        except ValidationError:
-            return JsonResponse({"error": "Invalid JSON in request body"}, status=400)
+        body, error = _parse_request_body(request)
+        if error:
+            return error
+        assert body is not None  # narrowed by error check
 
-        # Get method from request to determine which model to use
         method = body.method
 
         if method == "tools/list":
-            # Validate with ToolsListRequest using raw body
-            try:
-                _ = ToolsListRequest.model_validate_json(request.body)
-            except ValidationError as e:
-                return JsonResponse(
-                    {"error": "Invalid request", "details": sanitize_pydantic_errors(e.errors())}, status=400
-                )
+            error = _validate_tools_list(request)
+            if error:
+                return error
             return await self.handle_list_tools(request)
         elif method == "tools/call":
-            # Validate with ToolsCallRequest using raw body
             try:
                 request_obj = ToolsCallRequest.model_validate_json(request.body)
             except ValidationError as e:
-                return JsonResponse(
-                    {"error": "Invalid request", "details": sanitize_pydantic_errors(e.errors())}, status=400
-                )
+                return _invalid_request_response(e)
             return await self.handle_call_tool(request, request_obj, token=token)
         else:
             return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
@@ -150,30 +179,20 @@ class MCPHTTPView(View):
         """Handle tools/list request."""
         tools = get_tools()
 
-        # Serialize tools to dict format
-        tools_data = []
-        for tool in tools:
-            tools_data.append(
-                {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "inputSchema": tool.inputSchema,
-                }
-            )
+        tools_data = [
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "inputSchema": tool.inputSchema,
+            }
+            for tool in tools
+        ]
 
         return JsonResponse({"tools": tools_data})
 
     async def handle_call_tool(self, request, request_obj: ToolsCallRequest, token=None):
         """Handle tools/call request."""
-        tool_name = request_obj.name
-        arguments = request_obj.arguments
-
-        # Create request with user for permission checking
-        tool_request = HttpRequest()
-        tool_request.user = token.user if token else None  # type: ignore[assignment]
-
-        # Call the tool with request context
-        result = await call_tool(tool_name, arguments, tool_request)
+        result = await _execute_tool(request_obj, token)
 
         # Extract text from result - content.text is a JSON string
         if result and len(result) > 0:
@@ -194,22 +213,19 @@ def mcp_health(request):
 
 @transaction.non_atomic_requests
 async def mcp_endpoint(request):
-    """Main MCP HTTP endpoint."""
+    """Main MCP HTTP endpoint (JSON-RPC envelope per the MCP spec)."""
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
 
-    # Authenticate request
     token = await authenticate_token(request)
     if not token:
-        return JsonResponse({"error": "Invalid or missing authentication token"}, status=401)
+        return _unauthorized_response()
 
-    # Parse request body using Pydantic
-    try:
-        body = RequestBody.model_validate_json(request.body)
-    except ValidationError:
-        return JsonResponse({"error": "Invalid JSON in request body"}, status=400)
+    body, error = _parse_request_body(request)
+    if error:
+        return error
+    assert body is not None  # narrowed by error check
 
-    # Get method from request to determine which model to use
     method = body.method
 
     if method == "initialize":
@@ -228,13 +244,9 @@ async def mcp_endpoint(request):
         response = NotificationsInitializedResponse(id=body.id)
         return JsonResponse(response.model_dump())
     elif method == "tools/list":
-        # Validate with ToolsListRequest using raw body
-        try:
-            _ = ToolsListRequest.model_validate_json(request.body)
-        except ValidationError as e:
-            return JsonResponse(
-                {"error": "Invalid request", "details": sanitize_pydantic_errors(e.errors())}, status=400
-            )
+        error = _validate_tools_list(request)
+        if error:
+            return error
         return await handle_list_tools_request(request, body.id)
     elif method == "tools/call":
         # Extract params from JSON-RPC structure
@@ -244,9 +256,7 @@ async def mcp_endpoint(request):
         try:
             request_obj = ToolsCallRequest.model_validate(call_data)
         except ValidationError as e:
-            return JsonResponse(
-                {"error": "Invalid request", "details": sanitize_pydantic_errors(e.errors())}, status=400
-            )
+            return _invalid_request_response(e)
         return await handle_call_tool_request(request, request_obj, token=token, request_id=body.id)
     else:
         return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
@@ -272,15 +282,7 @@ async def handle_list_tools_request(request, request_id=None):
 
 async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token=None, request_id=None):
     """Handle tools/call request."""
-    tool_name = request_obj.name
-    arguments = request_obj.arguments
-
-    # Create request with user for permission checking
-    tool_request = HttpRequest()
-    tool_request.user = token.user if token else None  # type: ignore[assignment]
-
-    # Call the tool with request context
-    result = await call_tool(tool_name, arguments, tool_request)
+    result = await _execute_tool(request_obj, token)
 
     # Extract text from result - content.text is already a JSON string
     if result and len(result) > 0:
