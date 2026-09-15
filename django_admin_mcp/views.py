@@ -12,7 +12,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.db import DatabaseError, transaction
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
@@ -28,7 +28,6 @@ from django_admin_mcp.protocol import (
     InitializeResult,
     JsonRpcError,
     JsonRpcResponse,
-    NotificationsInitializedResponse,
     ServerCapabilities,
     ServerInfo,
     TextContent,
@@ -151,14 +150,22 @@ async def _execute_tool(request_obj: ToolsCallRequest, token) -> list[TextConten
     return await call_tool(request_obj.name, request_obj.arguments, _request_for_token(token))
 
 
+# JSON-RPC 2.0 standard error codes (issue #97)
+PARSE_ERROR = -32700
+METHOD_NOT_FOUND = -32601
+INVALID_PARAMS = -32602
+
+
 def _jsonrpc_result(request_id, result: Any) -> JsonResponse:
     """JSON-RPC success envelope."""
     return JsonResponse(JsonRpcResponse(id=request_id, result=result).model_dump())
 
 
-def _jsonrpc_error(request_id, code: int, message: str) -> JsonResponse:
-    """JSON-RPC error envelope."""
-    return JsonResponse(JsonRpcResponse(id=request_id, error=JsonRpcError(code=code, message=message)).model_dump())
+def _jsonrpc_error(request_id, code: int, message: str, data: Any | None = None) -> JsonResponse:
+    """JSON-RPC error envelope (always HTTP 200 — the protocol error is in the body)."""
+    return JsonResponse(
+        JsonRpcResponse(id=request_id, error=JsonRpcError(code=code, message=message, data=data)).model_dump()
+    )
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -246,7 +253,8 @@ async def mcp_endpoint(request):
 
     body, error = _parse_request_body(request)
     if error:
-        return error
+        # JSON-RPC parse error envelope, not a bare 400 (issue #97)
+        return _jsonrpc_error(None, PARSE_ERROR, "Parse error: invalid JSON in request body")
     assert body is not None  # narrowed by error check
 
     method = body.method
@@ -263,13 +271,13 @@ async def mcp_endpoint(request):
         )
         return JsonResponse(response.model_dump())
     elif method == "notifications/initialized":
-        # Client acknowledgement - just return success
-        response = NotificationsInitializedResponse(id=body.id)
-        return JsonResponse(response.model_dump())
+        # Notifications get no JSON-RPC response body (issue #97)
+        return HttpResponse(status=202)
     elif method == "tools/list":
-        error = _validate_tools_list(request)
-        if error:
-            return error
+        try:
+            ToolsListRequest.model_validate_json(request.body)
+        except ValidationError as e:
+            return _jsonrpc_error(body.id, INVALID_PARAMS, "Invalid params", sanitize_pydantic_errors(e.errors()))
         return await handle_list_tools_request(request, body.id)
     elif method == "tools/call":
         # Extract params from JSON-RPC structure
@@ -279,7 +287,7 @@ async def mcp_endpoint(request):
         try:
             request_obj = ToolsCallRequest.model_validate(call_data)
         except ValidationError as e:
-            return _invalid_request_response(e)
+            return _jsonrpc_error(body.id, INVALID_PARAMS, "Invalid params", sanitize_pydantic_errors(e.errors()))
         return await handle_call_tool_request(request, request_obj, token=token, request_id=body.id)
     elif method == "prompts/list":
         return _jsonrpc_result(body.id, {"prompts": list_prompts()})
@@ -305,7 +313,7 @@ async def mcp_endpoint(request):
             return _jsonrpc_error(body.id, -32002, str(e))
         return _jsonrpc_result(body.id, {"contents": [contents]})
     else:
-        return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
+        return _jsonrpc_error(body.id, METHOD_NOT_FOUND, f"Method not found: {method}")
 
 
 # Mark as CSRF exempt
@@ -346,7 +354,7 @@ async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token
                     data={"validation_errors": sanitize_pydantic_errors(e.errors())},
                 ),
             )
-            return JsonResponse(error_response.model_dump(), status=500)
+            return JsonResponse(error_response.model_dump())
 
         # Pass through the JSON string as-is
         response = ToolsCallResponse(
@@ -359,4 +367,4 @@ async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token
             id=request_id,
             error=JsonRpcError(code=-32000, message="No result from tool"),
         )
-        return JsonResponse(error_response.model_dump(), status=500)
+        return JsonResponse(error_response.model_dump())

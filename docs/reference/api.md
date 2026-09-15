@@ -122,17 +122,16 @@ Some failures use the JSON-RPC `error` member instead of `result`:
 
 | JSON-RPC code | HTTP status | Cause |
 |---------------|-------------|-------|
-| -32602 | 200 | Unknown `prompts/get` name, or missing `resources/read` uri |
+| -32700 | 200 | Body is not a valid JSON-RPC request (parse error) |
+| -32601 | 200 | `Method not found: x` (unsupported method) |
+| -32602 | 200 | Malformed `tools/call` or `tools/list` params (sanitized details in `error.data`), unknown `prompts/get` name, or missing `resources/read` uri |
 | -32002 | 200 | Resource error (e.g. unknown resource URI) |
-| -32000 | 500 | `Invalid JSON in tool result` or `No result from tool` |
+| -32000 | 200 | `Invalid JSON in tool result` or `No result from tool` |
 
-Other failures return bare (non-JSON-RPC) error bodies:
+`notifications/initialized` returns an empty HTTP 202 response (notifications get no JSON-RPC body). Transport-level failures still return bare (non-JSON-RPC) error bodies:
 
 | HTTP status | Body | Cause |
 |-------------|------|-------|
-| 400 | `{"error": "Invalid request", "details": [...]}` | Malformed `tools/call` params |
-| 400 | `{"error": "Invalid JSON in request body"}` | Body is not a valid JSON-RPC request |
-| 400 | `{"error": "Unknown method: x"}` | Unsupported method |
 | 401 | `{"error": "Invalid or missing authentication token"}` | Auth failure |
 | 405 | `{"error": "Method not allowed"}` | Non-POST request to the MCP endpoint |
 
@@ -194,8 +193,10 @@ The client then sends `notifications/initialized` to complete the handshake:
 curl -X POST http://localhost:8000/mcp/ \
   -H "Authorization: Bearer TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 2, "method": "notifications/initialized"}'
+  -d '{"jsonrpc": "2.0", "method": "notifications/initialized"}'
 ```
+
+The server answers with an empty HTTP 202 response (notifications carry no `id` and get no JSON-RPC body).
 
 ### tools/list
 

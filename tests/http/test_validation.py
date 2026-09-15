@@ -36,10 +36,11 @@ class TestPydanticValidation:
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
         data = json.loads(response.content)
-        assert "error" in data
-        assert "Unknown method" in data["error"]
+        # JSON-RPC method-not-found envelope (issue #97)
+        assert data["error"]["code"] == -32601
+        assert "invalid/method" in data["error"]["message"]
 
     @skip_if_django_lt_42
     @pytest.mark.asyncio
@@ -55,14 +56,12 @@ class TestPydanticValidation:
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
         data = json.loads(response.content)
-        assert "error" in data
-        assert "Invalid request" in data["error"]
-        assert "details" in data
-        # Check that Pydantic validation error details are present
-        assert isinstance(data["details"], list)
-        assert len(data["details"]) > 0
+        # JSON-RPC invalid-params envelope with sanitized details (issue #97)
+        assert data["error"]["code"] == -32602
+        assert isinstance(data["error"]["data"], list)
+        assert len(data["error"]["data"]) > 0
 
     @skip_if_django_lt_42
     @pytest.mark.asyncio

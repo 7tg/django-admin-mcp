@@ -44,9 +44,9 @@ class TestEmptyToolResult:
                 headers={"Authorization": f"Bearer {token.plaintext_token}"},
             )
 
-            assert response.status_code == 500
+            assert response.status_code == 200
             data = json.loads(response.content)
-            # Response is now JSON-RPC wrapped
+            # JSON-RPC error envelope with HTTP 200 (issue #97)
             assert "error" in data
             assert "No result" in data["error"]["message"]
 
@@ -82,10 +82,10 @@ class TestFunctionBasedViewEdgeCases:
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
         data = json.loads(response.content)
-        assert "error" in data
-        assert "JSON" in data["error"]
+        # JSON-RPC parse error envelope (issue #97)
+        assert data["error"]["code"] == -32700
 
     @skip_if_django_lt_42
     @pytest.mark.asyncio
@@ -102,10 +102,11 @@ class TestFunctionBasedViewEdgeCases:
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
         data = json.loads(response.content)
-        assert "error" in data
-        assert "Unknown method" in data["error"]
+        # JSON-RPC method-not-found envelope (issue #97)
+        assert data["error"]["code"] == -32601
+        assert "unknown/method" in data["error"]["message"]
 
     @skip_if_django_lt_42
     @pytest.mark.asyncio
@@ -127,12 +128,11 @@ class TestFunctionBasedViewEdgeCases:
             headers={"Authorization": f"Bearer {token.plaintext_token}"},
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
         data = json.loads(response.content)
-        assert "error" in data
-        # Pydantic validation returns "Invalid request" with details
-        assert "Invalid request" in data["error"]
-        assert "details" in data
+        # JSON-RPC invalid-params envelope with sanitized details (issue #97)
+        assert data["error"]["code"] == -32602
+        assert isinstance(data["error"]["data"], list)
 
     @skip_if_django_lt_42
     @pytest.mark.asyncio
