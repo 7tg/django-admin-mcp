@@ -15,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
+from django_admin_mcp import __version__
 from django_admin_mcp.handlers.base import sanitize_pydantic_errors
 from django_admin_mcp.models import MCPToken
 from django_admin_mcp.protocol import (
@@ -217,7 +218,7 @@ async def mcp_endpoint(request):
             id=body.id,
             result=InitializeResult(
                 protocolVersion="2025-11-25",
-                serverInfo=ServerInfo(name="django-admin-mcp", version="0.2.1"),
+                serverInfo=ServerInfo(name="django-admin-mcp", version=__version__),
                 capabilities=ServerCapabilities(),
             ),
         )

@@ -28,9 +28,32 @@ from django_admin_mcp.handlers.decorators import require_permission, require_reg
 from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
 
 
+# Lookups allowed in list filters. Anything else (regex, relation traversal, ...)
+# is skipped to prevent resource-intensive queries and data disclosure via
+# filtering on fields of related models the caller may not have access to.
+SAFE_FILTER_LOOKUPS = frozenset({"exact", "contains", "icontains", "gt", "gte", "lt", "lte", "in", "isnull"})
+
+# Key-name markers whose values are redacted from admin LogEntry messages.
+SENSITIVE_KEY_MARKERS = ("password", "token", "secret", "api_key", "auth", "credential")
+
+
+def _redact_sensitive(data: dict[str, Any]) -> dict[str, Any]:
+    """Replace values of sensitive-looking keys before audit logging."""
+    redacted = {}
+    for key, value in data.items():
+        if any(marker in key.lower() for marker in SENSITIVE_KEY_MARKERS):
+            redacted[key] = "***REDACTED***"
+        else:
+            redacted[key] = value
+    return redacted
+
+
 def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500) -> str:
     """
     Serialize data for Django admin log message with size limit.
+
+    Values of sensitive-looking keys (passwords, tokens, secrets, ...) are
+    redacted so they never reach the audit trail.
 
     Args:
         data: Dictionary to serialize for logging.
@@ -40,7 +63,7 @@ def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500) -> str:
         Serialized JSON string, truncated if necessary with ellipsis.
     """
     adapter = TypeAdapter(dict[str, Any])
-    data_json = adapter.dump_json(data).decode("utf-8")
+    data_json = adapter.dump_json(_redact_sensitive(data)).decode("utf-8")
 
     if len(data_json) > max_length:
         return data_json[: max_length - 3] + "..."
@@ -52,13 +75,15 @@ def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q
     """
     Build a Q object from filter parameters.
 
-    Supports lookups:
+    Supports lookups on direct model fields only (no relation traversal):
     - field: exact match (default)
-    - field__icontains: case-insensitive contains
-    - field__gte: greater than or equal
-    - field__lte: less than or equal
+    - field__exact, field__contains, field__icontains
+    - field__gt, field__gte, field__lt, field__lte
     - field__in: value in list
     - field__isnull: is null check
+
+    Filters with unknown fields, disallowed lookups, or relation traversal
+    (e.g. "author__email") are silently skipped.
 
     Args:
         model: The Django model class.
@@ -71,10 +96,14 @@ def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q
     valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, "name")}
 
     for key, value in filters.items():
-        # Extract field name from lookup (e.g., "name__icontains" -> "name")
-        field_name = key.split("__")[0]
+        parts = key.split("__")
+        field_name = parts[0]
         if field_name not in valid_fields:
             continue  # Skip invalid fields
+        if len(parts) > 2:
+            continue  # Skip chained lookups / relation traversal
+        if len(parts) == 2 and parts[1] not in SAFE_FILTER_LOOKUPS:
+            continue  # Skip disallowed lookup types (regex, related fields, ...)
 
         q &= Q(**{key: value})
     return q
