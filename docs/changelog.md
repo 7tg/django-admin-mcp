@@ -5,7 +5,7 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-09-15
 
 ### Security
 - **All row lookups now honor `ModelAdmin.get_queryset()` scoping.** `update_*`, `delete_*`, `bulk_*`, `related_*`, `history_*`, and `autocomplete_*` previously used `model.objects` directly, so rows hidden from the admin changelist (multi-tenant filters, soft-delete, proxy scoping) could still be read, updated, or deleted by pk ([#88](https://github.com/7tg/django-admin-mcp/issues/88))
@@ -161,6 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Python | Django |
 |---------|--------|--------|
+| 0.6.0 | 3.10+ | 3.2+ |
 | 0.5.0 | 3.10+ | 3.2+ |
 | 0.4.0 | 3.10+ | 3.2+ |
 | 0.3.x | 3.10+ | 3.2+ |
@@ -170,6 +171,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## Upgrade Guide
+
+### From 0.5.x to 0.6.0
+
+No migrations. Behavior changes to review:
+
+- **`mcp_expose = False` models are no longer callable.** If any client relied on calling tools for a registered-but-not-exposed model, set `mcp_expose = True` on that admin.
+- **Row scoping now applies everywhere.** `update_*`, `delete_*`, `bulk_*`, `related_*`, `history_*`, and `autocomplete_*` honor `ModelAdmin.get_queryset(request)`; rows outside the admin queryset now return "not found".
+- **`related_*` no longer returns plain field values.** Only actual relations are served; clients reading non-relation attributes through it must use `get_*` instead.
+- **Related/inline reads require view permission on the related model.** Grant the token `view` permission on inline/related models it should keep seeing through `include_inlines`/`include_related`/`related_*`.
+- **JSON-RPC error responses changed shape.** Parse errors, unknown methods, and invalid params now arrive as JSON-RPC error envelopes (`-32700`/`-32601`/`-32602`) with HTTP 200, and `notifications/initialized` returns an empty HTTP 202. Clients checking for HTTP 400/500 on these paths must read `error.code` instead.
+- `MCPToken.last_used_at` now updates at most once per `MCP_LAST_USED_RESOLUTION` seconds (default 60). Set the setting to `0` to restore per-request writes.
 
 ### From 0.4.x to 0.5.0
 
