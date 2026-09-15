@@ -242,6 +242,38 @@ def _update_inlines(
         if not fk_field:
             continue
 
+        # Enforce InlineModelAdmin min_num/max_num on the resulting object count,
+        # mirroring formset validation in the Django admin (issues #61, #62)
+        inline_items = inlines_data[inline_model_name]
+        existing_count = inline_model.objects.filter(**{fk_field.name: obj}).count()
+        additions = sum(1 for item in inline_items if not item.get("id") and not item.get("_delete", False))
+        deletions = sum(1 for item in inline_items if item.get("id") and item.get("_delete", False))
+        resulting_count = existing_count + additions - deletions
+
+        max_num = getattr(inline_class, "max_num", None)
+        if max_num is not None and resulting_count > max_num:
+            results["errors"].append(
+                {
+                    "model": inline_model_name,
+                    "id": None,
+                    "error": f"Cannot have more than {max_num} {inline_model_name} objects (would result in {resulting_count})",
+                    "code": "max_num_exceeded",
+                }
+            )
+            continue
+
+        min_num = getattr(inline_class, "min_num", None)
+        if min_num is not None and resulting_count < min_num:
+            results["errors"].append(
+                {
+                    "model": inline_model_name,
+                    "id": None,
+                    "error": f"Cannot have fewer than {min_num} {inline_model_name} objects (would result in {resulting_count})",
+                    "code": "min_num_violated",
+                }
+            )
+            continue
+
         # Get the form class for the inline
         # Check if inline has a custom form class (not the default ModelForm)
         inline_form_class = getattr(inline_class, "form", None)
@@ -249,7 +281,6 @@ def _update_inlines(
             # No custom form or default ModelForm - generate one
             inline_form_class = modelform_factory(inline_model, fields="__all__")
 
-        inline_items = inlines_data[inline_model_name]
         for item in inline_items:
             try:
                 item_id = item.get("id")
