@@ -19,11 +19,25 @@ from django_admin_mcp.handlers import (
 )
 from django_admin_mcp.handlers.meta import (
     _get_field_metadata,
+    _json_safe_admin_item,
     _model_matches_query,
 )
 from tests.models import Article, Author
 
 User = get_user_model()
+
+
+class TestJsonSafeAdminItem:
+    """Tests for _json_safe_admin_item helper."""
+
+    def test_preserves_none_as_none(self):
+        assert _json_safe_admin_item(None) is None
+
+    def test_preserves_none_inside_nested_lists(self):
+        assert _json_safe_admin_item(("name", None)) == ["name", None]
+
+    def test_stringifies_unknown_scalars(self):
+        assert _json_safe_admin_item(42) == "42"
 
 
 class TestModelMatchesQuery:
@@ -146,6 +160,52 @@ class TestHandleDescribe:
         assert "list_display" in admin_config
         assert "search_fields" in admin_config
         assert "ordering" in admin_config
+
+    async def test_describe_with_none_ordering(self):
+        """ModelAdmin.ordering defaults to None; describe must coerce to []."""
+        from django.contrib import admin  # noqa: PLC0415
+
+        request = create_mock_request()
+        model_admin = admin.site._registry[Author]
+        original_ordering = model_admin.ordering
+        model_admin.ordering = None
+        try:
+            result = await handle_describe("author", {}, request)
+            data = json.loads(result[0].text)
+            assert "error" not in data
+            assert data["admin_config"]["ordering"] == []
+        finally:
+            model_admin.ordering = original_ordering
+
+    async def test_describe_with_custom_list_filter_class(self):
+        """Custom list_filter classes must serialize as dotted paths, not crash."""
+        from django.contrib import admin  # noqa: PLC0415
+
+        class HasBioFilter(admin.SimpleListFilter):
+            title = "has bio"
+            parameter_name = "has_bio"
+
+            def lookups(self, request, model_admin):
+                return (("yes", "Yes"), ("no", "No"))
+
+            def queryset(self, request, queryset):
+                return queryset
+
+        request = create_mock_request()
+        model_admin = admin.site._registry[Author]
+        original_list_filter = model_admin.list_filter
+        model_admin.list_filter = [HasBioFilter]
+        try:
+            result = await handle_describe("author", {}, request)
+            data = json.loads(result[0].text)
+            assert "error" not in data
+            list_filter = data["admin_config"]["list_filter"]
+            assert len(list_filter) == 1
+            expected = f"{HasBioFilter.__module__}.{HasBioFilter.__qualname__}"
+            assert list_filter[0] == expected
+            assert not list_filter[0].startswith("<")
+        finally:
+            model_admin.list_filter = original_list_filter
 
     async def test_includes_inlines_config(self):
         """Test that inlines configuration is included for Author."""

@@ -20,6 +20,31 @@ from django_admin_mcp.handlers.decorators import require_permission, require_reg
 from django_admin_mcp.protocol.types import TextContent
 
 
+def _json_safe_admin_item(item: Any) -> Any:
+    """
+    Convert admin config values to JSON-serializable forms.
+
+    ModelAdmin attributes like list_filter/list_display may contain filter
+    classes or callables that Pydantic cannot serialize.
+    """
+    if item is None:
+        return None
+    if isinstance(item, str):
+        return item
+    if isinstance(item, (list, tuple)):
+        return [_json_safe_admin_item(v) for v in item]
+    if isinstance(item, type):
+        return f"{item.__module__}.{item.__qualname__}"
+    if callable(item):
+        return getattr(item, "__qualname__", None) or getattr(item, "__name__", str(item))
+    return str(item)
+
+
+def _admin_config_list(value: Any) -> list[Any]:
+    """Coerce a ModelAdmin list-like attribute to a JSON-safe list."""
+    return [_json_safe_admin_item(item) for item in (value or [])]
+
+
 def _get_field_metadata(field) -> dict[str, Any]:
     """
     Extract comprehensive metadata from a Django model field.
@@ -154,11 +179,11 @@ async def handle_describe(
         # Collect admin configuration
         admin_config = {}
         if model_admin:
-            admin_config["list_display"] = list(getattr(model_admin, "list_display", []))
-            admin_config["list_filter"] = list(getattr(model_admin, "list_filter", []))
-            admin_config["search_fields"] = list(getattr(model_admin, "search_fields", []))
-            admin_config["ordering"] = list(getattr(model_admin, "ordering", []))
-            admin_config["readonly_fields"] = list(getattr(model_admin, "readonly_fields", []))
+            admin_config["list_display"] = _admin_config_list(getattr(model_admin, "list_display", None))
+            admin_config["list_filter"] = _admin_config_list(getattr(model_admin, "list_filter", None))
+            admin_config["search_fields"] = _admin_config_list(getattr(model_admin, "search_fields", None))
+            admin_config["ordering"] = _admin_config_list(getattr(model_admin, "ordering", None))
+            admin_config["readonly_fields"] = _admin_config_list(getattr(model_admin, "readonly_fields", None))
 
             # Get fieldsets if defined
             fieldsets = getattr(model_admin, "fieldsets", None)
@@ -166,8 +191,8 @@ async def handle_describe(
                 admin_config["fieldsets"] = [
                     {
                         "name": fs[0] or "General",
-                        "fields": list(fs[1].get("fields", [])),
-                        "classes": list(fs[1].get("classes", [])),
+                        "fields": _admin_config_list(fs[1].get("fields", [])),
+                        "classes": _admin_config_list(fs[1].get("classes", [])),
                     }
                     for fs in fieldsets
                 ]
