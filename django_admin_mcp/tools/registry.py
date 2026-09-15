@@ -28,6 +28,7 @@ from django_admin_mcp.handlers import (
     handle_update,
     json_response,
 )
+from django_admin_mcp.handlers.base import safe_error_message
 from django_admin_mcp.protocol.types import TextContent, Tool
 
 # Type alias for handler functions
@@ -84,7 +85,12 @@ async def call_tool(name: str, arguments: dict[str, Any], request: HttpRequest) 
     if not handler:
         return json_response({"error": f"Unknown operation: {operation}"})
 
-    return await handler(model_name, arguments, request)
+    try:
+        return await handler(model_name, arguments, request)
+    except Exception as e:
+        # Handlers sanitize their own errors; this guard keeps any bug in
+        # them from escaping as an unhandled HTTP 500 (issue #94)
+        return json_response({"error": safe_error_message(e)})
 
 
 def _get_field_info(model: type[models.Model]) -> list[dict[str, Any]]:

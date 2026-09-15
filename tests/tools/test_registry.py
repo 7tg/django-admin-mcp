@@ -5,12 +5,14 @@ Tests tool registration, routing, and schema generation.
 """
 
 import json
+from unittest.mock import patch
 
 import pytest
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import User
 from django.test import RequestFactory
 
+from django_admin_mcp.handlers.base import create_mock_request
 from django_admin_mcp.handlers.crud import SAFE_FILTER_LOOKUPS
 from django_admin_mcp.protocol.types import TextContent, Tool
 from django_admin_mcp.tools import (
@@ -19,6 +21,7 @@ from django_admin_mcp.tools import (
     get_find_models_tool,
     get_model_tools,
     get_tools,
+    registry,
 )
 from django_admin_mcp.tools.registry import (
     _format_fields_doc,
@@ -269,3 +272,20 @@ class TestGetTools:
         # Author and Article should be exposed via mcp_expose=True
         assert "list_author" in tool_names
         assert "list_article" in tool_names
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestCallToolExceptionGuard:
+    """call_tool must never leak an unhandled exception as HTTP 500 (issue #94)."""
+
+    async def test_handler_exception_returns_safe_json_error(self):
+        async def exploding_handler(model_name, arguments, request):
+            raise RuntimeError("internal details that must not leak")
+
+        with patch.dict(registry.HANDLERS, {"list": exploding_handler}):
+            result = await registry.call_tool("list_author", {}, create_mock_request())
+
+        data = json.loads(result[0].text)
+        assert data == {"error": "An internal error occurred"}
+        assert "internal details" not in result[0].text

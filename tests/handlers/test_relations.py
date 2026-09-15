@@ -687,3 +687,79 @@ class TestRelatedModelPermissions:
 
         assert data.get("code") == "permission_denied"
         assert f"Single Perm {uid}" not in result[0].text
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestRelationsPaginationValidation:
+    """limit/offset must be validated instead of raising (issue #94)."""
+
+    @staticmethod
+    async def _superuser_request(uid):
+        user = await sync_to_async(User.objects.create_superuser)(
+            username=f"pagval_{uid}", email=f"pagval_{uid}@example.com", password="x"
+        )
+        return create_mock_request(user)
+
+    async def test_related_negative_limit_returns_json_error(self):
+        uid = unique_id()
+        author = await create_author(f"Pag Author {uid}", f"pag_{uid}@example.com")
+        request = await self._superuser_request(uid)
+
+        result = await handle_related("author", {"id": author.pk, "relation": "articles", "limit": -1}, request)
+        data = json.loads(result[0].text)
+
+        assert data == {"error": "limit must be a non-negative integer"}
+
+    async def test_related_negative_offset_returns_json_error(self):
+        uid = unique_id()
+        author = await create_author(f"Pag2 Author {uid}", f"pag2_{uid}@example.com")
+        request = await self._superuser_request(uid)
+
+        result = await handle_related("author", {"id": author.pk, "relation": "articles", "offset": -5}, request)
+        data = json.loads(result[0].text)
+
+        assert data == {"error": "offset must be a non-negative integer"}
+
+    async def test_related_string_limit_returns_json_error(self):
+        uid = unique_id()
+        author = await create_author(f"Pag3 Author {uid}", f"pag3_{uid}@example.com")
+        request = await self._superuser_request(uid)
+
+        result = await handle_related("author", {"id": author.pk, "relation": "articles", "limit": "10"}, request)
+        data = json.loads(result[0].text)
+
+        assert data == {"error": "limit must be a non-negative integer"}
+
+    async def test_related_limit_is_capped_by_mcp_max_list_limit(self, settings):
+        settings.MCP_MAX_LIST_LIMIT = 2
+        uid = unique_id()
+        author = await create_author(f"Cap Author {uid}", f"cap_{uid}@example.com")
+        for i in range(3):
+            await create_article(f"Cap Article {i} {uid}", "content", author)
+        request = await self._superuser_request(uid)
+
+        result = await handle_related("author", {"id": author.pk, "relation": "articles", "limit": 100}, request)
+        data = json.loads(result[0].text)
+
+        assert data["count"] == 2
+        assert data["total_count"] == 3
+
+    async def test_history_negative_limit_returns_json_error(self):
+        uid = unique_id()
+        author = await create_author(f"Hist Author {uid}", f"hist_{uid}@example.com")
+        request = await self._superuser_request(uid)
+
+        result = await handle_history("author", {"id": author.pk, "limit": -1}, request)
+        data = json.loads(result[0].text)
+
+        assert data == {"error": "limit must be a non-negative integer"}
+
+    async def test_autocomplete_negative_limit_returns_json_error(self):
+        uid = unique_id()
+        request = await self._superuser_request(uid)
+
+        result = await handle_autocomplete("author", {"term": "x", "limit": -1}, request)
+        data = json.loads(result[0].text)
+
+        assert data == {"error": "limit must be a non-negative integer"}

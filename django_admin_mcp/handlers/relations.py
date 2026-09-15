@@ -18,6 +18,7 @@ from django_admin_mcp.handlers.base import (
     resolve_registered_admin,
     safe_error_message,
     serialize_instance,
+    validate_pagination,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.protocol.types import TextContent
@@ -59,8 +60,9 @@ async def handle_related(
     """
     obj_id = arguments.get("id")
     relation = arguments.get("relation")
-    limit = arguments.get("limit", 100)
-    offset = arguments.get("offset", 0)
+    limit, offset, pagination_error = validate_pagination(arguments)
+    if pagination_error:
+        return json_response({"error": pagination_error})
 
     if not obj_id:
         return json_response({"error": "id parameter is required"})
@@ -184,7 +186,9 @@ async def handle_history(
         - For errors: error message
     """
     obj_id = arguments.get("id")
-    limit = arguments.get("limit", 50)
+    limit, _offset, pagination_error = validate_pagination(arguments, default_limit=50)
+    if pagination_error:
+        return json_response({"error": pagination_error})
 
     if not obj_id:
         return json_response({"error": "id parameter is required"})
@@ -282,7 +286,9 @@ async def handle_autocomplete(
         - For errors: error message
     """
     term = arguments.get("term", "")
-    limit = arguments.get("limit", 10)
+    limit, _offset, pagination_error = validate_pagination(arguments, default_limit=10)
+    if pagination_error:
+        return json_response({"error": pagination_error})
 
     @sync_to_async
     def search_autocomplete():

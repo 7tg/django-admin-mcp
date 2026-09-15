@@ -115,6 +115,33 @@ def get_model_admin(model_name: str) -> tuple[type[models.Model] | None, Any | N
     return None, None
 
 
+def validate_pagination(
+    arguments: Mapping[str, Any],
+    *,
+    default_limit: int = 100,
+    default_offset: int = 0,
+) -> tuple[int, int, str | None]:
+    """
+    Validate and bound the limit/offset arguments of a paginated handler.
+
+    Returns:
+        (limit, offset, error): error is None when valid; limit is capped by
+        MCP_MAX_LIST_LIMIT (issue #47) so no handler can be asked for an
+        unbounded page (issue #94).
+    """
+    # Deferred import: settings access requires Django to be configured
+    from django.conf import settings  # noqa: PLC0415
+
+    limit = arguments.get("limit", default_limit)
+    offset = arguments.get("offset", default_offset)
+    if not isinstance(limit, int) or limit < 0:
+        return 0, 0, "limit must be a non-negative integer"
+    if not isinstance(offset, int) or offset < 0:
+        return 0, 0, "offset must be a non-negative integer"
+    max_limit = int(getattr(settings, "MCP_MAX_LIST_LIMIT", 1000))
+    return min(limit, max_limit), offset, None
+
+
 def resolve_registered_admin(model: type[models.Model]) -> Any | None:
     """
     Return the registered MCP admin for a model, or None.
