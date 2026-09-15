@@ -5,7 +5,7 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-09-15
 
 ### Added
 - **MCP Prompts** support: `prompts/list` and `prompts/get` serve workflow guides (`explore_models`, `understand_model`, `crud_guide`, `bulk_operations_guide`) ([#65](https://github.com/7tg/django-admin-mcp/issues/65))
