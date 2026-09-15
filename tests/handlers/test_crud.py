@@ -1106,3 +1106,30 @@ class TestIncludeRelatedPermissions:
         returned_ids = {row["id"] for row in (data.get("_related") or {}).get("articles", [])}
         assert visible.pk in returned_ids
         assert hidden.pk not in returned_ids
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestIncludeRelatedForwardFK:
+    """include_related must not crash on models with forward FKs (issue #93)."""
+
+    @staticmethod
+    @sync_to_async
+    def _superuser_request(uid):
+        user = User.objects.create_superuser(username=f"fkinc_{uid}", email=f"fkinc_{uid}@example.com", password="x")
+        return create_mock_request(user)
+
+    async def test_get_with_include_related_on_model_with_forward_fk(self):
+        uid = unique_id()
+        author = await sync_to_async(Author.objects.create)(name=f"FK Author {uid}", email=f"fk_{uid}@example.com")
+        article = await sync_to_async(Article.objects.create)(title=f"FK Article {uid}", content="c", author=author)
+        request = await self._superuser_request(uid)
+
+        result = await handle_get("article", {"id": article.pk, "include_related": True}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" not in data
+        assert data["id"] == article.pk
+        # Forward FK stays a pk field, not a _related entry
+        assert data["author"] == author.pk
+        assert "author" not in (data.get("_related") or {})

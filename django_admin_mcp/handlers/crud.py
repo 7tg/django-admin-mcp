@@ -585,8 +585,11 @@ async def handle_get(
                 related_data = {}
                 for field in model._meta.get_fields():
                     if hasattr(field, "related_model") and field.related_model:
-                        if hasattr(field, "one_to_many") or hasattr(field, "one_to_one"):
-                            # Reverse relation
+                        # Reverse relations only: forward FK/O2O fields define
+                        # one_to_many/one_to_one as attributes too, so the
+                        # values must be tested, and only auto-created
+                        # non-concrete rels have get_accessor_name (issue #93)
+                        if (field.one_to_many or field.one_to_one) and field.auto_created and not field.concrete:
                             accessor_name = field.get_accessor_name()
                             if hasattr(obj, accessor_name):
                                 related_manager = getattr(obj, accessor_name)
