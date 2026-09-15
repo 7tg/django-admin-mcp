@@ -433,10 +433,21 @@ async def handle_action(
             if count == 0:
                 return {"error": "No objects found with the provided IDs"}
 
-            # Handle built-in delete_selected directly (it renders HTML in Django)
+            # Handle built-in delete_selected directly (it renders HTML in Django).
+            # Mirror the changelist pipeline: LogEntry per object and the
+            # admin's delete_queryset() hook (issue #95)
             if action_name == "delete_selected":
+                from django.contrib.admin.models import DELETION  # noqa: PLC0415
+
                 deleted_count = count
-                queryset.delete()
+                user = _get_bulk_user(request)
+                with transaction.atomic():
+                    for obj in queryset:
+                        _log_action(user=user, obj=obj, action_flag=DELETION, change_message="Deleted via MCP")
+                    if model_admin is not None:
+                        model_admin.delete_queryset(request, queryset)
+                    else:
+                        queryset.delete()
                 return {
                     "success": True,
                     "action": action_name,
@@ -533,7 +544,14 @@ async def handle_bulk_create(
                     continue
 
                 with transaction.atomic():
-                    obj = form.save()
+                    # Same admin pipeline as handle_create: save_model() when
+                    # a ModelAdmin is available (issue #95)
+                    if model_admin is not None:
+                        obj = form.save(commit=False)
+                        model_admin.save_model(request, obj, form, change=False)
+                        form.save_m2m()
+                    else:
+                        obj = form.save()
                     _log_action(user=user, obj=obj, action_flag=ADDITION, change_message="Bulk created via MCP")
                 results["success"].append({"index": i, "id": obj.pk, "created": True})
             except Exception as e:
@@ -567,12 +585,32 @@ async def handle_bulk_update(
         results: dict[str, list] = {"success": [], "errors": []}
         data_adapter = TypeAdapter(dict[str, Any])
 
+        # Same guards as handle_update (issue #95)
+        valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, "name")}
+        readonly_fields = set(getattr(model_admin, "readonly_fields", []) or []) if model_admin else set()
+
         for i, item in enumerate(items):
             try:
                 obj_id = item.get("id")
                 data = item.get("data", {})
                 if not obj_id:
                     results["errors"].append({"index": i, "error": "id is required for update"})
+                    continue
+
+                invalid_fields = [key for key in data if key not in valid_fields]
+                if invalid_fields:
+                    results["errors"].append({"index": i, "error": f"Invalid field: {invalid_fields[0]}"})
+                    continue
+
+                readonly_attempted = set(data) & readonly_fields
+                if readonly_attempted:
+                    results["errors"].append(
+                        {
+                            "index": i,
+                            "error": f"Cannot update readonly fields: {', '.join(sorted(readonly_attempted))}",
+                            "readonly_fields": sorted(readonly_attempted),
+                        }
+                    )
                     continue
 
                 # Scoped to the admin queryset (issue #88)
@@ -596,7 +634,14 @@ async def handle_bulk_update(
                     continue
 
                 with transaction.atomic():
-                    obj = form.save()
+                    # Same admin pipeline as handle_update: save_model() when
+                    # a ModelAdmin is available (issue #95)
+                    if model_admin is not None:
+                        obj = form.save(commit=False)
+                        model_admin.save_model(request, obj, form, change=True)
+                        form.save_m2m()
+                    else:
+                        obj = form.save()
                     serialized_data = data_adapter.dump_json(data, fallback=str).decode()
                     max_length = 500
                     if len(serialized_data) > max_length:
@@ -646,7 +691,12 @@ async def handle_bulk_delete(
                 obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
                 with transaction.atomic():
                     _log_action(user=user, obj=obj, action_flag=DELETION, change_message="Bulk deleted via MCP")
-                    obj.delete()
+                    # Same admin pipeline as handle_delete: delete_model() when
+                    # a ModelAdmin is available (issue #95)
+                    if model_admin is not None:
+                        model_admin.delete_model(request, obj)
+                    else:
+                        obj.delete()
                 results["success"].append({"index": i, "id": obj_id, "deleted": True})
             except model.DoesNotExist:
                 results["errors"].append({"index": i, "error": f"Object with id {obj_id} not found"})

@@ -4,6 +4,7 @@ Tests for django_admin_mcp.handlers.actions module.
 
 import json
 import uuid
+from unittest.mock import patch
 
 import pytest
 from asgiref.sync import sync_to_async
@@ -610,3 +611,130 @@ class TestHandleBulk:
         parsed = json.loads(result[0].text)
         assert "error" in parsed
         assert "Permission denied" in parsed["error"]
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestAdminPipelineParity:
+    """Bulk and action paths must follow the same admin pipeline as single ops (issue #95)."""
+
+    @staticmethod
+    def _author_admin():
+        return django_admin.site._registry[Author]
+
+    async def test_delete_selected_writes_log_entries(self):
+        uid = unique_id()
+        author = await create_author(f"Del Log {uid}", f"dellog_{uid}@example.com")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_action("author", {"action": "delete_selected", "ids": [author.pk]}, request)
+        data = json.loads(result[0].text)
+
+        assert data.get("success") is True
+
+        @sync_to_async
+        def deletion_logged():
+            content_type = ContentType.objects.get_for_model(Author)
+            return LogEntry.objects.filter(content_type=content_type, object_id=str(author.pk), action_flag=3).exists()
+
+        assert await deletion_logged()
+
+    async def test_delete_selected_uses_delete_queryset(self):
+        uid = unique_id()
+        author = await create_author(f"Del Hook {uid}", f"delhook_{uid}@example.com")
+        request = create_mock_request(user=await create_superuser(uid))
+        author_admin = self._author_admin()
+
+        with patch.object(author_admin, "delete_queryset", wraps=author_admin.delete_queryset) as mock_delete_queryset:
+            result = await handle_action("author", {"action": "delete_selected", "ids": [author.pk]}, request)
+
+        data = json.loads(result[0].text)
+        assert data.get("success") is True
+        mock_delete_queryset.assert_called_once()
+        assert not await author_exists(author.pk)
+
+    async def test_bulk_create_calls_save_model(self):
+        uid = unique_id()
+        request = create_mock_request(user=await create_superuser(uid))
+        author_admin = self._author_admin()
+
+        with patch.object(author_admin, "save_model", wraps=author_admin.save_model) as mock_save:
+            result = await handle_bulk(
+                "author",
+                {"operation": "create", "items": [{"name": f"Bulk SM {uid}", "email": f"bulksm_{uid}@example.com"}]},
+                request,
+            )
+
+        data = json.loads(result[0].text)
+        assert data["success_count"] == 1
+        mock_save.assert_called_once()
+        assert mock_save.call_args[0][-1] is False or mock_save.call_args[1].get("change") is False
+
+    async def test_bulk_update_calls_save_model(self):
+        uid = unique_id()
+        author = await create_author(f"Bulk USM {uid}", f"bulkusm_{uid}@example.com")
+        request = create_mock_request(user=await create_superuser(uid))
+        author_admin = self._author_admin()
+
+        with patch.object(author_admin, "save_model", wraps=author_admin.save_model) as mock_save:
+            result = await handle_bulk(
+                "author",
+                {"operation": "update", "items": [{"id": author.pk, "data": {"name": f"Bulk USM2 {uid}"}}]},
+                request,
+            )
+
+        data = json.loads(result[0].text)
+        assert data["success_count"] == 1
+        mock_save.assert_called_once()
+        assert mock_save.call_args[0][-1] is True or mock_save.call_args[1].get("change") is True
+
+    async def test_bulk_delete_calls_delete_model(self):
+        uid = unique_id()
+        author = await create_author(f"Bulk DM {uid}", f"bulkdm_{uid}@example.com")
+        request = create_mock_request(user=await create_superuser(uid))
+        author_admin = self._author_admin()
+
+        with patch.object(author_admin, "delete_model", wraps=author_admin.delete_model) as mock_delete:
+            result = await handle_bulk("author", {"operation": "delete", "items": [author.pk]}, request)
+
+        data = json.loads(result[0].text)
+        assert data["success_count"] == 1
+        mock_delete.assert_called_once()
+        assert not await author_exists(author.pk)
+
+    async def test_bulk_update_rejects_readonly_fields(self):
+        uid = unique_id()
+        author = await create_author(f"Bulk RO {uid}", f"bulkro_{uid}@example.com")
+        request = create_mock_request(user=await create_superuser(uid))
+        author_admin = self._author_admin()
+        original_readonly = getattr(author_admin, "readonly_fields", ())
+        author_admin.readonly_fields = ("email",)
+        try:
+            result = await handle_bulk(
+                "author",
+                {"operation": "update", "items": [{"id": author.pk, "data": {"email": f"evil_{uid}@example.com"}}]},
+                request,
+            )
+        finally:
+            author_admin.readonly_fields = original_readonly
+
+        data = json.loads(result[0].text)
+        assert data["error_count"] == 1
+        assert "readonly" in data["results"]["errors"][0]["error"].lower()
+        await refresh_author(author)
+        assert author.email == f"bulkro_{uid}@example.com"
+
+    async def test_bulk_update_rejects_unknown_fields(self):
+        uid = unique_id()
+        author = await create_author(f"Bulk UF {uid}", f"bulkuf_{uid}@example.com")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_bulk(
+            "author",
+            {"operation": "update", "items": [{"id": author.pk, "data": {"not_a_field": "x"}}]},
+            request,
+        )
+
+        data = json.loads(result[0].text)
+        assert data["error_count"] == 1
+        assert "invalid field" in data["results"]["errors"][0]["error"].lower()
