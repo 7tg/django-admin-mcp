@@ -175,6 +175,50 @@ def _get_inline_data(obj: models.Model, admin: Any, request: HttpRequest) -> dic
     return inlines_data
 
 
+def _build_inline_form_class(inline_class, inline_model, parent_admin, request, parent_obj):
+    """
+    Resolve the form class for an inline, honoring its field configuration.
+
+    Mirrors Django's formset construction: the instantiated inline's
+    ``get_formset()`` applies ``fields``, ``exclude``, and ``readonly_fields``
+    (issue #105). When get_formset needs request context we don't have (e.g.
+    no user on the synthetic request), fall back to a modelform_factory form
+    built from the inline's declared configuration.
+    """
+    # Deferred import: admin utils require the app registry to be ready
+    from django.contrib.admin.sites import site  # noqa: PLC0415
+    from django.contrib.admin.utils import flatten  # noqa: PLC0415
+
+    custom_form = getattr(inline_class, "form", None)
+    if custom_form is not None and custom_form is not ModelForm:
+        return custom_form
+
+    try:
+        inline_instance = inline_class(parent_admin.model, getattr(parent_admin, "admin_site", site))
+        return inline_instance.get_formset(request, parent_obj).form
+    except Exception:
+        readonly = [f for f in (getattr(inline_class, "readonly_fields", None) or []) if isinstance(f, str)]
+        exclude = list(getattr(inline_class, "exclude", None) or []) + readonly
+        declared = getattr(inline_class, "fields", None)
+        if declared:
+            allowed = [f for f in flatten(declared) if f not in exclude]
+            return modelform_factory(inline_model, fields=allowed)
+        return modelform_factory(inline_model, fields="__all__", exclude=exclude or None)
+
+
+def _invalid_inline_keys(item_data, form_class, readonly_fields, fk_name):
+    """
+    Split an inline item's data keys into readonly and unknown violations.
+
+    Keys outside the inline form's fields must be rejected — not silently
+    dropped by the form — matching the top-level update guards (issue #105).
+    """
+    allowed = set(form_class.base_fields) | {fk_name, "id", "_delete"}
+    readonly_attempted = sorted(k for k in item_data if k in readonly_fields)
+    unknown = [k for k in item_data if k not in allowed and k not in readonly_fields]
+    return readonly_attempted, unknown
+
+
 def _update_inlines(
     obj: models.Model,
     admin: Any,
@@ -261,12 +305,10 @@ def _update_inlines(
             )
             continue
 
-        # Get the form class for the inline
-        # Check if inline has a custom form class (not the default ModelForm)
-        inline_form_class = getattr(inline_class, "form", None)
-        if inline_form_class is None or inline_form_class is ModelForm:
-            # No custom form or default ModelForm - generate one
-            inline_form_class = modelform_factory(inline_model, fields="__all__")
+        # Get the form class for the inline, honoring the inline admin's
+        # fields / exclude / readonly_fields configuration (issue #105)
+        inline_form_class = _build_inline_form_class(inline_class, inline_model, admin, request, obj)
+        readonly_fields = {f for f in (getattr(inline_class, "readonly_fields", None) or []) if isinstance(f, str)}
 
         for item in inline_items:
             try:
@@ -329,9 +371,34 @@ def _update_inlines(
                         )
                         continue
 
+                    # Reject readonly / undeclared fields instead of letting the
+                    # form silently drop them (issue #105)
+                    update_data = {k: v for k, v in item_data.items() if k not in ["id", "_delete"]}
+                    readonly_attempted, unknown = _invalid_inline_keys(
+                        update_data, inline_form_class, readonly_fields, fk_field.name
+                    )
+                    if readonly_attempted:
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": item_id,
+                                "error": f"Cannot update readonly fields: {', '.join(readonly_attempted)}",
+                                "readonly_fields": readonly_attempted,
+                            }
+                        )
+                        continue
+                    if unknown:
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": item_id,
+                                "error": f"Invalid field: {unknown[0]}",
+                            }
+                        )
+                        continue
+
                     # Merge existing data with updates
                     existing_data = model_to_dict(inline_obj)
-                    update_data = {k: v for k, v in item_data.items() if k not in ["id", "_delete"]}
                     merged_data = {**existing_data, **update_data}
 
                     form = inline_form_class(data=merged_data, instance=inline_obj)
@@ -362,9 +429,35 @@ def _update_inlines(
 
                     # Create new inline with form validation
                     create_data = {k: v for k, v in item_data.items() if k not in ["id", "_delete"]}
+                    readonly_attempted, unknown = _invalid_inline_keys(
+                        create_data, inline_form_class, readonly_fields, fk_field.name
+                    )
+                    if readonly_attempted:
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": None,
+                                "error": f"Cannot update readonly fields: {', '.join(readonly_attempted)}",
+                                "readonly_fields": readonly_attempted,
+                            }
+                        )
+                        continue
+                    if unknown:
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": None,
+                                "error": f"Invalid field: {unknown[0]}",
+                            }
+                        )
+                        continue
+
                     create_data[fk_field.name] = obj.pk  # Set FK to parent
 
                     form = inline_form_class(data=create_data)
+                    # Formset-derived forms exclude the parent FK; set it on the
+                    # instance so saving still attaches to the parent
+                    setattr(form.instance, fk_field.name, obj)
                     if form.is_valid():
                         new_obj = form.save()
                         results["created"].append({"model": inline_model_name, "id": new_obj.pk})

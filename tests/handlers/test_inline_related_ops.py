@@ -64,8 +64,8 @@ class TestInlineOperations:
         assert errors, data
         assert any("validation_errors" in e for e in errors), errors
 
-    async def test_inline_extra_unknown_fields_are_ignored(self):
-        """Unknown fields in inline data don't break creation (ModelForm ignores them)."""
+    async def test_inline_extra_unknown_fields_are_rejected(self):
+        """Unknown fields in inline data are rejected explicitly (issue #105)."""
         uid = unique_id()
         author, _ = await create_author_with_articles(uid, 0)
         request = await superuser_request(uid)
@@ -75,13 +75,15 @@ class TestInlineOperations:
             {
                 "id": author.pk,
                 "data": {},
-                "inlines": {"article": [{"data": {"title": f"Extra {uid}", "content": "c", "not_a_field": "ignored"}}]},
+                "inlines": {"article": [{"data": {"title": f"Extra {uid}", "content": "c", "not_a_field": "nope"}}]},
             },
             request,
         )
         data = json.loads(result[0].text)
-        created = (data.get("inlines") or {}).get("created", [])
-        assert len(created) == 1, data
+        inlines = data.get("inlines") or {}
+        errors = inlines.get("errors", [])
+        assert any("not_a_field" in e.get("error", "") for e in errors), data
+        assert not inlines.get("created"), data
 
     async def test_inline_update_nonexistent_id_is_an_error_entry(self):
         uid = unique_id()
