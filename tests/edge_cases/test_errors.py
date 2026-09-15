@@ -591,10 +591,10 @@ class TestEdgeCasesAndErrors:
 
     async def test_autocomplete_exception_returns_safe_error(self):
         """Test that autocomplete exception handler returns sanitized error."""
-        # Patch model.objects.all() to raise inside the sync function
+        # Patch the admin queryset lookup to raise inside the sync function
         with patch.object(
-            Author.objects,
-            "all",
+            type(admin.site._registry[Author]),
+            "get_queryset",
             side_effect=RuntimeError("internal db details"),
         ):
             result = await MCPAdminMixin.handle_tool_call("autocomplete_author", {"term": "test"})

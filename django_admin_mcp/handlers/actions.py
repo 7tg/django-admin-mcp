@@ -575,7 +575,8 @@ async def handle_bulk_update(
                     results["errors"].append({"index": i, "error": "id is required for update"})
                     continue
 
-                obj = model.objects.get(pk=obj_id)
+                # Scoped to the admin queryset (issue #88)
+                obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
 
                 normalized_data = normalize_fk_fields(model, data)
                 form_class = get_admin_form_class(model, model_admin, request, obj=obj)
@@ -641,7 +642,8 @@ async def handle_bulk_delete(
 
         for i, obj_id in enumerate(ids):
             try:
-                obj = model.objects.get(pk=obj_id)
+                # Scoped to the admin queryset (issue #88)
+                obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
                 with transaction.atomic():
                     _log_action(user=user, obj=obj, action_flag=DELETION, change_message="Bulk deleted via MCP")
                     obj.delete()

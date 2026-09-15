@@ -12,7 +12,18 @@ import pytest
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import AnonymousUser, User
 
-from django_admin_mcp.handlers import create_mock_request, handle_action, handle_get, handle_list
+from django_admin_mcp.handlers import (
+    create_mock_request,
+    handle_action,
+    handle_autocomplete,
+    handle_bulk,
+    handle_delete,
+    handle_get,
+    handle_history,
+    handle_list,
+    handle_related,
+    handle_update,
+)
 from tests.models import CatalogItem, CatalogItemA
 
 
@@ -199,3 +210,143 @@ class TestAdminActionGetQueryset:
         assert data["affected_count"] == 1
         assert not await sync_to_async(CatalogItem.objects.filter(pk=item_a.pk).exists)()
         assert await sync_to_async(CatalogItem.objects.filter(pk=item_b.pk).exists)()
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestWritePathsHonorAdminQueryset:
+    """update/delete/bulk must only touch rows inside model_admin.get_queryset() (issue #88)."""
+
+    async def test_update_rejects_out_of_scope_pk(self):
+        uid = unique_id()
+        item_b = await create_catalog_item(f"Item B {uid}", "B")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_update(
+            "catalogitema",
+            {"id": item_b.pk, "data": {"title": f"HACKED {uid}"}},
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        assert "error" in data
+        assert "not found" in data["error"].lower()
+        refreshed = await sync_to_async(CatalogItem.objects.get)(pk=item_b.pk)
+        assert refreshed.title == f"Item B {uid}"
+
+    async def test_update_allows_in_scope_pk(self):
+        uid = unique_id()
+        item_a = await create_catalog_item(f"Item A {uid}", "A")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_update(
+            "catalogitema",
+            {"id": item_a.pk, "data": {"title": f"Renamed {uid}"}},
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        assert data.get("success") is True
+        refreshed = await sync_to_async(CatalogItem.objects.get)(pk=item_a.pk)
+        assert refreshed.title == f"Renamed {uid}"
+
+    async def test_delete_rejects_out_of_scope_pk(self):
+        uid = unique_id()
+        item_b = await create_catalog_item(f"Item B {uid}", "B")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_delete("catalogitema", {"id": item_b.pk}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" in data
+        assert "not found" in data["error"].lower()
+        assert await sync_to_async(CatalogItem.objects.filter(pk=item_b.pk).exists)()
+
+    async def test_delete_allows_in_scope_pk(self):
+        uid = unique_id()
+        item_a = await create_catalog_item(f"Item A {uid}", "A")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_delete("catalogitema", {"id": item_a.pk}, request)
+        data = json.loads(result[0].text)
+
+        assert data.get("success") is True
+        assert not await sync_to_async(CatalogItem.objects.filter(pk=item_a.pk).exists)()
+
+    async def test_bulk_update_rejects_out_of_scope_pk(self):
+        uid = unique_id()
+        item_b = await create_catalog_item(f"Item B {uid}", "B")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_bulk(
+            "catalogitema",
+            {"operation": "update", "items": [{"id": item_b.pk, "data": {"title": f"HACKED {uid}"}}]},
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        assert data["error_count"] == 1
+        assert "not found" in data["results"]["errors"][0]["error"].lower()
+        refreshed = await sync_to_async(CatalogItem.objects.get)(pk=item_b.pk)
+        assert refreshed.title == f"Item B {uid}"
+
+    async def test_bulk_delete_rejects_out_of_scope_pk(self):
+        uid = unique_id()
+        item_b = await create_catalog_item(f"Item B {uid}", "B")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_bulk(
+            "catalogitema",
+            {"operation": "delete", "items": [item_b.pk]},
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        assert data["error_count"] == 1
+        assert "not found" in data["results"]["errors"][0]["error"].lower()
+        assert await sync_to_async(CatalogItem.objects.filter(pk=item_b.pk).exists)()
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestReadPathsHonorAdminQueryset:
+    """related/history/autocomplete must honor model_admin.get_queryset() (issue #88)."""
+
+    async def test_related_rejects_out_of_scope_pk(self):
+        uid = unique_id()
+        item_b = await create_catalog_item(f"Item B {uid}", "B")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_related(
+            "catalogitema",
+            {"id": item_b.pk, "relation": "title"},
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        assert "error" in data
+        assert "not found" in data["error"].lower()
+
+    async def test_history_rejects_out_of_scope_pk(self):
+        uid = unique_id()
+        item_b = await create_catalog_item(f"Item B {uid}", "B")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_history("catalogitema", {"id": item_b.pk}, request)
+        data = json.loads(result[0].text)
+
+        assert "error" in data
+        assert "not found" in data["error"].lower()
+
+    async def test_autocomplete_excludes_out_of_scope_rows(self):
+        uid = unique_id()
+        item_a = await create_catalog_item(f"Findme A {uid}", "A")
+        item_b = await create_catalog_item(f"Findme B {uid}", "B")
+        request = create_mock_request(user=await create_superuser(uid))
+
+        result = await handle_autocomplete("catalogitema", {"term": "Findme"}, request)
+        data = json.loads(result[0].text)
+
+        returned_ids = {row["id"] for row in data["results"]}
+        assert item_a.pk in returned_ids
+        assert item_b.pk not in returned_ids

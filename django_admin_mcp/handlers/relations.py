@@ -12,6 +12,7 @@ from django.db.models import Q
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
+    get_admin_queryset,
     json_response,
     safe_error_message,
     serialize_instance,
@@ -68,7 +69,8 @@ async def handle_related(
     @sync_to_async
     def get_related():
         try:
-            obj = model.objects.get(pk=obj_id)
+            # Scoped to the admin queryset (issue #88)
+            obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
         except (model.DoesNotExist, ValueError, TypeError):
             return {"error": f"{model_name} not found"}
 
@@ -166,9 +168,9 @@ async def handle_history(
         )
         from django.contrib.contenttypes.models import ContentType  # noqa: PLC0415
 
-        # Verify the object exists
+        # Verify the object exists (scoped to the admin queryset, issue #88)
         try:
-            obj = model.objects.get(pk=obj_id)
+            obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
         except (model.DoesNotExist, ValueError, TypeError):
             return {"error": f"{model_name} not found"}
 
@@ -252,7 +254,8 @@ async def handle_autocomplete(
 
     @sync_to_async
     def search_autocomplete():
-        queryset = model.objects.all()
+        # Scoped to the admin queryset (issue #88)
+        queryset = get_admin_queryset(model, model_admin, request)
 
         # Use admin's search_fields if available
         search_fields = []

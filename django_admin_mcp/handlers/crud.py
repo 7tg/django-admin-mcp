@@ -731,7 +731,9 @@ async def handle_update(
             # Deferred import: Django models require app registry to be ready
             from django.contrib.admin.models import CHANGE  # noqa: PLC0415
 
-            obj = model.objects.get(pk=obj_id)
+            # Scope the lookup to the admin queryset so rows hidden from the
+            # changelist can't be updated by pk (issue #88)
+            obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
 
             # Normalize FK field names (convert field_id to field)
             normalized_data = normalize_fk_fields(model, data)
@@ -841,7 +843,9 @@ async def handle_delete(
             # Deferred import: Django models require app registry to be ready
             from django.contrib.admin.models import DELETION  # noqa: PLC0415
 
-            obj = model.objects.get(pk=obj_id)
+            # Scope the lookup to the admin queryset so rows hidden from the
+            # changelist can't be deleted by pk (issue #88)
+            obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
             obj_repr = str(obj)
 
             # Wrap logging and deletion in transaction for atomicity
