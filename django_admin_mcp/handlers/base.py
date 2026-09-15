@@ -297,17 +297,45 @@ def get_exposed_models() -> list[tuple[str, Any]]:
     ]
 
 
-def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
+def resolve_field_visibility(model_admin: Any) -> tuple[list | None, list | None]:
     """
-    Serialize a Django model instance to dict with field filtering.
+    Resolve the (include, exclude) field name lists for a ModelAdmin.
 
-    Respects field visibility configuration from ModelAdmin:
+    Resolution order (shared by serialization and every schema surface,
+    issue #102):
     1. mcp_fields: MCP-specific list of fields to include (takes precedence)
     2. mcp_exclude_fields: MCP-specific list of fields to exclude (takes precedence)
     3. fields: Django admin's fields list (fallback if mcp_fields not set)
     4. exclude: Django admin's exclude list (fallback if mcp_exclude_fields not set)
 
-    Field filtering prevents sensitive data exposure in MCP responses.
+    Returns:
+        Tuple of (fields_to_include, fields_to_exclude); each is None when
+        no configuration applies.
+    """
+    fields_to_include = None
+    fields_to_exclude = None
+
+    if model_admin is not None:
+        if hasattr(model_admin, "mcp_fields") and model_admin.mcp_fields is not None:
+            fields_to_include = model_admin.mcp_fields
+        elif hasattr(model_admin, "fields") and model_admin.fields is not None:
+            fields_to_include = model_admin.fields
+
+        if hasattr(model_admin, "mcp_exclude_fields") and model_admin.mcp_exclude_fields is not None:
+            fields_to_exclude = model_admin.mcp_exclude_fields
+        elif hasattr(model_admin, "exclude") and model_admin.exclude is not None:
+            fields_to_exclude = model_admin.exclude
+
+    return fields_to_include, fields_to_exclude
+
+
+def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
+    """
+    Serialize a Django model instance to dict with field filtering.
+
+    Field visibility follows ``resolve_field_visibility()`` (mcp_fields /
+    mcp_exclude_fields with admin fields/exclude fallbacks). Field filtering
+    prevents sensitive data exposure in MCP responses.
 
     When ``model_admin`` is omitted, looks up the registered MCP admin for the
     instance's model so list/related/inline call sites still apply excludes.
@@ -322,23 +350,7 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
     if model_admin is None:
         model_admin = resolve_registered_admin(type(instance))
 
-    # Determine which fields to include/exclude
-    fields_to_include = None
-    fields_to_exclude = None
-
-    if model_admin is not None:
-        # 1. Check for MCP-specific field configuration (takes precedence)
-        if hasattr(model_admin, "mcp_fields") and model_admin.mcp_fields is not None:
-            fields_to_include = model_admin.mcp_fields
-        elif hasattr(model_admin, "fields") and model_admin.fields is not None:
-            # 2. Fallback to Django admin's fields
-            fields_to_include = model_admin.fields
-
-        if hasattr(model_admin, "mcp_exclude_fields") and model_admin.mcp_exclude_fields is not None:
-            fields_to_exclude = model_admin.mcp_exclude_fields
-        elif hasattr(model_admin, "exclude") and model_admin.exclude is not None:
-            # 2. Fallback to Django admin's exclude
-            fields_to_exclude = model_admin.exclude
+    fields_to_include, fields_to_exclude = resolve_field_visibility(model_admin)
 
     # Use model_to_dict with fields/exclude parameters
     obj_dict = model_to_dict(instance, fields=fields_to_include, exclude=fields_to_exclude)

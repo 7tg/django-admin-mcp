@@ -15,6 +15,7 @@ from django_admin_mcp.handlers.base import (
     async_check_module_permission,
     async_check_permission,
     json_response,
+    resolve_field_visibility,
     safe_error_message,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
@@ -164,11 +165,25 @@ async def handle_describe(
         List containing TextContent with JSON-serialized model metadata.
     """
     try:
-        # Collect field metadata
+        # Collect field metadata, honoring the admin's field visibility so
+        # hidden fields never appear on any schema surface (issue #102)
+        fields_to_include, fields_to_exclude = resolve_field_visibility(model_admin)
+        include = set(fields_to_include) if fields_to_include is not None else None
+        exclude = set(fields_to_exclude or [])
+
         fields = []
         relationships = []
 
         for field in model._meta.get_fields():
+            if field.name in exclude:
+                continue
+            # An include list limits the model's own (forward) fields; reverse
+            # relations are never serialized fields and stay discoverable for
+            # related_* even under an include list
+            is_reverse = field.auto_created and not field.concrete
+            if include is not None and not is_reverse and field.name not in include:
+                continue
+
             field_meta = _get_field_metadata(field)
 
             # Categorize as regular field or relationship

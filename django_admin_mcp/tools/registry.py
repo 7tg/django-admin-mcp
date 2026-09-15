@@ -31,6 +31,8 @@ from django_admin_mcp.handlers import (
 from django_admin_mcp.handlers.base import (
     check_module_permission,
     check_permission,
+    resolve_field_visibility,
+    resolve_registered_admin,
     safe_error_message,
 )
 from django_admin_mcp.protocol.types import TextContent, Tool
@@ -97,18 +99,31 @@ async def call_tool(name: str, arguments: dict[str, Any], request: HttpRequest) 
         return json_response({"error": safe_error_message(e)})
 
 
-def _get_field_info(model: type[models.Model]) -> list[dict[str, Any]]:
+def _get_field_info(model: type[models.Model], model_admin: Any = None) -> list[dict[str, Any]]:
     """
     Get field information for a model.
 
+    Fields hidden by the admin's visibility configuration (mcp_fields /
+    mcp_exclude_fields with fields/exclude fallbacks) are omitted so tool
+    descriptions never document them (issue #102).
+
     Args:
         model: Django model class.
+        model_admin: Optional ModelAdmin with field visibility configuration.
 
     Returns:
         List of field info dictionaries with name, type, and required status.
     """
+    fields_to_include, fields_to_exclude = resolve_field_visibility(model_admin)
+    include = set(fields_to_include) if fields_to_include is not None else None
+    exclude = set(fields_to_exclude or [])
+
     fields = []
     for field in model._meta.get_fields():
+        if field.name in exclude:
+            continue
+        if include is not None and field.name not in include:
+            continue
         if hasattr(field, "get_internal_type"):
             null_allowed = getattr(field, "null", False)
             blank_allowed = getattr(field, "blank", False)
@@ -130,7 +145,7 @@ def _format_fields_doc(fields: list[dict[str, Any]]) -> str:
     return "\n".join([f"  - {f['name']} ({f['type']}){' [required]' if f['required'] else ''}" for f in fields])
 
 
-def get_model_tools(model: type[models.Model]) -> list[Tool]:
+def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[Tool]:
     """
     Generate Tool definitions for a single model.
 
@@ -139,6 +154,9 @@ def get_model_tools(model: type[models.Model]) -> list[Tool]:
 
     Args:
         model: Django model class.
+        model_admin: Optional ModelAdmin whose field visibility configuration
+            filters the field lists embedded in tool descriptions. Resolved
+            from the MCP registry when omitted (issue #102).
 
     Returns:
         List of Tool definitions for the model.
@@ -146,7 +164,10 @@ def get_model_tools(model: type[models.Model]) -> list[Tool]:
     model_name = model._meta.model_name
     verbose_name = model._meta.verbose_name
 
-    fields = _get_field_info(model)
+    if model_admin is None:
+        model_admin = resolve_registered_admin(model)
+
+    fields = _get_field_info(model, model_admin)
     fields_doc = _format_fields_doc(fields)
 
     return [
@@ -478,6 +499,6 @@ def get_tools(request: HttpRequest | None = None) -> list[Tool]:
             if not check_permission(request, model_admin, "view"):
                 continue
         model = model_admin.model
-        tools.extend(get_model_tools(model))
+        tools.extend(get_model_tools(model, model_admin))
 
     return tools
