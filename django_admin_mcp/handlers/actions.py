@@ -13,9 +13,10 @@ from urllib.parse import unquote
 from asgiref.sync import sync_to_async
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, QueryDict, StreamingHttpResponse
-from pydantic import TypeAdapter
 
 from django_admin_mcp.handlers.base import (
+    _log_action,
+    _serialize_data_for_log,
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
@@ -301,35 +302,6 @@ def _get_admin_actions(model_admin, request):
     return model_admin.get_actions(request)
 
 
-def _log_action(user, obj, action_flag: int, change_message: str = ""):
-    """
-    Log an action to Django's admin LogEntry.
-
-    Args:
-        user: The Django User who performed the action.
-        obj: The model instance that was affected.
-        action_flag: ADDITION (1), CHANGE (2), or DELETION (3).
-        change_message: Description of the change.
-    """
-    if user is None:
-        return  # Can't log without a user
-
-    # Deferred import: Django models require app registry to be ready
-    from django.contrib.admin.models import LogEntry  # noqa: PLC0415
-    from django.contrib.contenttypes.models import ContentType  # noqa: PLC0415
-
-    content_type = ContentType.objects.get_for_model(obj)
-
-    LogEntry.objects.create(
-        user_id=user.pk,
-        content_type_id=content_type.pk,
-        object_id=str(obj.pk),
-        object_repr=str(obj)[:200],
-        action_flag=action_flag,
-        change_message=change_message,
-    )
-
-
 @require_registered_model
 @require_permission("view")
 async def handle_actions(
@@ -583,7 +555,6 @@ async def handle_bulk_update(
         items = arguments.get("items", [])
         user = _get_bulk_user(request)
         results: dict[str, list] = {"success": [], "errors": []}
-        data_adapter = TypeAdapter(dict[str, Any])
 
         # Same guards as handle_update (issue #95)
         valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, "name")}
@@ -642,15 +613,12 @@ async def handle_bulk_update(
                         form.save_m2m()
                     else:
                         obj = form.save()
-                    serialized_data = data_adapter.dump_json(data, fallback=str).decode()
-                    max_length = 500
-                    if len(serialized_data) > max_length:
-                        serialized_data = serialized_data[:max_length] + '... (truncated)"'
+                    # Same redacting serializer as the single-update path (issue #104)
                     _log_action(
                         user=user,
                         obj=obj,
                         action_flag=CHANGE,
-                        change_message=f"Bulk updated via MCP: {serialized_data}",
+                        change_message=f"Bulk updated via MCP: {_serialize_data_for_log(data)}",
                     )
                 results["success"].append({"index": i, "id": obj_id, "updated": True})
             except model.DoesNotExist:

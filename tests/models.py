@@ -36,6 +36,33 @@ class Article(models.Model):
         return self.title
 
 
+class Gadget(models.Model):
+    """Test model with a sensitive-looking field and nullable relations."""
+
+    title = models.CharField(max_length=1000)
+    api_key = models.CharField(max_length=100, blank=True)
+    owner = models.ForeignKey(
+        Author,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="gadgets",
+    )
+    twin = models.OneToOneField(
+        Author,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="twin_gadget",
+    )
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.title
+
+
 class CatalogItem(models.Model):
     """Concrete model shared by channel proxy admins."""
 

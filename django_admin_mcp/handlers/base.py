@@ -102,6 +102,73 @@ def safe_error_message(exc: Exception) -> str:
     return "An internal error occurred"
 
 
+# Key-name markers whose values are redacted from admin LogEntry messages.
+SENSITIVE_KEY_MARKERS = ("password", "token", "secret", "api_key", "auth", "credential")
+
+
+def _redact_sensitive(data: dict[str, Any]) -> dict[str, Any]:
+    """Replace values of sensitive-looking keys before audit logging."""
+    redacted = {}
+    for key, value in data.items():
+        if any(marker in key.lower() for marker in SENSITIVE_KEY_MARKERS):
+            redacted[key] = "***REDACTED***"
+        else:
+            redacted[key] = value
+    return redacted
+
+
+def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500) -> str:
+    """
+    Serialize data for Django admin log message with size limit.
+
+    Values of sensitive-looking keys (passwords, tokens, secrets, ...) are
+    redacted so they never reach the audit trail.
+
+    Args:
+        data: Dictionary to serialize for logging.
+        max_length: Maximum length of the serialized string (default 500).
+
+    Returns:
+        Serialized JSON string, truncated if necessary with ellipsis.
+    """
+    adapter = TypeAdapter(dict[str, Any])
+    data_json = adapter.dump_json(_redact_sensitive(data), fallback=str).decode("utf-8")
+
+    if len(data_json) > max_length:
+        return data_json[: max_length - 3] + "..."
+
+    return data_json
+
+
+def _log_action(user: Any, obj: models.Model, action_flag: int, change_message: str = "") -> None:
+    """
+    Log an action to Django's admin LogEntry.
+
+    Args:
+        user: The Django User who performed the action.
+        obj: The model instance that was affected.
+        action_flag: ADDITION (1), CHANGE (2), or DELETION (3).
+        change_message: Description of the change.
+    """
+    if user is None:
+        return  # Can't log without a user
+
+    # Deferred import: Django models require app registry to be ready
+    from django.contrib.admin.models import LogEntry  # noqa: PLC0415
+    from django.contrib.contenttypes.models import ContentType  # noqa: PLC0415
+
+    content_type = ContentType.objects.get_for_model(obj)
+
+    LogEntry.objects.create(
+        user_id=user.pk,
+        content_type_id=content_type.pk,
+        object_id=str(obj.pk),
+        object_repr=str(obj)[:200],
+        action_flag=action_flag,
+        change_message=change_message,
+    )
+
+
 def sanitize_pydantic_errors(errors: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
     """Strip internal details from Pydantic validation errors."""
     sanitized = []
