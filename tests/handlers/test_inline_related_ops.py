@@ -192,3 +192,77 @@ class TestDeleteCascade:
         data = json.loads(result[0].text)
         assert data.get("success") is True, data
         assert await sync_to_async(Article.objects.filter(pk__in=[a.pk for a in articles]).count)() == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+class TestInlineParentScoping:
+    """Inline items must belong to the parent being updated (issue #92)."""
+
+    async def test_inline_delete_of_other_parents_child_is_rejected(self):
+        uid = unique_id()
+        author1, _ = await create_author_with_articles(uid, 0)
+        author2, (other_article,) = await create_author_with_articles(f"other_{uid}", 1)
+        request = await superuser_request(uid)
+
+        result = await handle_update(
+            "author",
+            {
+                "id": author1.pk,
+                "data": {},
+                "inlines": {"article": [{"id": other_article.pk, "_delete": True}]},
+            },
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        inlines = data.get("inlines") or {}
+        assert inlines.get("deleted", []) == []
+        assert len(inlines.get("errors", [])) == 1
+        assert "not found" in inlines["errors"][0]["error"].lower()
+        assert await sync_to_async(Article.objects.filter(pk=other_article.pk).exists)()
+
+    async def test_inline_update_of_other_parents_child_is_rejected(self):
+        uid = unique_id()
+        author1, _ = await create_author_with_articles(uid, 0)
+        author2, (other_article,) = await create_author_with_articles(f"other_{uid}", 1)
+        original_title = other_article.title
+        request = await superuser_request(uid)
+
+        result = await handle_update(
+            "author",
+            {
+                "id": author1.pk,
+                "data": {},
+                "inlines": {"article": [{"id": other_article.pk, "data": {"title": f"TAMPERED {uid}"}}]},
+            },
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        inlines = data.get("inlines") or {}
+        assert inlines.get("updated", []) == []
+        assert len(inlines.get("errors", [])) == 1
+        assert "not found" in inlines["errors"][0]["error"].lower()
+        refreshed = await sync_to_async(Article.objects.get)(pk=other_article.pk)
+        assert refreshed.title == original_title
+
+    async def test_inline_delete_of_own_child_still_works(self):
+        uid = unique_id()
+        author, (article,) = await create_author_with_articles(uid, 1)
+        request = await superuser_request(uid)
+
+        result = await handle_update(
+            "author",
+            {
+                "id": author.pk,
+                "data": {},
+                "inlines": {"article": [{"id": article.pk, "_delete": True}]},
+            },
+            request,
+        )
+        data = json.loads(result[0].text)
+
+        inlines = data.get("inlines") or {}
+        assert inlines.get("deleted") == [{"model": "article", "id": article.pk}]
+        assert not await sync_to_async(Article.objects.filter(pk=article.pk).exists)()

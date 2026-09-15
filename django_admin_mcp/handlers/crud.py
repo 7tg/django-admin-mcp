@@ -306,9 +306,20 @@ def _update_inlines(
                         )
                         continue
 
-                    # Delete existing inline
-                    inline_model.objects.filter(pk=item_id).delete()
-                    results["deleted"].append({"model": inline_model_name, "id": item_id})
+                    # Delete existing inline — scoped to the parent so another
+                    # parent's children can't be deleted by pk (issue #92)
+                    deleted_count, _ = inline_model.objects.filter(pk=item_id, **{fk_field.name: obj}).delete()
+                    if deleted_count:
+                        results["deleted"].append({"model": inline_model_name, "id": item_id})
+                    else:
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": item_id,
+                                "error": f"{inline_model_name} not found for this parent",
+                                "code": "not_found",
+                            }
+                        )
                 elif item_id:
                     # Check change permission on inline model
                     if not check_inline_permission(inline_class, admin, request, obj, "change"):
@@ -322,8 +333,20 @@ def _update_inlines(
                         )
                         continue
 
-                    # Update existing inline with form validation
-                    inline_obj = inline_model.objects.get(pk=item_id)
+                    # Update existing inline with form validation — scoped to
+                    # the parent (issue #92)
+                    try:
+                        inline_obj = inline_model.objects.get(pk=item_id, **{fk_field.name: obj})
+                    except inline_model.DoesNotExist:
+                        results["errors"].append(
+                            {
+                                "model": inline_model_name,
+                                "id": item_id,
+                                "error": f"{inline_model_name} not found for this parent",
+                                "code": "not_found",
+                            }
+                        )
+                        continue
 
                     # Merge existing data with updates
                     existing_data = model_to_dict(inline_obj)
