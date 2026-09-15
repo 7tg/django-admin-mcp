@@ -196,7 +196,7 @@ class MCPHTTPView(View):
             error = _validate_tools_list(request)
             if error:
                 return error
-            return await self.handle_list_tools(request)
+            return await self.handle_list_tools(request, token=token)
         elif method == "tools/call":
             try:
                 request_obj = ToolsCallRequest.model_validate_json(request.body)
@@ -206,9 +206,9 @@ class MCPHTTPView(View):
         else:
             return JsonResponse({"error": f"Unknown method: {method}"}, status=400)
 
-    async def handle_list_tools(self, request):
-        """Handle tools/list request."""
-        tools = get_tools()
+    async def handle_list_tools(self, request, token=None):
+        """Handle tools/list request, filtered by the token's permissions (issue #101)."""
+        tools = await sync_to_async(get_tools)(_request_for_token(token))
 
         tools_data = [
             {
@@ -279,7 +279,7 @@ async def mcp_endpoint(request):
             ToolsListRequest.model_validate_json(request.body)
         except ValidationError as e:
             return _jsonrpc_error(body.id, INVALID_PARAMS, "Invalid params", sanitize_pydantic_errors(e.errors()))
-        return await handle_list_tools_request(request, body.id)
+        return await handle_list_tools_request(request, body.id, token=token)
     elif method == "tools/call":
         # Extract params from JSON-RPC structure
         params = body.params or {}
@@ -321,9 +321,9 @@ async def mcp_endpoint(request):
 mcp_endpoint.csrf_exempt = True  # type: ignore[attr-defined]
 
 
-async def handle_list_tools_request(request, request_id=None):
-    """Handle tools/list request."""
-    tools = get_tools()
+async def handle_list_tools_request(request, request_id=None, token=None):
+    """Handle tools/list request, filtered by the token's permissions (issue #101)."""
+    tools = await sync_to_async(get_tools)(_request_for_token(token))
 
     # Convert to Pydantic Tool models
     tool_models = [Tool(name=tool.name, description=tool.description, inputSchema=tool.inputSchema) for tool in tools]

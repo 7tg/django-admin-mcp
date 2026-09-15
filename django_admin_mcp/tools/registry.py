@@ -28,7 +28,11 @@ from django_admin_mcp.handlers import (
     handle_update,
     json_response,
 )
-from django_admin_mcp.handlers.base import safe_error_message
+from django_admin_mcp.handlers.base import (
+    check_module_permission,
+    check_permission,
+    safe_error_message,
+)
 from django_admin_mcp.protocol.types import TextContent, Tool
 
 # Type alias for handler functions
@@ -446,12 +450,20 @@ def get_find_models_tool() -> Tool:
     )
 
 
-def get_tools() -> list[Tool]:
+def get_tools(request: HttpRequest | None = None) -> list[Tool]:
     """
     Generate Tool definitions for all exposed models.
 
     Discovers all ModelAdmin classes with mcp_expose=True and
     generates tool definitions for each.
+
+    When ``request`` is given, models the requesting user may not see are
+    skipped — the same has_module_permission + view permission filter as
+    find_models and resources/list — so tools/list doesn't advertise tool
+    schemas for models the token has no access to (issue #101).
+
+    Args:
+        request: Optional HttpRequest with user set for permission filtering.
 
     Returns:
         List of all Tool definitions including find_models and
@@ -460,6 +472,11 @@ def get_tools() -> list[Tool]:
     tools = [get_find_models_tool()]
 
     for _model_name, model_admin in get_exposed_models():
+        if request is not None:
+            if not check_module_permission(request, model_admin):
+                continue
+            if not check_permission(request, model_admin, "view"):
+                continue
         model = model_admin.model
         tools.extend(get_model_tools(model))
 

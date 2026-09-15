@@ -66,8 +66,21 @@ class TestHTTPInterface:
     @pytest.mark.asyncio
     async def test_mcp_endpoint_with_valid_token_list_tools(self):
         """Test MCP endpoint with valid token lists tools."""
-        # Create a token
-        token = await sync_to_async(MCPTokenFactory)()
+
+        # Create a token that may view author and article (tools/list is
+        # permission-filtered since issue #101)
+        @sync_to_async
+        def make_token():
+            from django.contrib.auth.models import Permission, User  # noqa: PLC0415
+
+            user = User.objects.create_user(username=f"list_tools_{User.objects.count()}", password="pw")
+            perms = Permission.objects.filter(codename__in=["view_author", "view_article"])
+            user.user_permissions.add(*perms)
+            token = MCPTokenFactory(user=user)
+            token.permissions.add(*perms)
+            return token
+
+        token = await make_token()
 
         client = AsyncClient()
         response = await client.post(
