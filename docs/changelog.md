@@ -5,7 +5,7 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-09-15
 
 ### Security
 - **`tools/list` is filtered by the requesting token's permissions.** Models failing the `has_module_permission` / view permission checks are skipped, mirroring `find_models` and `resources/list`; a minimally-privileged token can no longer enumerate every exposed model's tool schemas ([#101](https://github.com/7tg/django-admin-mcp/issues/101))
@@ -180,6 +180,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Python | Django |
 |---------|--------|--------|
+| 0.7.0 | 3.10+ | 3.2+ |
 | 0.6.0 | 3.10+ | 3.2+ |
 | 0.5.0 | 3.10+ | 3.2+ |
 | 0.4.0 | 3.10+ | 3.2+ |
@@ -190,6 +191,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## Upgrade Guide
+
+### From 0.6.x to 0.7.0
+
+No migrations. Behavior changes to review:
+
+- **`tools/list` is now permission-filtered.** Tools appear only for models the token holds view (and module) permission on, matching `find_models`. Clients that enumerated all tools with a low-privilege token will see a shorter list; grant view permissions for models that should stay discoverable.
+- **Hidden fields left every schema surface.** Fields excluded via `mcp_fields`/`mcp_exclude_fields` no longer appear in tool descriptions, `describe_*`, or `models://{model}/schema`. Clients introspecting those fields' metadata must expose them deliberately.
+- **`MCPToken.has_perm`/`has_perms`/`has_module_perms` now answer from effective permissions** (grants capped by the linked user). Downstream code that used them for raw-grant introspection should use `get_all_permissions()` instead.
+- **Inline writes are validated like the admin.** Inline items targeting fields that are readonly or not declared on the inline now return errors instead of writing. Clients depending on the old behavior must update the inline's `fields`/`readonly_fields`.
+- **Notifications get no response body.** Any JSON-RPC request without an `id` (including all of `notifications/*`) returns an empty HTTP 202; only requests with an `id` receive envelopes.
+- **`related_*` null relations changed shape.** Empty forward FK/O2O and reverse O2O now return `{"type": "single", "result": null}` instead of a `value` string or an internal error.
 
 ### From 0.5.x to 0.6.0
 
