@@ -36,6 +36,8 @@ Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add
 
 ---
 
+<!-- mcp-name: io.github.7tg/django-admin-mcp -->
+
 ## Installation
 
 ```bash
