@@ -113,11 +113,11 @@ class TestFilteringSearchingOrdering:
         assert response["total_count"] >= 5  # Total matching items
 
     async def test_list_with_invalid_filter_field(self):
-        """Test that invalid filter fields are ignored."""
+        """Invalid filter fields produce an error response (issue #111)."""
         result = await MCPAdminMixin.handle_tool_call("list_author", {"filters": {"invalid_field": "value"}})
         response = json.loads(result[0].text)
-        # Should not error, just ignore the invalid filter
-        assert "results" in response
+        assert "error" in response
+        assert "invalid_field" in response["error"]
 
     async def test_list_combined_filters_search_ordering(self):
         """Test combining filters, search, and ordering."""

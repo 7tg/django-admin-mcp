@@ -18,7 +18,7 @@ Lists model instances with support for pagination, filtering, search, and orderi
 
 `limit` is capped server-side at `MCP_MAX_LIST_LIMIT` (default 1000) via `min(limit, MCP_MAX_LIST_LIMIT)`. Passing a negative value or a non-integer returns `{"error": "limit must be a non-negative integer"}` (and the equivalent for `offset`).
 
-`order_by` accepts direct field names only, with an optional `-` prefix for descending order. Invalid entries are silently dropped.
+`order_by` accepts direct field names only, with an optional `-` prefix for descending order. Unknown fields return `{"error": "Invalid order_by — unknown fields: ..."}`.
 
 ### Supported filter lookups
 
@@ -36,10 +36,10 @@ Only the following lookups are allowed in `filters`:
 
 Filters apply to **direct model fields only**.
 
-!!! warning "Invalid filters are silently skipped"
-    Any filter with an unknown field, a disallowed lookup (`regex`, `startswith`, `__year`, ...), or relation traversal (e.g. `author__email`) is **silently skipped** — the query runs without that filter, so you may get more results than expected instead of an error.
+!!! warning "Invalid filters are rejected"
+    Any filter with an unknown field, a disallowed lookup (`regex`, `startswith`, `__year`, ...), or relation traversal (e.g. `author__email`) is **rejected with an error response** naming every offending key — the query never runs partially filtered.
 
-Filters use **model field names**, not database column names: `{"author": 5}` filters by the FK, while `{"author_id": 5}` is silently dropped (the `_id` suffix works in `create_*` data but not in filters).
+Filters use **model field names**, not database column names: `{"author": 5}` filters by the FK, while `{"author_id": 5}` is rejected as an unknown field (the `_id` suffix works in `create_*` data but not in filters).
 
 ### Examples
 
@@ -499,7 +499,7 @@ In `create_*` data, foreign keys can be specified in two ways:
 
 Both are normalized internally to the model field name.
 
-`update_*` accepts **only model field names**: sending `author_id` returns `{"error": "Invalid field: author_id"}`. Filters in `list_*` also require model field names (`{"author": 5}`); `author_id` there is silently dropped.
+`update_*` accepts **only model field names**: sending `author_id` returns `{"error": "Invalid field: author_id"}`. Filters in `list_*` also require model field names (`{"author": 5}`); `author_id` there is rejected as an unknown field.
 
 ---
 

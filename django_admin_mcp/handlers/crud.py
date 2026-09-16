@@ -35,9 +35,13 @@ from django_admin_mcp.handlers.decorators import require_permission, require_reg
 from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
 
 # Lookups allowed in list filters. Anything else (regex, relation traversal, ...)
-# is skipped to prevent resource-intensive queries and data disclosure via
+# is rejected to prevent resource-intensive queries and data disclosure via
 # filtering on fields of related models the caller may not have access to.
 SAFE_FILTER_LOOKUPS = frozenset({"exact", "contains", "icontains", "gt", "gte", "lt", "lte", "in", "isnull"})
+
+
+class InvalidFilterError(ValueError):
+    """A list filter or ordering parameter was rejected (issue #111)."""
 
 
 def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q:
@@ -51,30 +55,44 @@ def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q
     - field__in: value in list
     - field__isnull: is null check
 
-    Filters with unknown fields, disallowed lookups, or relation traversal
-    (e.g. "author__email") are silently skipped.
-
     Args:
         model: The Django model class.
         filters: Dictionary of field:value filter criteria.
 
     Returns:
         Q object for filtering queryset.
+
+    Raises:
+        InvalidFilterError: For unknown fields, disallowed lookups, or
+            relation traversal (e.g. "author__email"). Silently dropping
+            these would hand the caller a success-shaped but unfiltered
+            result set.
     """
     q = Q()
     valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, "name")}
+    allowed = ", ".join(sorted(SAFE_FILTER_LOOKUPS))
 
+    problems = []
     for key, value in filters.items():
         parts = key.split("__")
         field_name = parts[0]
         if field_name not in valid_fields:
-            continue  # Skip invalid fields
+            problems.append(f"'{key}': unknown field '{field_name}'")
+            continue
         if len(parts) > 2:
-            continue  # Skip chained lookups / relation traversal
+            problems.append(f"'{key}': relation traversal is not supported")
+            continue
         if len(parts) == 2 and parts[1] not in SAFE_FILTER_LOOKUPS:
-            continue  # Skip disallowed lookup types (regex, related fields, ...)
+            problems.append(
+                f"'{key}': unsupported lookup '{parts[1]}' "
+                f"(relation filters are not supported; allowed lookups: {allowed})"
+            )
+            continue
 
         q &= Q(**{key: value})
+
+    if problems:
+        raise InvalidFilterError("Invalid filters — " + "; ".join(problems))
     return q
 
 
@@ -525,13 +543,29 @@ async def handle_list(
         elif model._meta.ordering:
             default_ordering = list(model._meta.ordering)
 
+        # Validate filters and caller-supplied ordering up front: rejected
+        # parameters must produce an error response, never a success-shaped
+        # unfiltered result (issue #111).
+        filter_q = None
+        if filters:
+            try:
+                filter_q = _build_filter_query(model, filters)
+            except InvalidFilterError as e:
+                return json_response({"error": str(e)})
+
+        if order_by:
+            valid_ordering = _get_valid_ordering_fields(model)
+            invalid_order = [o for o in order_by if o not in valid_ordering]
+            if invalid_order:
+                names = ", ".join(f"'{o}'" for o in invalid_order)
+                return json_response({"error": f"Invalid order_by — unknown fields: {names}"})
+
         @sync_to_async
         def get_objects():
             queryset = get_admin_queryset(model, model_admin, request)
 
             # Apply filters
-            if filters:
-                filter_q = _build_filter_query(model, filters)
+            if filter_q is not None:
                 queryset = queryset.filter(filter_q)
 
             # Apply search through the admin's own pipeline: it handles the
