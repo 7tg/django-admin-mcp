@@ -137,7 +137,7 @@ class TestTokenEdgeCases:
 class TestInputInjection:
     """Malicious filter/order inputs must be neutralized, never executed."""
 
-    async def test_sql_injection_in_filter_keys_is_ignored(self):
+    async def test_sql_injection_in_filter_keys_is_rejected(self):
         uid = unique_id()
         await create_author(uid)
 
@@ -155,11 +155,13 @@ class TestInputInjection:
             request,
         )
         data = json.loads(result[0].text)
-        # The malicious key is not a valid field: skipped, and the table survives
-        assert "results" in data
+        # The malicious key is not a valid field: rejected loudly (issue #111),
+        # never executed, and the table survives
+        assert "error" in data
+        assert "unknown field" in data["error"]
         assert await sync_to_async(Author.objects.filter(name__icontains=uid).count)() == 1
 
-    async def test_order_by_with_raw_sql_is_ignored(self):
+    async def test_order_by_with_raw_sql_is_rejected(self):
         uid = unique_id()
         await create_author(uid)
 
@@ -177,5 +179,6 @@ class TestInputInjection:
             request,
         )
         data = json.loads(result[0].text)
-        assert "results" in data
+        assert "error" in data
+        assert "order_by" in data["error"]
         assert await sync_to_async(Author.objects.filter(name__icontains=uid).count)() == 1

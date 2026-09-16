@@ -5,6 +5,11 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **`list_*` rejects invalid `filters` and `order_by` instead of silently dropping them.** Unknown fields, disallowed lookups, and relation traversal now return an error response naming every offending key; previously the query ran without those filters, handing the caller a success-shaped but unfiltered result ([#111](https://github.com/7tg/django-admin-mcp/issues/111))
+
 ## [0.7.1] - 2026-09-16
 
 ### Fixed
