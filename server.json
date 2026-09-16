@@ -1,0 +1,39 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.7tg/django-admin-mcp",
+  "title": "Django Admin MCP",
+  "description": "Django admin models over MCP: CRUD, actions, history, autocomplete — capped by Django permissions.",
+  "repository": {
+    "url": "https://github.com/7tg/django-admin-mcp",
+    "source": "github"
+  },
+  "version": "0.7.2",
+  "websiteUrl": "https://7tg.github.io/django-admin-mcp/",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "django-admin-mcp",
+      "version": "0.7.2",
+      "transport": {
+        "type": "streamable-http",
+        "url": "https://{host}/mcp/",
+        "headers": [
+          {
+            "name": "Authorization",
+            "description": "Bearer token created in the Django admin (MCP Tokens)",
+            "isRequired": true,
+            "isSecret": true
+          }
+        ]
+      },
+      "environmentVariables": [
+        {
+          "name": "host",
+          "description": "Hostname of your Django deployment that mounts django_admin_mcp.urls (e.g. admin.example.com)",
+          "isRequired": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
