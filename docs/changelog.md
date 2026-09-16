@@ -5,6 +5,14 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-09-16
+
+### Fixed
+- `describe_*` (and any handler response) no longer crashes with `PydanticSerializationError` when admin config or model metadata contains Django lazy translation proxies — `gettext_lazy` fieldset names, `verbose_name`s, and the like now serialize as their string value
+
+### Changed
+- Minimum Pydantic version is now 2.7 (the log-redaction path already relied on a 2.7 feature; the floor now reflects reality)
+
 ## [0.7.0] - 2026-09-15
 
 ### Security
@@ -180,6 +188,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Python | Django |
 |---------|--------|--------|
+| 0.7.1 | 3.10+ | 3.2+ |
 | 0.7.0 | 3.10+ | 3.2+ |
 | 0.6.0 | 3.10+ | 3.2+ |
 | 0.5.0 | 3.10+ | 3.2+ |
