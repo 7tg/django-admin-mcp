@@ -207,6 +207,23 @@ class TestHandleDescribe:
         finally:
             model_admin.list_filter = original_list_filter
 
+    async def test_describe_with_lazy_fieldset_names(self):
+        """gettext_lazy fieldset names must not crash describe (production PydanticSerializationError)."""
+        from django.contrib import admin  # noqa: PLC0415
+        from django.utils.translation import gettext_lazy as _  # noqa: PLC0415
+
+        request = create_mock_request()
+        model_admin = admin.site._registry[Author]
+        original_fieldsets = model_admin.fieldsets
+        model_admin.fieldsets = ((_("Alanlar"), {"fields": ["name", "email"]}),)
+        try:
+            result = await handle_describe("author", {}, request)
+            data = json.loads(result[0].text)
+            assert "error" not in data
+            assert data["admin_config"]["fieldsets"][0]["name"] == "Alanlar"
+        finally:
+            model_admin.fieldsets = original_fieldsets
+
     async def test_includes_inlines_config(self):
         """Test that inlines configuration is included for Author."""
         request = create_mock_request()

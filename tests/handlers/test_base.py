@@ -252,6 +252,16 @@ class TestSerializeInstance:
         data = json.loads(result[0].text)
         assert data["attachment"] == ""
 
+    def test_json_response_dumps_lazy_strings(self):
+        """gettext_lazy proxies must serialize as their string value (production crash on describe)."""
+        from django.utils.translation import gettext_lazy as _  # noqa: PLC0415
+
+        data = {"label": _("Alanlar"), "nested": {"names": [_("Zaman Damgası")]}}
+        result = json_response(data)
+        parsed = json.loads(result[0].text)
+        assert parsed["label"] == "Alanlar"
+        assert parsed["nested"]["names"] == ["Zaman Damgası"]
+
 
 @pytest.mark.django_db
 class TestGetModelName:

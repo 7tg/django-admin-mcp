@@ -80,8 +80,10 @@ def json_response(data: dict) -> list[TextContent]:
     Returns:
         List containing a single TextContent with JSON-serialized data.
     """
-    # Use Pydantic TypeAdapter for JSON serialization with better type safety
-    json_bytes = _JSON_ADAPTER.dump_json(data, by_alias=True)
+    # Use Pydantic TypeAdapter for JSON serialization with better type safety.
+    # fallback=str covers types pydantic can't serialize natively, notably
+    # Django's lazy translation proxies (gettext_lazy verbose_names/fieldsets).
+    json_bytes = _JSON_ADAPTER.dump_json(data, by_alias=True, fallback=str)
     return [TextContent(text=json_bytes.decode("utf-8"))]
 
 
