@@ -245,6 +245,7 @@ pre-commit install
 - Tokens are validated against `MCPToken` model
 - Expired tokens are rejected
 - Token usage is tracked (last_used_at)
+- `MCP_ALLOW_URL_TOKEN` (default `False`) opens a second route that reads the same token from the URL path, for web clients that cannot send headers; the route 404s while the setting is off
 
 ### Authorization
 

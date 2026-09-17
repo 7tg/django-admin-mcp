@@ -6,13 +6,17 @@ Provides HTTP interface for MCP protocol with token-based authentication.
 Two endpoints share the core auth/parse/validate/execute pipeline:
 - ``MCPHTTPView`` (class-based) returns bare JSON responses (legacy shape)
 - ``mcp_endpoint`` (function-based) returns JSON-RPC envelopes per the MCP spec
+
+``mcp_endpoint_url_token`` delegates to ``mcp_endpoint`` with the token taken
+from the URL path, for clients that cannot send an Authorization header.
 """
 
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.db import DatabaseError, transaction
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
@@ -324,6 +328,35 @@ async def mcp_endpoint(request):
 
 # Mark as CSRF exempt
 mcp_endpoint.csrf_exempt = True  # type: ignore[attr-defined]
+
+
+@transaction.non_atomic_requests
+async def mcp_endpoint_url_token(request, token: str):
+    """
+    MCP endpoint that takes the bearer token from the URL path.
+
+    Web MCP clients (claude.ai, ChatGPT) can only register a plain URL for a
+    custom connector — their connector dialogs offer OAuth but no field for a
+    static ``Authorization`` header. This route accepts the token as a path
+    segment and replays it as a bearer header, so the rest of the pipeline
+    authenticates it unchanged.
+
+    Disabled unless ``MCP_ALLOW_URL_TOKEN`` is true: a token in the path is
+    recorded by proxies, access logs, and browser history, so it is a weaker
+    transport than the header and must be opted into deliberately.
+    """
+    if not getattr(settings, "MCP_ALLOW_URL_TOKEN", False):
+        raise Http404
+
+    request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
+    # ``request.headers`` is a cached_property and middleware has usually
+    # materialized it already; drop the cache so the new META is visible.
+    request.__dict__.pop("headers", None)
+
+    return await mcp_endpoint(request)
+
+
+mcp_endpoint_url_token.csrf_exempt = True  # type: ignore[attr-defined]
 
 
 async def handle_list_tools_request(request, request_id=None, token=None):

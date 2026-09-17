@@ -1,11 +1,12 @@
 # HTTP API Reference
 
-Django Admin MCP routes two HTTP endpoints:
+Django Admin MCP routes three HTTP endpoints:
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/mcp/` | POST | MCP protocol over JSON-RPC 2.0 |
 | `/mcp/health/` | GET | Health check (no authentication) |
+| `/mcp/mcp_<key>.<secret>/` | POST | Same as `/mcp/`, token read from the path — `404` unless [`MCP_ALLOW_URL_TOKEN`](settings.md#mcp_allow_url_token) is enabled |
 
 !!! note "URL prefix"
     The `/mcp/` prefix depends on where your project mounts `include('django_admin_mcp.urls')` — the paths above assume `path('mcp/', include('django_admin_mcp.urls'))`.
@@ -21,6 +22,8 @@ Authorization: Bearer mcp_yourkey.yoursecret
 ```
 
 Tokens are created in Django admin at `/admin/django_admin_mcp/mcptoken/`. Each authenticated request updates the token's `last_used_at` timestamp.
+
+Clients that cannot send headers can pass the same token in the path instead — see [`MCP_ALLOW_URL_TOKEN`](settings.md#mcp_allow_url_token).
 
 ### Authentication Errors
 

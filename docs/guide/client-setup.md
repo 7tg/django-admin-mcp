@@ -78,6 +78,25 @@ I have access to the following Django admin tools:
 
 Django Admin MCP works with any MCP-compatible client that supports HTTP transport.
 
+### Web Clients (claude.ai, ChatGPT)
+
+Web custom connectors register a URL and authenticate over OAuth. They have no field for a static `Authorization` header, so the header route cannot be used from them. Put the token in the URL instead:
+
+```python title="settings.py"
+MCP_ALLOW_URL_TOKEN = True
+```
+
+Then register the token-bearing URL as the connector's server URL:
+
+```
+https://example.com/mcp/mcp_yourkey.yoursecret/
+```
+
+The endpoint behaves exactly like `/mcp/` — same handshake, same tools, same permission checks.
+
+!!! warning "Mint a dedicated token for this"
+    The token is now part of the URL, so it lands in access logs and browser history. Create a separate token for the URL route with the narrowest permissions it needs and an `expires_at`, so revoking it doesn't disturb your header-authenticated clients. See [MCP_ALLOW_URL_TOKEN](../reference/settings.md#mcp_allow_url_token).
+
 ### Generic HTTP Client
 
 The endpoint speaks JSON-RPC 2.0: `tools/call` takes `name` and `arguments` nested under `params`. Test with curl:

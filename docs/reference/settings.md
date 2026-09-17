@@ -46,7 +46,7 @@ path('admin-api/', include('django_admin_mcp.urls')),
 
 ### Optional Settings
 
-Three optional Django settings tune request behavior:
+Four optional Django settings:
 
 ```python title="settings.py"
 # Maximum page size for list_*, related_*, history_*, and autocomplete_*
@@ -62,7 +62,30 @@ MCP_ACTION_MAX_FILE_BYTES = 5 * 1024 * 1024
 # window of the recorded timestamp, further uses are not written to the
 # database. Set to 0 to record every use. Default: 60
 MCP_LAST_USED_RESOLUTION = 60
+
+# Accept the bearer token as a URL path segment, for clients that cannot
+# send an Authorization header. Default: False
+MCP_ALLOW_URL_TOKEN = False
 ```
+
+### MCP_ALLOW_URL_TOKEN
+
+Opens a second route at `<mount_point>/<token>/` that reads the bearer token from the URL instead of the `Authorization` header:
+
+```
+POST https://example.com/mcp/mcp_yourkey.yoursecret/
+```
+
+It exists for web MCP clients — claude.ai and ChatGPT custom connectors register a plain URL and offer OAuth, with no field for a static header. Everything downstream is unchanged: the same token, the same permission checks, the same responses.
+
+When the setting is false (the default) the route returns `404`. The header route at `<mount_point>/` always works and is unaffected either way.
+
+!!! warning "A token in a URL is a weaker secret"
+    URLs are recorded where headers are not: proxy and web-server access logs, `django.request` log lines on errors, and browser history. Treat the URL itself as the credential.
+
+    - Mint a **dedicated** token for the URL route so it can be revoked on its own
+    - Give it the narrowest permissions and an `expires_at`
+    - Prefer the header route for any client that supports it
 
 !!! note "Token expiry is not a Django setting"
     The 90-day default for programmatic creation is fixed in the `MCPToken` model. Set `expires_at` per token to override it; in the admin form, a blank **Expires At** means the token never expires.

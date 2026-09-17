@@ -7,13 +7,13 @@
     "url": "https://github.com/7tg/django-admin-mcp",
     "source": "github"
   },
-  "version": "0.7.2",
+  "version": "0.8.0",
   "websiteUrl": "https://7tg.github.io/django-admin-mcp/",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "django-admin-mcp",
-      "version": "0.7.2",
+      "version": "0.8.0",
       "transport": {
         "type": "streamable-http",
         "url": "https://{host}/mcp/",

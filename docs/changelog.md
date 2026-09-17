@@ -5,6 +5,11 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-17
+
+### Added
+- **`MCP_ALLOW_URL_TOKEN` accepts the bearer token as a URL path segment.** Web MCP clients (claude.ai and ChatGPT custom connectors) register a plain URL and authenticate over OAuth, with no field for a static `Authorization` header, leaving them unable to reach the header route at all. With the setting enabled, `POST <mount_point>/mcp_<key>.<secret>/` authenticates the same token through the same pipeline; the route returns `404` while the setting is false (the default), and the header route is unaffected either way. The URL is now the credential — it reaches access logs and browser history — so use a dedicated, narrowly-scoped token for it
+
 ## [0.7.2] - 2026-09-16
 
 ### Changed

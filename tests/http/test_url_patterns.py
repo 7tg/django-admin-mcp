@@ -6,7 +6,8 @@ allowing users to control the mount point entirely.
 See: https://github.com/7tg/django-admin-mcp/issues/68
 """
 
-from django.urls import resolve, reverse
+import pytest
+from django.urls import Resolver404, resolve, reverse
 
 
 class TestURLPatterns:
@@ -39,3 +40,16 @@ class TestURLPatterns:
         match = resolve("/api/health/")
         assert match.url_name == "health"
         assert match.namespace == "django_admin_mcp"
+
+    def test_url_token_endpoint_resolves(self):
+        """A path segment shaped like a token routes to the URL-token endpoint."""
+        match = resolve("/api/mcp_thekey.thesecret/")
+        assert match.url_name == "mcp_endpoint_url_token"
+        assert match.kwargs["token"] == "mcp_thekey.thesecret"
+
+    def test_url_token_pattern_requires_the_token_prefix(self):
+        """Anchoring on ``mcp_`` keeps the pattern from swallowing named routes."""
+        with pytest.raises(Resolver404):
+            resolve("/api/health/extra/")
+        with pytest.raises(Resolver404):
+            resolve("/api/notatoken/")
