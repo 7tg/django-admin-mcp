@@ -15,17 +15,16 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django.test import override_settings
 
 from django_admin_mcp.handlers import create_mock_request
-from django_admin_mcp.handlers.actions import (
+from django_admin_mcp.handlers.action_files import (
     ActionFileTooLargeError,
     _charset_from_content_type,
-    _confirmation_response,
     _ensure_bytes,
     _filename_from_content_disposition,
     _http_response_body,
     _response_header,
-    handle_action,
     serialize_action_result,
 )
+from django_admin_mcp.handlers.actions import _confirmation_response, handle_action
 from tests.models import Author
 
 raw_handle_action = handle_action.__wrapped__.__wrapped__

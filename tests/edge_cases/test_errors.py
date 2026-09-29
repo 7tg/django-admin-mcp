@@ -634,7 +634,7 @@ class TestEdgeCasesAndErrors:
         """Test that bulk create exception handler returns sanitized error."""
         # Patch transaction.atomic to raise after form.save()
         with patch(
-            "django_admin_mcp.handlers.actions.transaction.atomic",
+            "django_admin_mcp.handlers.bulk.transaction.atomic",
             side_effect=RuntimeError("db connection lost"),
         ):
             result = await MCPAdminMixin.handle_tool_call(
@@ -656,7 +656,7 @@ class TestEdgeCasesAndErrors:
             lambda: Author.objects.create(name="BulkUpErr", email="bulkuperr@test.com"),
         )
         with patch(
-            "django_admin_mcp.handlers.actions.get_admin_form_class",
+            "django_admin_mcp.handlers.bulk.get_admin_form_class",
             side_effect=RuntimeError("unexpected form error"),
         ):
             result = await MCPAdminMixin.handle_tool_call(

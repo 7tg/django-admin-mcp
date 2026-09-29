@@ -13,7 +13,7 @@ from django.contrib.auth.models import User
 from django.http import HttpResponse, StreamingHttpResponse
 
 from django_admin_mcp.handlers import handle_action
-from django_admin_mcp.handlers.actions import (
+from django_admin_mcp.handlers.action_files import (
     ActionFileTooLargeError,
     _charset_from_content_type,
     _filename_from_content_disposition,

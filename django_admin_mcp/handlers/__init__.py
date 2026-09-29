@@ -8,7 +8,6 @@ for processing MCP tool requests.
 from django_admin_mcp.handlers.actions import (
     handle_action,
     handle_actions,
-    handle_bulk,
 )
 from django_admin_mcp.handlers.base import (
     async_check_permission,
@@ -24,6 +23,7 @@ from django_admin_mcp.handlers.base import (
     normalize_fk_fields,
     serialize_instance,
 )
+from django_admin_mcp.handlers.bulk import handle_bulk
 from django_admin_mcp.handlers.crud import (
     handle_create,
     handle_delete,

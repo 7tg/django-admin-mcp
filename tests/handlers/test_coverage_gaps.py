@@ -13,7 +13,6 @@ from django.contrib.auth.models import AnonymousUser, Permission, User
 from django.forms import ModelForm
 
 from django_admin_mcp.handlers import create_mock_request, handle_update
-from django_admin_mcp.handlers.actions import handle_bulk_create, handle_bulk_delete, handle_bulk_update
 from django_admin_mcp.handlers.base import (
     MCPMessageStorage,
     check_inline_permission,
@@ -22,13 +21,16 @@ from django_admin_mcp.handlers.base import (
     get_admin_queryset,
     get_model_admin,
 )
+from django_admin_mcp.handlers.bulk import handle_bulk_create, handle_bulk_delete, handle_bulk_update
 from django_admin_mcp.handlers.crud import (
-    _build_inline_form_class,
     _build_search_query,
-    _get_inline_data,
-    _update_inlines,
     handle_create,
     handle_delete,
+)
+from django_admin_mcp.handlers.inlines import (
+    _build_inline_form_class,
+    _get_inline_data,
+    _update_inlines,
 )
 from django_admin_mcp.handlers.meta import _json_safe_admin_item
 from tests.models import Article, Author

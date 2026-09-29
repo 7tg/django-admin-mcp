@@ -17,7 +17,7 @@ from django_admin_mcp.handlers import (
     handle_delete,
     handle_update,
 )
-from django_admin_mcp.handlers.actions import handle_bulk_update
+from django_admin_mcp.handlers.bulk import handle_bulk_update
 from tests.models import Author
 
 

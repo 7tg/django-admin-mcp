@@ -215,7 +215,7 @@ class TestBulkCreateTransactionSafety:
                 raise Exception("Log failure on second item")
 
         # Patch _log_action to fail on second item
-        with patch("django_admin_mcp.handlers.actions._log_action", side_effect=log_action_side_effect):
+        with patch("django_admin_mcp.handlers.bulk._log_action", side_effect=log_action_side_effect):
             result = await handle_bulk(
                 "author",
                 {
@@ -283,7 +283,7 @@ class TestBulkUpdateTransactionSafety:
                 raise Exception("Log failure on second item")
 
         # Patch _log_action to fail on second item
-        with patch("django_admin_mcp.handlers.actions._log_action", side_effect=log_action_side_effect):
+        with patch("django_admin_mcp.handlers.bulk._log_action", side_effect=log_action_side_effect):
             result = await handle_bulk(
                 "author",
                 {
@@ -352,7 +352,7 @@ class TestBulkDeleteTransactionSafety:
                 raise Exception("Log failure on second item")
 
         # Patch _log_action to fail on second item
-        with patch("django_admin_mcp.handlers.actions._log_action", side_effect=log_action_side_effect):
+        with patch("django_admin_mcp.handlers.bulk._log_action", side_effect=log_action_side_effect):
             result = await handle_bulk(
                 "author",
                 {
