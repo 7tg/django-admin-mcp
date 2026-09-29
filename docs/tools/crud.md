@@ -193,6 +193,8 @@ The schema accepts `id` as an integer or a string. `id=0` (or any falsy value) i
 
 Foreign keys serialize as bare primary keys (`"author": 5`), never as nested objects. Many-to-many fields serialize as lists of primary keys.
 
+Fields defined with `choices` keep their raw stored value and additionally get a `<field>_display` sidecar with the human-readable label (`"status": 2, "status_display": "Active"`). The sidecar follows the field's visibility rules and is skipped when the model has a real field of that name.
+
 ```json
 {
   "id": 42,
@@ -200,6 +202,8 @@ Foreign keys serialize as bare primary keys (`"author": 5`), never as nested obj
   "content": "This tutorial covers...",
   "author": 5,
   "categories": [1, 2],
+  "status": 2,
+  "status_display": "Active",
   "published": true,
   "created_at": "2024-01-15T10:00:00Z",
   "_inlines": {

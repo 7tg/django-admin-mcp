@@ -81,8 +81,11 @@ def _get_field_metadata(field) -> dict[str, Any]:
     if hasattr(field, "help_text") and field.help_text:
         metadata["help_text"] = str(field.help_text)
 
-    if hasattr(field, "choices") and field.choices:
-        metadata["choices"] = [{"value": choice[0], "label": str(choice[1])} for choice in field.choices]
+    if getattr(field, "choices", None):
+        # flatchoices flattens grouped (optgroup) choices into value/label
+        # pairs so every choice is listed individually (issue #113)
+        flat_choices = getattr(field, "flatchoices", None) or field.choices
+        metadata["choices"] = [{"value": value, "label": str(label)} for value, label in flat_choices]
 
     if hasattr(field, "default") and field.default is not models.fields.NOT_PROVIDED:
         # Handle callable defaults

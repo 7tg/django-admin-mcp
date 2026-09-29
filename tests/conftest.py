@@ -19,10 +19,10 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
     with django_db_blocker.unblock():
         # Deferred import: must wait for Django app registry to be ready
         from django_admin_mcp import MCPAdminMixin  # noqa: PLC0415
-        from tests.models import Article, Author, CatalogItemA, CatalogItemB, Gadget  # noqa: PLC0415
+        from tests.models import Article, Author, CatalogItemA, CatalogItemB, Gadget, Ticket  # noqa: PLC0415
 
         # Clear any existing registrations
-        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget):
+        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket):
             if model in admin.site._registry:
                 admin.site.unregister(model)
 
@@ -56,6 +56,12 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
 
             mcp_expose = True
 
+        @admin.register(Ticket)
+        class TicketAdmin(MCPAdminMixin, admin.ModelAdmin):
+            """Ticket admin with MCP support (choice fields, issue #113)."""
+
+            mcp_expose = True
+
         @admin.register(CatalogItemA)
         class CatalogItemAAdmin(MCPAdminMixin, admin.ModelAdmin):
             """Proxy admin scoped to channel A via get_queryset."""
@@ -79,6 +85,6 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
         yield
 
         # Cleanup (optional, as this is session-scoped)
-        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget):
+        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket):
             if model in admin.site._registry:
                 admin.site.unregister(model)

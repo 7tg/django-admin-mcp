@@ -431,6 +431,11 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
     When ``model_admin`` is omitted, looks up the registered MCP admin for the
     instance's model so list/related/inline call sites still apply excludes.
 
+    Fields defined with ``choices`` additionally get a ``<name>_display``
+    sidecar carrying their human-readable label (issue #113). Sidecars are
+    only added for fields that survived visibility filtering, and never
+    shadow a real model field of the same name.
+
     Args:
         instance: The Django model instance to serialize.
         model_admin: Optional ModelAdmin with field configuration.
@@ -460,6 +465,19 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
             serialized[key] = value.name or ""
         else:
             serialized[key] = value
+
+    # Choice fields: attach "<name>_display" label sidecars (issue #113).
+    # Only fields already present survived visibility filtering, so hidden
+    # fields can never leak through their label.
+    model_field_names = {f.name for f in instance._meta.get_fields()}
+    for field in instance._meta.concrete_fields:
+        if field.is_relation or not field.choices or field.name not in serialized:
+            continue
+        display_key = f"{field.name}_display"
+        # A real model field of the same name always wins
+        if display_key in serialized or display_key in model_field_names:
+            continue
+        serialized[display_key] = getattr(instance, f"get_{field.name}_display")()
 
     return serialized
 
