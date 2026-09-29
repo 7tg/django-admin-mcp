@@ -5,6 +5,14 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-09-29
+
+### Added
+- **Choice fields serialize with a `<field>_display` label sidecar.** Every field defined with `choices` (`IntegerChoices`, `TextChoices`, plain or grouped lists) keeps its raw stored value and gains a `<field>_display` key carrying the human-readable label (`"status": 2, "status_display": "Active"`), so MCP clients no longer need a schema round-trip to interpret enum values. Sidecars honor `mcp_fields`/`mcp_exclude_fields` visibility and never shadow a real model field of the same name ([#113](https://github.com/7tg/django-admin-mcp/issues/113))
+
+### Fixed
+- `describe_*` now flattens grouped (optgroup) choices into individual value/label pairs; previously each group serialized as a single broken entry with the stringified inner list as its label ([#113](https://github.com/7tg/django-admin-mcp/issues/113))
+
 ## [0.8.0] - 2026-09-17
 
 ### Added

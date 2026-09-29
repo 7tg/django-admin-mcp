@@ -63,6 +63,41 @@ class Gadget(models.Model):
         return self.title
 
 
+class TicketStatus(models.IntegerChoices):
+    DRAFT = 1, "Draft"
+    ACTIVE = 2, "Active"
+    CLOSED = 3, "Closed"
+
+
+class TicketPriority(models.TextChoices):
+    LOW = "low", "Low priority"
+    HIGH = "high", "High priority"
+
+
+class Ticket(models.Model):
+    """Test model covering every flavor of choice field (issue #113)."""
+
+    title = models.CharField(max_length=200)
+    status = models.IntegerField(choices=TicketStatus.choices, default=TicketStatus.DRAFT)
+    priority = models.CharField(max_length=10, choices=TicketPriority.choices, default=TicketPriority.LOW)
+    size = models.CharField(max_length=1, choices=[("s", "Small"), ("m", "Medium")], blank=True)
+    media = models.CharField(
+        max_length=10,
+        choices=[("Audio", [("cd", "CD"), ("vinyl", "Vinyl")]), ("unknown", "Unknown")],
+        blank=True,
+    )
+    severity = models.IntegerField(choices=[(1, "Minor"), (2, "Major")], null=True, blank=True)
+    # Collision pair: a choice field whose natural sidecar name is taken by a real field
+    state = models.IntegerField(choices=[(1, "Open"), (2, "Done")], null=True, blank=True)
+    state_display = models.CharField(max_length=20, blank=True)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.title
+
+
 class CatalogItem(models.Model):
     """Concrete model shared by channel proxy admins."""
 

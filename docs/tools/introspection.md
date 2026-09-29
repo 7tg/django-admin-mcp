@@ -213,7 +213,7 @@ Field metadata keys, as emitted by the handler:
 | `primary_key` | only when `true` | Primary key flag |
 | `max_length` | when set | Maximum length (CharField etc.) |
 | `help_text` | when set | Field help text |
-| `choices` | when set | List of `{"value", "label"}` objects |
+| `choices` | when set | List of `{"value", "label"}` objects; grouped (optgroup) choices are flattened so every choice is listed |
 | `default` | non-callable defaults only | Default value |
 | `has_default` | callable defaults only | `true` when the default is a callable |
 | `related_model` | FK/M2M/reverse | Bare related model name (e.g. `"author"`) |
