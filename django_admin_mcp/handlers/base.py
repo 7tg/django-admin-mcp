@@ -987,6 +987,23 @@ def build_admin_form(
     post = dict(data)
     form = form_class(data=post) if instance is None else form_class(data=post, instance=instance)
     form.data = post
+    shape_admin_form(form, instance=instance, prepopulated_fields=prepopulated_fields)
+    return form
+
+
+def shape_admin_form(
+    form: Any,
+    instance: models.Model | None = None,
+    prepopulated_fields: Mapping[str, Any] | None = None,
+) -> None:
+    """
+    Apply ``build_admin_form()``'s reshaping to an already bound form.
+
+    Inline formsets construct their own forms, bound to the formset's POST
+    dict under a per-row prefix; this gives those forms the same treatment.
+    ``form.data`` must be a mutable dict and is rewritten in place.
+    """
+    post = form.data
 
     if instance is None and prepopulated_fields:
         _prepopulate(form, post, prepopulated_fields)
@@ -1002,7 +1019,111 @@ def build_admin_form(
             # value, i.e. the model default (issue #115)
             field.disabled = True
 
-    return form
+
+class _KeyRecorder(dict):
+    """A dict that records which keys were looked up, whether or not they exist."""
+
+    def __init__(self, data: Mapping[str, Any]):
+        super().__init__(data)
+        self.read: set[str] = set()
+
+    def __getitem__(self, key):
+        self.read.add(key)
+        return super().__getitem__(key)
+
+    def __contains__(self, key):
+        self.read.add(key)
+        return super().__contains__(key)
+
+    def get(self, key, default=None):
+        self.read.add(key)
+        return super().get(key, default)
+
+
+def unconsumed_keys(form: Any, data: Mapping[str, Any], skip_fields: Sequence[str] = ()) -> list[str]:
+    """
+    Return the keys of ``data`` that the bound form will not consume (issue #118).
+
+    A form silently ignores POST keys none of its fields read, so a write
+    carrying an unknown, read-only, non-editable or excluded field would
+    report success without storing the value. The accepted set is derived
+    from the form itself rather than from the model's fields:
+
+    - every key an enabled field's widget reads from POST data: the field's
+      own name for most widgets, the ``<name>_0`` / ``<name>_1`` sub-keys of
+      a ``MultiWidget``, the ``<name>-clear`` checkbox of a file input;
+    - the name of a ``MultiWidget`` field, whose single value
+      ``shape_admin_form()`` splits across the sub-keys.
+
+    A field the form itself disables (``UserChangeForm.password``) ignores
+    submitted data, and a file field reads uploads rather than POST data, so
+    their names are reported as unconsumed. Call this after
+    ``build_admin_form()`` / ``shape_admin_form()``: the fields they disable
+    are exactly those the caller did not send.
+
+    Args:
+        form: A bound form, already shaped.
+        data: The caller's field name -> value pairs, as bound to the form
+            (FK aliases normalized, keys without the form prefix).
+        skip_fields: Form fields whose keys the caller may not supply (the
+            bookkeeping fields of an inline formset).
+
+    Returns:
+        The offending keys, in the caller's order.
+    """
+    recorder = _KeyRecorder({form.add_prefix(key): value for key, value in data.items()})
+    files: MultiValueDict = MultiValueDict()
+    accepted = set()
+    for name, field in form.fields.items():
+        if field.disabled or name in skip_fields:
+            continue
+        key = form.add_prefix(name)
+        if isinstance(field.widget, MultiWidget):
+            accepted.add(key)
+        recorder.read.clear()
+        try:
+            field.widget.value_from_datadict(recorder, files, key)
+        except Exception:
+            # A widget choking on the value is form validation's to report
+            logger.debug("Widget of '%s' could not read the submitted data", name, exc_info=True)
+            accepted.add(key)
+        accepted |= recorder.read
+    return [key for key in data if form.add_prefix(key) not in accepted]
+
+
+def get_readonly_field_names(model_admin: Any, request: HttpRequest, obj: models.Model | None = None) -> set[str]:
+    """
+    Names in the admin's ``get_readonly_fields(request, obj)`` (issue #118).
+
+    Works for a ModelAdmin and for an InlineModelAdmin (``obj`` is then the
+    parent). Callable entries are display-only and have no name to write to.
+    """
+    entries = get_computed_entries(model_admin, "readonly_fields", request, obj)
+    return {entry for entry in entries if isinstance(entry, str)}
+
+
+def reject_unconsumed_keys(
+    form: Any,
+    data: Mapping[str, Any],
+    readonly_fields: set[str],
+    skip_fields: Sequence[str] = (),
+) -> dict[str, Any] | None:
+    """
+    Build the error payload for keys the form will not consume, or None when all are used.
+
+    Read-only fields are reported apart from other invalid keys, so a client
+    can tell "this admin does not let you write that" from a typo.
+    """
+    # Checked against the admin's list, not only the form: a form built
+    # without the admin's get_form() does not leave read-only fields out
+    readonly = [key for key in data if key in readonly_fields]
+    if readonly:
+        verb = "set" if form.instance._state.adding else "update"
+        return {"error": f"Cannot {verb} readonly fields: {', '.join(readonly)}", "readonly_fields": readonly}
+    unconsumed = unconsumed_keys(form, data, skip_fields)
+    if unconsumed:
+        return {"error": f"Invalid field: {unconsumed[0]}", "invalid_fields": unconsumed}
+    return None
 
 
 def normalize_fk_fields(model: type[models.Model], data: dict) -> dict:
@@ -1073,7 +1194,7 @@ def check_inline_permission(
     inline_class: type,
     parent_admin: Any,
     request: HttpRequest,
-    parent_obj: models.Model,
+    parent_obj: models.Model | None,
     action: str,
 ) -> bool:
     """
@@ -1086,7 +1207,7 @@ def check_inline_permission(
         inline_class: The inline class from parent_admin.inlines.
         parent_admin: The parent ModelAdmin instance.
         request: HttpRequest with user set.
-        parent_obj: The parent model instance being edited.
+        parent_obj: The parent model instance being edited (None while it is being added).
         action: One of 'view', 'add', 'change', 'delete'.
 
     Returns:

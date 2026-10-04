@@ -18,16 +18,11 @@ from django_admin_mcp.handlers.base import (
     _log_action,
     _serialize_data_for_log,
     attach_messages,
-    build_admin_form,
     check_related_view_permission,
-    format_form_errors,
-    get_admin_form_class,
     get_admin_queryset,
     get_computed_entries,
-    get_prepopulated_fields,
     is_missing_id,
     json_response,
-    normalize_fk_fields,
     require_deletable,
     require_object_permission,
     resolve_related_admin,
@@ -44,7 +39,8 @@ from django_admin_mcp.handlers.filters import (  # noqa: F401  (re-exported for 
     _queryable_field_names,
     resolve_list_filters,
 )
-from django_admin_mcp.handlers.inlines import _get_inline_data, _update_inlines
+from django_admin_mcp.handlers.inlines import _get_inline_data
+from django_admin_mcp.handlers.write import WriteRejected, save_through_admin
 from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
 
 
@@ -313,24 +309,29 @@ async def handle_create(
     """
     Create new model instance with form validation.
 
-    Uses Django admin's form system for validation when ModelAdmin is available.
-    Falls back to auto-generated ModelForm otherwise.
+    Runs the admin's own save pipeline (see ``handlers/write.py``): the
+    ModelAdmin's form, ``save_model()``, then ``save_related()`` with the
+    inline formsets. Falls back to an auto-generated ModelForm without a
+    ModelAdmin.
 
     Args:
         model_name: The lowercase name of the model.
         arguments: Dictionary containing:
             - data: dict of field:value pairs for the new instance
+            - inlines: optional dict of inline rows to create with it
         request: HttpRequest with user for permission checking and logging.
         model: Resolved Django model class (injected by decorator).
         model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing:
-        - On success: success, id, object
+        - On success: success, id, object, (optional) inlines
         - On validation error: error, code, validation_errors
+        - On an inline error: error, code, inlines.errors; nothing is saved
     """
     try:
         data = arguments.get("data", {})
+        inlines_data = arguments.get("inlines") or {}
         user = getattr(request, "user", None)
         if user and not user.is_authenticated:
             user = None
@@ -340,64 +341,35 @@ async def handle_create(
             # Deferred import: Django models require app registry to be ready
             from django.contrib.admin.models import ADDITION  # noqa: PLC0415
 
-            # Normalize FK field names (convert field_id to field)
-            normalized_data = normalize_fk_fields(model, data)
-
-            # Get the form class from ModelAdmin or generate one
-            form_class = get_admin_form_class(model, model_admin, request, obj=None)
-
-            # Bind the form to the submitted data, shaped for the admin widgets
-            form = build_admin_form(
-                form_class,
-                normalized_data,
-                prepopulated_fields=get_prepopulated_fields(model_admin, request),
-            )
-
-            # Validate the form
-            if not form.is_valid():
-                return None, format_form_errors(form.errors)
-
-            # Wrap save and logging in transaction for atomicity
+            # Save, inline writes, and logging are one transaction
             with transaction.atomic():
-                # Save the form to create the object
-                # Use ModelAdmin.save_model() when available for the standard Django admin pipeline
-                if model_admin is not None:
-                    obj = form.save(commit=False)
-                    model_admin.save_model(request, obj, form, change=False)
-                    form.save_m2m()
-                else:
-                    obj = form.save()
+                obj, inlines_result = save_through_admin(model, model_admin, request, data, inlines=inlines_data)
 
                 # Log the action - use Pydantic for serialization (truncated for log size)
-                data_json = _serialize_data_for_log(data, model_admin=model_admin)
+                change_message = [f"Created via MCP: {_serialize_data_for_log(data, model_admin=model_admin)}"]
+                if inlines_data:
+                    change_message.append(f"Created inlines: {list(inlines_data.keys())}")
                 _log_action(
                     user=user,
                     obj=obj,
                     action_flag=ADDITION,
-                    change_message=f"Created via MCP: {data_json}",
+                    change_message=" | ".join(change_message),
                 )
 
-            return obj.pk, serialize_instance(obj, model_admin)
+            return obj.pk, serialize_instance(obj, model_admin), inlines_result
 
-        result_id, result_data = await create_object()
-
-        # Check if validation failed
-        if result_id is None:
-            return json_response(
-                {
-                    "error": "Validation failed",
-                    "code": "validation_error",
-                    "validation_errors": result_data,
-                }
-            )
+        result_id, result_data, inlines_result = await create_object()
 
         response = CreateResponse(
             success=True,
             id=result_id,
             object=result_data,
+            inlines=inlines_result if inlines_result and any(inlines_result.values()) else None,
         )
 
         return json_response(attach_messages(response.model_dump(), request, model_admin), indent=2)
+    except WriteRejected as e:
+        return json_response(e.payload)
     except Exception as e:
         return json_response({"error": safe_error_message(e)})
 
@@ -410,8 +382,9 @@ async def handle_update(
     """
     Update model instance with form validation.
 
-    Uses Django admin's form system for validation when ModelAdmin is available.
-    The form is initialized with the existing instance and partial data is merged.
+    Runs the admin's own save pipeline (see ``handlers/write.py``). Only the
+    fields the caller sent change; inline operations are validated with the
+    parent and saved in the same transaction.
 
     Args:
         model_name: The lowercase name of the model.
@@ -427,32 +400,15 @@ async def handle_update(
         List of TextContent with JSON response containing:
         - On success: success, object, (optional) inlines
         - On validation error: error, code, validation_errors
+        - On an inline error: error, code, inlines.errors; nothing is saved
     """
     try:
         obj_id = arguments.get("id")
         data = arguments.get("data", {})
-        inlines_data = arguments.get("inlines", {})
+        inlines_data = arguments.get("inlines") or {}
 
         if is_missing_id(obj_id):
             return json_response({"error": "id parameter is required"})
-
-        # Validate that only model fields are being updated (protect against mass assignment)
-        valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, "name")}
-        for key in data.keys():
-            if key not in valid_fields:
-                return json_response({"error": f"Invalid field: {key}"})
-
-        # Check for readonly_fields - prevent updating them
-        if model_admin:
-            readonly_fields = set(getattr(model_admin, "readonly_fields", []))
-            readonly_attempted = set(data.keys()) & readonly_fields
-            if readonly_attempted:
-                return json_response(
-                    {
-                        "error": f"Cannot update readonly fields: {', '.join(readonly_attempted)}",
-                        "readonly_fields": list(readonly_attempted),
-                    }
-                )
 
         user = getattr(request, "user", None)
         if user and not user.is_authenticated:
@@ -468,35 +424,11 @@ async def handle_update(
             obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
             require_object_permission(request, model_admin, "change", obj, model_name)
 
-            # Normalize FK field names (convert field_id to field)
-            normalized_data = normalize_fk_fields(model, data)
-
-            # Get the form class from ModelAdmin
-            form_class = get_admin_form_class(model, model_admin, request, obj=obj)
-
-            # Partial update: fields the caller did not send keep the
-            # instance's values (issue #114)
-            form = build_admin_form(form_class, normalized_data, instance=obj)
-
-            # Validate the form
-            if not form.is_valid():
-                return None, format_form_errors(form.errors), {}
-
-            # Wrap save, inline updates, and logging in transaction for atomicity
+            # Save, inline writes, and logging are one transaction
             with transaction.atomic():
-                # Save the form to update the object
-                # Use ModelAdmin.save_model() when available for the standard Django admin pipeline
-                if model_admin is not None:
-                    obj = form.save(commit=False)
-                    model_admin.save_model(request, obj, form, change=True)
-                    form.save_m2m()
-                else:
-                    obj = form.save()
-
-                # Handle inlines if provided
-                inlines_result = {}
-                if inlines_data and model_admin:
-                    inlines_result = _update_inlines(obj, model_admin, inlines_data, request)
+                obj, inlines_result = save_through_admin(
+                    model, model_admin, request, data, obj=obj, inlines=inlines_data
+                )
 
                 # Log the action - use Pydantic for serialization (truncated for log size)
                 change_message = []
@@ -512,19 +444,9 @@ async def handle_update(
                     change_message=(" | ".join(change_message) if change_message else "Updated via MCP"),
                 )
 
-            return serialize_instance(obj, model_admin), None, inlines_result
+            return serialize_instance(obj, model_admin), inlines_result
 
-        obj_dict, validation_errors, inlines_result = await update_object()
-
-        # Check if validation failed
-        if obj_dict is None:
-            return json_response(
-                {
-                    "error": "Validation failed",
-                    "code": "validation_error",
-                    "validation_errors": validation_errors,
-                }
-            )
+        obj_dict, inlines_result = await update_object()
 
         response = UpdateResponse(
             success=True,
@@ -535,7 +457,7 @@ async def handle_update(
         return json_response(attach_messages(response.model_dump(), request, model_admin), indent=2)
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
-    except OperationDenied as e:
+    except (OperationDenied, WriteRejected) as e:
         return json_response(e.payload)
     except Exception as e:
         return json_response({"error": safe_error_message(e)})

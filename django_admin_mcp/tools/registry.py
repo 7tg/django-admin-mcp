@@ -169,6 +169,22 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
 
     fields = _get_field_info(model, model_admin)
     fields_doc = _format_fields_doc(fields)
+    # Shared by create_* and update_*: what the write pipeline accepts (issue #118)
+    write_doc = (
+        "Date and datetime fields take a single ISO 8601 string "
+        "(e.g. '2026-03-01' or '2026-03-01T09:30:00Z'). "
+        "Foreign keys take the related object's ID, many-to-many fields a list of IDs. "
+        "A field the admin form does not accept (unknown, read-only or non-editable) "
+        "is rejected with an error, never ignored."
+    )
+    inlines_schema = {
+        "type": "object",
+        "description": (
+            "Inline rows saved with the object, keyed by inline model name: "
+            "{model_name: [{data} to add, {id, data} to update, {id, _delete: true} to delete]}. "
+            "All-or-nothing: any inline error rejects the whole call and nothing is saved"
+        ),
+    }
 
     return [
         Tool(
@@ -249,21 +265,34 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
         ),
         Tool(
             name=f"create_{model_name}",
-            description=f"Create a new {verbose_name}\n\nFields:\n{fields_doc}",
+            description=(
+                f"Create a new {verbose_name}, optionally with inline rows.\n\n{write_doc}\n\nFields:\n{fields_doc}"
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "data": {
                         "type": "object",
                         "description": f"The data for the new {verbose_name}",
-                    }
+                    },
+                    "inlines": {
+                        **inlines_schema,
+                        "description": (
+                            "Inline rows to create with the object, keyed by inline model name: "
+                            "{model_name: [{data}, ...]}. "
+                            "All-or-nothing: any inline error rejects the whole call and nothing is saved"
+                        ),
+                    },
                 },
                 "required": ["data"],
             },
         ),
         Tool(
             name=f"update_{model_name}",
-            description=(f"Update an existing {verbose_name} with optional inline updates.\n\nFields:\n{fields_doc}"),
+            description=(
+                f"Update an existing {verbose_name} with optional inline updates. "
+                f"Only the fields sent are changed.\n\n{write_doc}\n\nFields:\n{fields_doc}"
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -275,12 +304,7 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
                         "type": "object",
                         "description": "The fields to update",
                     },
-                    "inlines": {
-                        "type": "object",
-                        "description": (
-                            "Inline updates: {model_name: [{id, data}, {data for new}, {id, _delete: true}]}"
-                        ),
-                    },
+                    "inlines": inlines_schema,
                 },
                 "required": ["id"],
             },

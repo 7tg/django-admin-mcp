@@ -15,19 +15,16 @@ from django_admin_mcp.handlers.base import (
     OperationDenied,
     _log_action,
     _serialize_data_for_log,
-    build_admin_form,
-    format_form_errors,
-    get_admin_form_class,
+    attach_messages,
     get_admin_queryset,
-    get_prepopulated_fields,
     is_missing_id,
     json_response,
-    normalize_fk_fields,
     require_deletable,
     require_object_permission,
     safe_error_message,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
+from django_admin_mcp.handlers.write import WriteRejected, save_through_admin
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -39,17 +36,22 @@ def _get_bulk_user(request):
     return user
 
 
-def _bulk_response(operation, items, results):
-    """Build standardized bulk operation response."""
-    return json_response(
-        {
-            "operation": operation,
-            "total_items": len(items),
-            "success_count": len(results["success"]),
-            "error_count": len(results["errors"]),
-            "results": results,
-        }
-    )
+def _bulk_response(operation, items, results, request, model_admin):
+    """
+    Build standardized bulk operation response.
+
+    Messages the admin queued with message_user() while the items were
+    processed ride along under "messages", unless the admin opts out with
+    mcp_return_messages = False (issues #118, #119).
+    """
+    data = {
+        "operation": operation,
+        "total_items": len(items),
+        "success_count": len(results["success"]),
+        "error_count": len(results["errors"]),
+        "results": results,
+    }
+    return json_response(attach_messages(data, request, model_admin))
 
 
 @require_registered_model
@@ -71,41 +73,24 @@ async def handle_bulk_create(
         items = arguments.get("items", [])
         user = _get_bulk_user(request)
         results: dict[str, list] = {"success": [], "errors": []}
-        form_class = get_admin_form_class(model, model_admin, request, obj=None)
-        prepopulated_fields = get_prepopulated_fields(model_admin, request)
 
         for i, item_data in enumerate(items):
             try:
-                normalized_data = normalize_fk_fields(model, item_data)
-                form = build_admin_form(form_class, normalized_data, prepopulated_fields=prepopulated_fields)
-                if not form.is_valid():
-                    results["errors"].append(
-                        {
-                            "index": i,
-                            "error": "Validation failed",
-                            "validation_errors": format_form_errors(form.errors),
-                        }
-                    )
-                    continue
-
                 with transaction.atomic():
-                    # Same admin pipeline as handle_create: save_model() when
-                    # a ModelAdmin is available (issue #95)
-                    if model_admin is not None:
-                        obj = form.save(commit=False)
-                        model_admin.save_model(request, obj, form, change=False)
-                        form.save_m2m()
-                    else:
-                        obj = form.save()
+                    # Same admin pipeline as handle_create: save_model() and
+                    # save_related() (issues #95, #118)
+                    obj, _ = save_through_admin(model, model_admin, request, item_data)
                     _log_action(user=user, obj=obj, action_flag=ADDITION, change_message="Bulk created via MCP")
                 results["success"].append({"index": i, "id": obj.pk, "created": True})
+            except WriteRejected as e:
+                results["errors"].append({"index": i, **e.payload})
             except Exception as e:
                 results["errors"].append({"index": i, "error": safe_error_message(e)})
 
         return items, results
 
     items, results = await execute()
-    return _bulk_response("create", items, results)
+    return _bulk_response("create", items, results, request, model_admin)
 
 
 @require_registered_model
@@ -128,10 +113,6 @@ async def handle_bulk_update(
         user = _get_bulk_user(request)
         results: dict[str, list] = {"success": [], "errors": []}
 
-        # Same guards as handle_update (issue #95)
-        valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, "name")}
-        readonly_fields = set(getattr(model_admin, "readonly_fields", []) or []) if model_admin else set()
-
         for i, item in enumerate(items):
             try:
                 obj_id = item.get("id")
@@ -140,50 +121,23 @@ async def handle_bulk_update(
                     results["errors"].append({"index": i, "error": "id is required for update"})
                     continue
 
-                invalid_fields = [key for key in data if key not in valid_fields]
-                if invalid_fields:
-                    results["errors"].append({"index": i, "error": f"Invalid field: {invalid_fields[0]}"})
-                    continue
-
-                readonly_attempted = set(data) & readonly_fields
-                if readonly_attempted:
-                    results["errors"].append(
-                        {
-                            "index": i,
-                            "error": f"Cannot update readonly fields: {', '.join(sorted(readonly_attempted))}",
-                            "readonly_fields": sorted(readonly_attempted),
-                        }
-                    )
+                # An item is {id, data}; anything else would be ignored, so
+                # it is refused (inlines are not available in bulk)
+                stray = sorted(set(item) - {"id", "data"})
+                if stray:
+                    results["errors"].append({"index": i, "error": f"Invalid item key: {stray[0]}"})
                     continue
 
                 # Scoped to the admin queryset (issue #88)
                 obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
                 require_object_permission(request, model_admin, "change", obj, model_name)
 
-                normalized_data = normalize_fk_fields(model, data)
-                form_class = get_admin_form_class(model, model_admin, request, obj=obj)
-
-                # Fields the caller did not send keep the instance's values (issue #114)
-                form = build_admin_form(form_class, normalized_data, instance=obj)
-                if not form.is_valid():
-                    results["errors"].append(
-                        {
-                            "index": i,
-                            "error": "Validation failed",
-                            "validation_errors": format_form_errors(form.errors),
-                        }
-                    )
-                    continue
-
                 with transaction.atomic():
-                    # Same admin pipeline as handle_update: save_model() when
-                    # a ModelAdmin is available (issue #95)
-                    if model_admin is not None:
-                        obj = form.save(commit=False)
-                        model_admin.save_model(request, obj, form, change=True)
-                        form.save_m2m()
-                    else:
-                        obj = form.save()
+                    # Same admin pipeline and guards as handle_update:
+                    # save_model() and save_related() (issues #95, #118).
+                    # Fields the caller did not send keep the instance's
+                    # values (issue #114)
+                    obj, _ = save_through_admin(model, model_admin, request, data, obj=obj)
                     # Same redacting serializer as the single-update path (issue #104)
                     data_json = _serialize_data_for_log(data, model_admin=model_admin)
                     _log_action(
@@ -195,7 +149,7 @@ async def handle_bulk_update(
                 results["success"].append({"index": i, "id": obj_id, "updated": True})
             except model.DoesNotExist:
                 results["errors"].append({"index": i, "error": f"Object with id {obj_id} not found"})
-            except OperationDenied as e:
+            except (OperationDenied, WriteRejected) as e:
                 results["errors"].append({"index": i, **e.payload})
             except Exception as e:
                 results["errors"].append({"index": i, "error": safe_error_message(e)})
@@ -203,7 +157,7 @@ async def handle_bulk_update(
         return items, results
 
     items, results = await execute()
-    return _bulk_response("update", items, results)
+    return _bulk_response("update", items, results, request, model_admin)
 
 
 @require_registered_model
@@ -250,7 +204,7 @@ async def handle_bulk_delete(
         return items, results
 
     items, results = await execute()
-    return _bulk_response("delete", items, results)
+    return _bulk_response("delete", items, results, request, model_admin)
 
 
 @require_registered_model

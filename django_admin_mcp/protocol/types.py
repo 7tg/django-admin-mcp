@@ -191,6 +191,7 @@ class CreateResponse(BaseModel):
     success: bool
     id: int | str
     object: dict[str, Any]
+    inlines: dict[str, Any] | None = None
 
 
 class UpdateResponse(BaseModel):

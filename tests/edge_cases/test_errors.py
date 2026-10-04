@@ -244,10 +244,10 @@ class TestEdgeCasesAndErrors:
             },
         )
         response = json.loads(result[0].text)
-        # Should succeed on author update but have inline errors
-        assert response["success"] is True
-        if "inlines" in response:
-            assert len(response["inlines"]["errors"]) > 0
+        # An inline error fails the whole update (issue #118)
+        assert "success" not in response
+        assert response["code"] == "inline_error"
+        assert [e["code"] for e in response["inlines"]["errors"]] == ["not_found"]
 
     async def test_inline_delete(self):
         """Test deleting inline objects."""
@@ -656,7 +656,7 @@ class TestEdgeCasesAndErrors:
             lambda: Author.objects.create(name="BulkUpErr", email="bulkuperr@test.com"),
         )
         with patch(
-            "django_admin_mcp.handlers.bulk.get_admin_form_class",
+            "django_admin_mcp.handlers.write.get_admin_form_class",
             side_effect=RuntimeError("unexpected form error"),
         ):
             result = await MCPAdminMixin.handle_tool_call(
