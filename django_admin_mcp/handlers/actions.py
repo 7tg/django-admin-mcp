@@ -5,9 +5,11 @@ This module provides handlers for admin actions and bulk operations
 extracted from the mixin module.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.contrib.admin.utils import model_format_dict
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, QueryDict, StreamingHttpResponse
 
@@ -124,6 +126,23 @@ def _get_admin_actions(model_admin, request):
     return model_admin.get_actions(request)
 
 
+def _format_action_description(description: Any, format_dict: Mapping[str, Any]) -> str:
+    """
+    Interpolate an action description the way the admin changelist does.
+
+    Django formats descriptions with ``model_format_dict(opts)``, which is
+    what turns the built-in ``"Delete selected %(verbose_name_plural)s"``
+    into ``"Delete selected articles"`` (issue #119). A description that is
+    not a valid format string is returned unchanged rather than failing the
+    whole listing.
+    """
+    text = str(description)
+    try:
+        return text % format_dict
+    except (KeyError, TypeError, ValueError):
+        return text
+
+
 @require_registered_model
 @require_permission("view")
 async def handle_actions(
@@ -139,7 +158,8 @@ async def handle_actions(
 
     Returns list of actions with:
     - name (function name)
-    - description (short_description attribute)
+    - description (short_description attribute, formatted with the model's
+      verbose names as in the admin changelist)
 
     Args:
         model_name: The name of the model to list actions for.
@@ -156,8 +176,9 @@ async def handle_actions(
 
         if model_admin:
             actions_dict = _get_admin_actions(model_admin, request)
+            format_dict = model_format_dict(model._meta)
             for name, (_func, name, description) in actions_dict.items():
-                actions_info.append({"name": name, "description": str(description)})
+                actions_info.append({"name": name, "description": _format_action_description(description, format_dict)})
 
         return json_response(
             {

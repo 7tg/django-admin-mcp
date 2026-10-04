@@ -49,6 +49,8 @@ None required.
 }
 ```
 
+Descriptions are formatted as on the admin changelist: `%(verbose_name)s` and `%(verbose_name_plural)s` placeholders are filled with the model's names, so the built-in `"Delete selected %(verbose_name_plural)s"` is returned as `"Delete selected articles"`.
+
 ---
 
 ## action_\<model\>
