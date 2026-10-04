@@ -19,10 +19,19 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
     with django_db_blocker.unblock():
         # Deferred import: must wait for Django app registry to be ready
         from django_admin_mcp import MCPAdminMixin  # noqa: PLC0415
-        from tests.models import Article, Author, CatalogItemA, CatalogItemB, Gadget, Ticket  # noqa: PLC0415
+        from tests.models import (  # noqa: PLC0415
+            Article,
+            Author,
+            CatalogItemA,
+            CatalogItemB,
+            Event,
+            EventSession,
+            Gadget,
+            Ticket,
+        )
 
         # Clear any existing registrations
-        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket):
+        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket, Event):
             if model in admin.site._registry:
                 admin.site.unregister(model)
 
@@ -82,9 +91,21 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
             def get_queryset(self, request):
                 return super().get_queryset(request).filter(channel="B")
 
+        class EventSessionInline(admin.TabularInline):
+            model = EventSession
+            extra = 0
+
+        @admin.register(Event)
+        class EventAdmin(MCPAdminMixin, admin.ModelAdmin):
+            """Event admin: split datetime widgets, JSON, M2M, file, defaults, prepopulated slug."""
+
+            prepopulated_fields = {"slug": ["name"]}
+            inlines = [EventSessionInline]
+            mcp_expose = True
+
         yield
 
         # Cleanup (optional, as this is session-scoped)
-        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket):
+        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket, Event):
             if model in admin.site._registry:
                 admin.site.unregister(model)

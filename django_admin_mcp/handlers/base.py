@@ -12,13 +12,15 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from django.contrib.admin.sites import site
 from django.contrib.messages.storage.base import BaseStorage
-from django.core.exceptions import FieldError
+from django.core.exceptions import FieldDoesNotExist, FieldError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, OperationalError, models
 from django.db.models.fields.files import FieldFile
-from django.forms import ModelForm
+from django.forms import FileField as FileFormField
+from django.forms import ModelForm, MultiWidget
 from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
+from django.utils.datastructures import MultiValueDict
 from pydantic import TypeAdapter
 
 from django_admin_mcp.protocol.types import TextContent
@@ -661,6 +663,119 @@ def get_admin_form_class(
                 return form_class
 
     return modelform_factory(model, fields="__all__")
+
+
+def _field_was_sent(field: Any, data: dict, key: str) -> bool:
+    """Whether the caller supplied a value for a form field, under any key its widget reads."""
+    if key in data:
+        return True
+    widget = field.widget
+    if isinstance(widget, MultiWidget):
+        return not widget.value_omitted_from_data(data, MultiValueDict(), key)
+    # Widgets reading keys of their own (e.g. SelectDateWidget). Checkbox-style
+    # widgets answer False for "absent", which is not a caller-supplied value.
+    value = widget.value_from_datadict(data, MultiValueDict(), key)
+    return value is not None and value is not False
+
+
+def _split_for_multiwidget(form: Any, name: str, field: Any, value: Any) -> list:
+    """
+    Turn one caller-supplied value into the per-subwidget values of a MultiWidget.
+
+    The model field parses the value (e.g. an ISO 8601 string into a datetime)
+    and the widget's own ``decompress()`` splits it, so this works for any
+    MultiWidget rather than only ``AdminSplitDateTime``. A value that cannot be
+    parsed is handed to every subwidget so the form reports the format error.
+    """
+    widget = field.widget
+    size = len(widget.widgets)
+    if isinstance(value, (list, tuple)) and len(value) == size:
+        return list(value)
+    try:
+        model = getattr(getattr(form, "_meta", None), "model", None)
+        if model is not None:
+            try:
+                value = model._meta.get_field(name).to_python(value)
+            except FieldDoesNotExist:
+                pass
+        parts = list(widget.decompress(value))
+    except Exception:
+        return [value] * size
+    return parts if len(parts) == size else [value] * size
+
+
+def _shape_sent_value(form: Any, name: str, field: Any, data: dict, key: str) -> None:
+    """Rewrite a caller-supplied value into the shape the field's widget reads from POST data."""
+    value = data.get(key)
+    if value is None:
+        # Sent through the widget's own keys, or an explicit null
+        return
+    widget = field.widget
+    if isinstance(widget, MultiWidget):
+        suffixes = getattr(widget, "widgets_names", None) or [f"_{i}" for i in range(len(widget.widgets))]
+        del data[key]
+        for suffix, part in zip(suffixes, _split_for_multiwidget(form, name, field, value), strict=True):
+            data[key + suffix] = part
+    elif not isinstance(value, str):
+        # Python value -> widget value (e.g. JSONField dumps a dict, so that an
+        # empty container is not mistaken for an empty submission)
+        data[key] = field.prepare_value(value)
+
+
+def _keep_stored_value(field: Any) -> None:
+    """
+    Make an update form field keep the instance's value instead of reading POST data.
+
+    A disabled field is cleaned from the form's initial value — the instance's
+    Python value — so the widget never has to round-trip it. It is not the
+    caller's to fill in, so ``required`` is lifted, and the widget's display
+    precision does not apply to a value that is not displayed.
+    """
+    if isinstance(field, FileFormField):
+        # Without an upload a file field already cleans to its initial value;
+        # disabling it would make Django open the stored file to validate it.
+        return
+    field.disabled = True
+    field.required = False
+    field.widget.supports_microseconds = True
+
+
+def build_admin_form(form_class: type, data: dict, instance: models.Model | None = None) -> Any:
+    """
+    Bind an admin form to API-shaped data (issue #114).
+
+    ``data`` maps field names to JSON values, which is not the POST shape admin
+    widgets read: ``AdminSplitDateTime`` reads ``<name>_0``/``<name>_1``, and
+    form fields treat empty Python containers as "nothing submitted". Rather
+    than patching each type, this works through the form's own fields:
+
+    - fields the caller sent are reshaped for their widget: a single value is
+      split across a ``MultiWidget`` by the widget's ``decompress()``, other
+      non-string values go through the field's ``prepare_value()``;
+    - on update (``instance`` given), every field the caller did not send is
+      disabled, so Django cleans it from the instance's value and the update
+      changes only the fields that were sent.
+
+    Args:
+        form_class: ModelForm class, typically from ``get_admin_form_class()``.
+        data: Field name -> value pairs supplied by the caller.
+        instance: Existing object for updates, None for creates.
+
+    Returns:
+        A bound, not yet validated form instance.
+    """
+    post = dict(data)
+    form = form_class(data=post) if instance is None else form_class(data=post, instance=instance)
+    form.data = post
+
+    for name, field in form.fields.items():
+        key = form.add_prefix(name)
+        if _field_was_sent(field, post, key):
+            _shape_sent_value(form, name, field, post, key)
+        elif instance is not None:
+            _keep_stored_value(field)
+
+    return form
 
 
 def normalize_fk_fields(model: type[models.Model], data: dict) -> dict:
