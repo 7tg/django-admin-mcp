@@ -23,9 +23,8 @@ from django_admin_mcp.handlers.base import (
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
-    get_prepopulated_fields,
     get_computed_entries,
-    is_field_visible,
+    get_prepopulated_fields,
     is_missing_id,
     json_response,
     normalize_fk_fields,
@@ -38,90 +37,15 @@ from django_admin_mcp.handlers.base import (
     validate_pagination,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
+from django_admin_mcp.handlers.filters import (  # noqa: F401  (re-exported for backwards compatibility)
+    SAFE_FILTER_LOOKUPS,
+    InvalidFilterError,
+    _build_filter_query,
+    _queryable_field_names,
+    resolve_list_filters,
+)
 from django_admin_mcp.handlers.inlines import _get_inline_data, _update_inlines
 from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
-
-# Lookups allowed in list filters. Anything else (regex, relation traversal, ...)
-# is rejected to prevent resource-intensive queries and data disclosure via
-# filtering on fields of related models the caller may not have access to.
-SAFE_FILTER_LOOKUPS = frozenset({"exact", "contains", "icontains", "gt", "gte", "lt", "lte", "in", "isnull"})
-
-
-class InvalidFilterError(ValueError):
-    """A list filter or ordering parameter was rejected (issue #111)."""
-
-
-def _queryable_field_names(model: type[models.Model], model_admin: Any = None) -> set[str]:
-    """
-    Names of the fields a caller may filter and order by.
-
-    Only the model's own fields that are visible over MCP (plus the primary
-    key): filtering or ordering on a field hidden by mcp_fields /
-    mcp_exclude_fields would let a caller recover its value one comparison
-    at a time, and reverse relations would probe models the caller may not
-    be able to view.
-    """
-    names = set()
-    for field in model._meta.get_fields():
-        if field.auto_created and not field.concrete:
-            continue  # reverse relation
-        if getattr(field, "primary_key", False) or is_field_visible(model_admin, field.name):
-            names.add(field.name)
-    return names
-
-
-def _build_filter_query(model: type[models.Model], filters: dict[str, Any], model_admin: Any = None) -> Q:
-    """
-    Build a Q object from filter parameters.
-
-    Supports lookups on direct, MCP-visible model fields only (no relation
-    traversal):
-    - field: exact match (default)
-    - field__exact, field__contains, field__icontains
-    - field__gt, field__gte, field__lt, field__lte
-    - field__in: value in list
-    - field__isnull: is null check
-
-    Args:
-        model: The Django model class.
-        filters: Dictionary of field:value filter criteria.
-        model_admin: Optional ModelAdmin with field visibility configuration.
-
-    Returns:
-        Q object for filtering queryset.
-
-    Raises:
-        InvalidFilterError: For unknown fields, disallowed lookups, or
-            relation traversal (e.g. "author__email"). Silently dropping
-            these would hand the caller a success-shaped but unfiltered
-            result set.
-    """
-    q = Q()
-    valid_fields = _queryable_field_names(model, model_admin)
-    allowed = ", ".join(sorted(SAFE_FILTER_LOOKUPS))
-
-    problems = []
-    for key, value in filters.items():
-        parts = key.split("__")
-        field_name = parts[0]
-        if field_name not in valid_fields:
-            problems.append(f"'{key}': unknown field '{field_name}'")
-            continue
-        if len(parts) > 2:
-            problems.append(f"'{key}': relation traversal is not supported")
-            continue
-        if len(parts) == 2 and parts[1] not in SAFE_FILTER_LOOKUPS:
-            problems.append(
-                f"'{key}': unsupported lookup '{parts[1]}' "
-                f"(relation filters are not supported; allowed lookups: {allowed})"
-            )
-            continue
-
-        q &= Q(**{key: value})
-
-    if problems:
-        raise InvalidFilterError("Invalid filters — " + "; ".join(problems))
-    return q
 
 
 def _build_search_query(model: type[models.Model], search_fields: list[str], search_term: str) -> Q:
@@ -182,7 +106,9 @@ async def handle_list(
         arguments: Dictionary containing:
             - limit: int (default 100) - Maximum items to return
             - offset: int (default 0) - Number of items to skip
-            - filters: dict of field:value filter criteria
+            - filters: dict of filter criteria: own fields, relation paths
+              declared in the admin's list_filter / date_hierarchy, and
+              SimpleListFilter parameter names (see handlers/filters.py)
             - search: str search term
             - order_by: list of field names (prefix with - for descending)
         request: HttpRequest with user for permission checking.
@@ -213,11 +139,12 @@ async def handle_list(
 
         # Validate filters and caller-supplied ordering up front: rejected
         # parameters must produce an error response, never a success-shaped
-        # unfiltered result (issue #111).
-        filter_q = None
+        # unfiltered result (issue #111). Resolution runs in a sync context
+        # because admin list filters may query the database for their choices.
+        resolved_filters = None
         if filters:
             try:
-                filter_q = _build_filter_query(model, filters, model_admin)
+                resolved_filters = await sync_to_async(resolve_list_filters)(model, filters, model_admin, request)
             except InvalidFilterError as e:
                 return json_response({"error": str(e)})
 
@@ -234,8 +161,8 @@ async def handle_list(
             queryset = get_admin_queryset(model, model_admin, request)
 
             # Apply filters
-            if filter_q is not None:
-                queryset = queryset.filter(filter_q)
+            if resolved_filters is not None:
+                queryset = resolved_filters.apply(queryset)
 
             # Apply search through the admin's own pipeline: it handles the
             # ^/=/@ operator prefixes, field__lookup forms, and custom

@@ -176,9 +176,16 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
             description=(
                 f"List {verbose_name} instances with filtering, searching, "
                 f"ordering, and pagination.\n\n"
-                f"Filter lookups: field (exact), field__contains, field__icontains, "
-                f"field__gt, field__gte, field__lt, field__lte, field__in, "
-                f"field__isnull\n\n"
+                f"Filter lookups: field (exact), field__iexact, field__contains, field__icontains, "
+                f"field__startswith, field__istartswith, field__endswith, field__iendswith, "
+                f"field__gt, field__gte, field__lt, field__lte, field__in, field__range, "
+                f"field__isnull; date fields also take field__year, field__month, field__day "
+                f"(and field__date on datetimes), optionally followed by a comparison "
+                f"(field__year__gte).\n"
+                f"Relation paths (e.g. category__slug) and custom filter parameters work only "
+                f"when the admin declares them in list_filter / date_hierarchy: "
+                f"describe_{model_name} lists them under admin_config.filters. "
+                f"Invalid filters return an error.\n\n"
                 f"Available fields:\n{fields_doc}"
             ),
             inputSchema={
@@ -198,7 +205,8 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
                         "type": "object",
                         "description": (
                             "Filter criteria. Keys are field names with optional lookups "
-                            "(e.g., {'status': 'published', 'created_at__gte': '2024-01-01'})"
+                            "(e.g., {'status': 'published', 'created_at__gte': '2024-01-01'}), or "
+                            "filter names listed by describe under admin_config.filters"
                         ),
                     },
                     "search": {
