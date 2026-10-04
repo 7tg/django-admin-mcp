@@ -10,10 +10,11 @@ from typing import Any
 
 from django.db import models
 from django.forms import ModelForm
-from django.forms.models import model_to_dict, modelform_factory
+from django.forms.models import modelform_factory
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
+    build_admin_form,
     check_inline_permission,
     check_permission,
     format_form_errors,
@@ -303,11 +304,8 @@ def _update_inlines(
                         )
                         continue
 
-                    # Merge existing data with updates
-                    existing_data = model_to_dict(inline_obj)
-                    merged_data = {**existing_data, **update_data}
-
-                    form = inline_form_class(data=merged_data, instance=inline_obj)
+                    # Fields the caller did not send keep the row's values (issue #114)
+                    form = build_admin_form(inline_form_class, update_data, instance=inline_obj)
                     if form.is_valid():
                         form.save()
                         results["updated"].append({"model": inline_model_name, "id": item_id})
@@ -360,7 +358,11 @@ def _update_inlines(
 
                     create_data[fk_field.name] = obj.pk  # Set FK to parent
 
-                    form = inline_form_class(data=create_data)
+                    form = build_admin_form(
+                        inline_form_class,
+                        create_data,
+                        prepopulated_fields=getattr(inline_class, "prepopulated_fields", None),
+                    )
                     # Formset-derived forms exclude the parent FK; set it on the
                     # instance so saving still attaches to the parent
                     setattr(form.instance, fk_field.name, obj)

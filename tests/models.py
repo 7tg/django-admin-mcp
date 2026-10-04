@@ -125,3 +125,43 @@ class CatalogItemB(CatalogItem):
     class Meta:
         proxy = True
         app_label = "tests"
+
+
+class Event(models.Model):
+    """Test model whose admin form widgets do not read a single POST key (issues #114, #115)."""
+
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=50, unique=True)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    labels = models.JSONField(default=list, blank=True)
+    speakers = models.ManyToManyField(Author, blank=True, related_name="events")
+    brochure = models.FileField(upload_to="brochures/", blank=True)
+    capacity = models.PositiveIntegerField(default=0)
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    status = models.CharField(max_length=10, choices=[("draft", "Draft"), ("live", "Live")], default="draft")
+    is_public = models.BooleanField(default=True)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name
+
+
+class EventSession(models.Model):
+    """Inline child of Event with its own DateTime / JSON / default fields."""
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="sessions")
+    title = models.CharField(max_length=200)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(null=True, blank=True)
+    notes = models.JSONField(default=dict, blank=True)
+    seats = models.PositiveIntegerField(default=10)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.title

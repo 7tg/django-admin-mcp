@@ -10,7 +10,6 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from django.db import models, transaction
 from django.db.models import Q
-from django.forms.models import model_to_dict
 from django.http import HttpRequest
 from pydantic import TypeAdapter
 
@@ -18,10 +17,12 @@ from django_admin_mcp.handlers.base import (
     OperationDenied,
     _log_action,
     _serialize_data_for_log,
+    build_admin_form,
     check_related_view_permission,
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
+    get_prepopulated_fields,
     is_field_visible,
     is_missing_id,
     json_response,
@@ -398,8 +399,12 @@ async def handle_create(
             # Get the form class from ModelAdmin or generate one
             form_class = get_admin_form_class(model, model_admin, request, obj=None)
 
-            # Instantiate form with submitted data
-            form = form_class(data=normalized_data)
+            # Bind the form to the submitted data, shaped for the admin widgets
+            form = build_admin_form(
+                form_class,
+                normalized_data,
+                prepopulated_fields=get_prepopulated_fields(model_admin, request),
+            )
 
             # Validate the form
             if not form.is_valid():
@@ -522,12 +527,9 @@ async def handle_update(
             # Get the form class from ModelAdmin
             form_class = get_admin_form_class(model, model_admin, request, obj=obj)
 
-            # For partial updates, merge existing data with new data
-            existing_data = model_to_dict(obj)
-            merged_data = {**existing_data, **normalized_data}
-
-            # Instantiate form with merged data and existing instance
-            form = form_class(data=merged_data, instance=obj)
+            # Partial update: fields the caller did not send keep the
+            # instance's values (issue #114)
+            form = build_admin_form(form_class, normalized_data, instance=obj)
 
             # Validate the form
             if not form.is_valid():
