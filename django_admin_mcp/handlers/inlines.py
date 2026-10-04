@@ -358,7 +358,11 @@ def _update_inlines(
 
                     create_data[fk_field.name] = obj.pk  # Set FK to parent
 
-                    form = build_admin_form(inline_form_class, create_data)
+                    form = build_admin_form(
+                        inline_form_class,
+                        create_data,
+                        prepopulated_fields=getattr(inline_class, "prepopulated_fields", None),
+                    )
                     # Formset-derived forms exclude the parent FK; set it on the
                     # instance so saving still attaches to the parent
                     setattr(form.instance, fk_field.name, obj)

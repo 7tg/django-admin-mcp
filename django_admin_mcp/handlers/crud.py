@@ -22,6 +22,7 @@ from django_admin_mcp.handlers.base import (
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
+    get_prepopulated_fields,
     is_field_visible,
     is_missing_id,
     json_response,
@@ -399,7 +400,11 @@ async def handle_create(
             form_class = get_admin_form_class(model, model_admin, request, obj=None)
 
             # Bind the form to the submitted data, shaped for the admin widgets
-            form = build_admin_form(form_class, normalized_data)
+            form = build_admin_form(
+                form_class,
+                normalized_data,
+                prepopulated_fields=get_prepopulated_fields(model_admin, request),
+            )
 
             # Validate the form
             if not form.is_valid():

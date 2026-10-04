@@ -19,6 +19,7 @@ from django_admin_mcp.handlers.base import (
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
+    get_prepopulated_fields,
     is_missing_id,
     json_response,
     normalize_fk_fields,
@@ -71,11 +72,12 @@ async def handle_bulk_create(
         user = _get_bulk_user(request)
         results: dict[str, list] = {"success": [], "errors": []}
         form_class = get_admin_form_class(model, model_admin, request, obj=None)
+        prepopulated_fields = get_prepopulated_fields(model_admin, request)
 
         for i, item_data in enumerate(items):
             try:
                 normalized_data = normalize_fk_fields(model, item_data)
-                form = build_admin_form(form_class, normalized_data)
+                form = build_admin_form(form_class, normalized_data, prepopulated_fields=prepopulated_fields)
                 if not form.is_valid():
                     results["errors"].append(
                         {

@@ -21,6 +21,7 @@ from django.forms import ModelForm, MultiWidget
 from django.forms.models import model_to_dict, modelform_factory
 from django.http import HttpRequest
 from django.utils.datastructures import MultiValueDict
+from django.utils.text import slugify
 from pydantic import TypeAdapter
 
 from django_admin_mcp.protocol.types import TextContent
@@ -740,9 +741,46 @@ def _keep_stored_value(field: Any) -> None:
     field.widget.supports_microseconds = True
 
 
-def build_admin_form(form_class: type, data: dict, instance: models.Model | None = None) -> Any:
+def get_prepopulated_fields(model_admin: Any, request: HttpRequest) -> dict[str, Any]:
+    """Return the admin's ``prepopulated_fields`` for an add form ({} without an admin)."""
+    if model_admin is None:
+        return {}
+    try:
+        return dict(model_admin.get_prepopulated_fields(request))
+    except Exception:
+        return dict(getattr(model_admin, "prepopulated_fields", None) or {})
+
+
+def _prepopulate(form: Any, data: dict, prepopulated_fields: Mapping[str, Any]) -> None:
     """
-    Bind an admin form to API-shaped data (issue #114).
+    Fill omitted or empty prepopulated fields from their source fields (issue #115).
+
+    The admin does this in the browser; here the caller-supplied source values
+    are slugified, joined, and trimmed to the target field's max_length.
+    """
+    for target, sources in prepopulated_fields.items():
+        field = form.fields.get(target)
+        key = form.add_prefix(target)
+        if field is None or data.get(key) not in (None, ""):
+            continue
+        values = [data.get(form.add_prefix(source)) for source in sources]
+        text = " ".join(str(value) for value in values if value not in (None, ""))
+        slug = slugify(text, allow_unicode=getattr(field, "allow_unicode", False))
+        max_length = getattr(field, "max_length", None)
+        if max_length:
+            slug = slug[:max_length].rstrip("-_")
+        if slug:
+            data[key] = slug
+
+
+def build_admin_form(
+    form_class: type,
+    data: dict,
+    instance: models.Model | None = None,
+    prepopulated_fields: Mapping[str, Any] | None = None,
+) -> Any:
+    """
+    Bind an admin form to API-shaped data (issues #114, #115).
 
     ``data`` maps field names to JSON values, which is not the POST shape admin
     widgets read: ``AdminSplitDateTime`` reads ``<name>_0``/``<name>_1``, and
@@ -754,12 +792,17 @@ def build_admin_form(form_class: type, data: dict, instance: models.Model | None
       non-string values go through the field's ``prepare_value()``;
     - on update (``instance`` given), every field the caller did not send is
       disabled, so Django cleans it from the instance's value and the update
-      changes only the fields that were sent.
+      changes only the fields that were sent;
+    - on create, ``prepopulated_fields`` targets left out or empty are derived
+      from their sources, and every other omitted field that has an initial
+      value (the model default) is submitted with it, as the admin add form
+      does. Such a default is validated like any submitted value.
 
     Args:
         form_class: ModelForm class, typically from ``get_admin_form_class()``.
         data: Field name -> value pairs supplied by the caller.
         instance: Existing object for updates, None for creates.
+        prepopulated_fields: Admin ``prepopulated_fields`` mapping, used on create.
 
     Returns:
         A bound, not yet validated form instance.
@@ -768,12 +811,19 @@ def build_admin_form(form_class: type, data: dict, instance: models.Model | None
     form = form_class(data=post) if instance is None else form_class(data=post, instance=instance)
     form.data = post
 
+    if instance is None and prepopulated_fields:
+        _prepopulate(form, post, prepopulated_fields)
+
     for name, field in form.fields.items():
         key = form.add_prefix(name)
         if _field_was_sent(field, post, key):
             _shape_sent_value(form, name, field, post, key)
         elif instance is not None:
             _keep_stored_value(field)
+        elif form.get_initial_for_field(field, name) is not None:
+            # Omitted on create: a disabled field is cleaned from its initial
+            # value, i.e. the model default (issue #115)
+            field.disabled = True
 
     return form
 
