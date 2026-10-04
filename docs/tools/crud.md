@@ -329,6 +329,13 @@ Creates a new model instance with validation.
 | Parameter | Type | Description | Required |
 |-----------|------|-------------|----------|
 | `data` | object | Field values for the new instance | Yes |
+| `inlines` | object | Inline rows to create with the instance | No |
+
+`data` keys are the fields of the admin's add form. Foreign keys may be sent under the field name or its `_id` alias (`author` or `author_id`). Date and datetime fields take a single ISO 8601 string (`"2026-03-01T09:30:00Z"`), whatever widget the admin form uses.
+
+A key the form will not consume is **rejected**, never dropped: see [Rejected fields](#rejected-fields).
+
+`inlines` has the same shape as on [`update_*`](#inline-behavior), restricted to new rows (`{"data": {...}}`). The instance and its inline rows are created together or not at all.
 
 ### Examples
 
@@ -384,7 +391,29 @@ Creates a new model instance with validation.
 }
 ```
 
-When a `ModelAdmin` is registered, creation goes through `ModelAdmin.save_model()` and a `LogEntry` is written for the addition.
+**With inline rows:**
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "create_article",
+    "arguments": {
+      "data": {"title": "New Article", "author_id": 5},
+      "inlines": {
+        "comment": [
+          {"data": {"text": "First!"}},
+          {"data": {"text": "Second"}}
+        ]
+      }
+    }
+  }
+}
+```
+
+The response then carries an `inlines` key, as for [`update_*`](#response-3).
+
+When a `ModelAdmin` is registered, creation follows the admin's add view: `get_form()` → `save_form()` → `save_model()` → `save_related()`, which saves many-to-many data and then each inline formset through `save_formset()`. Overrides of any of these hooks run. A `LogEntry` is written for the addition.
 
 Messages the admin queues with `self.message_user()` during the call are returned in a `messages` list of `{"level", "message"}` objects (levels are Django's `debug`, `info`, `success`, `warning`, `error`); the key is omitted when there are none, or when the admin sets [`mcp_return_messages = False`](../reference/settings.md#mcp_return_messages). The same applies to `update_*` and `delete_*`:
 
@@ -432,7 +461,7 @@ Updates an existing model instance.
 | `data` | object | Field values to update | No (defaults to `{}`) |
 | `inlines` | object | Inline add/update/delete operations | No |
 
-Only `id` is required. `data` keys must be **model field names**: `author_id` is rejected with `{"error": "Invalid field: author_id"}` (unlike `create_*`, which normalizes `_id` suffixes).
+Only `id` is required, and only the fields sent in `data` change. `data` keys are the fields of the admin's change form, with the same conventions as `create_*`: `_id` aliases for foreign keys, a single ISO 8601 string for datetimes. A key the form will not consume is rejected: see [Rejected fields](#rejected-fields).
 
 The `inlines` parameter maps inline model names to lists of operations:
 
@@ -454,9 +483,42 @@ The `inlines` parameter maps inline model names to lists of operations:
 
 ### Inline behavior
 
-- Each operation is checked against the inline's own `add`/`change`/`delete` permission; denied items land in `errors` with `"code": "permission_denied"`.
-- The inline's `min_num`/`max_num` are enforced on the resulting object count **before any item is applied**. A violation rejects that inline model's whole batch with an error carrying `"code": "max_num_exceeded"` or `"code": "min_num_violated"`.
-- The success response includes an `inlines` key with `created`, `updated`, `deleted`, and `errors` lists.
+Inline rows are validated with the admin's own formsets (`InlineModelAdmin.get_formset()`), so the inline's form, `fields`/`exclude`, `get_readonly_fields()` and formset-level validation all apply, and they are saved through `ModelAdmin.save_formset()`.
+
+- **All or nothing.** The parent and every inline operation are validated first and saved in one transaction. Any inline error rejects the whole call: the parent change is not saved either, and the response is an [inline error](#inline-errors) instead of a success.
+- Each operation is checked against the inline's own `add`/`change`/`delete` permission (`"code": "permission_denied"`).
+- Existing rows are looked up within the parent; an `id` belonging to another parent is `"code": "not_found"`.
+- The inline's `min_num`/`max_num` are enforced on the resulting object count (`"code": "max_num_exceeded"` / `"code": "min_num_violated"`).
+- An inline name the admin does not declare is `"code": "unknown_inline"`.
+- Inline `data` follows the same rules as top-level `data`: read-only and unknown keys are rejected, datetimes take one ISO 8601 string. The foreign key to the parent is set automatically.
+- Rows you do not name are left untouched.
+- The success response includes an `inlines` key with `created`, `updated`, `deleted`, and an always-empty `errors` list.
+
+### Inline errors
+
+```json
+{
+  "error": "Inline operations failed; nothing was saved",
+  "code": "inline_error",
+  "inlines": {
+    "errors": [
+      {
+        "model": "comment",
+        "id": null,
+        "index": 1,
+        "error": "Validation failed",
+        "validation_errors": {
+          "errors": [{"field": "rating", "messages": ["Ensure this value is less than or equal to 5."]}],
+          "error_count": 1,
+          "fields_with_errors": ["rating"]
+        }
+      }
+    ]
+  }
+}
+```
+
+Each entry names the inline `model`, the row `id` (`null` for a new row), the `index` of the operation in the list you sent, an `error`, and — depending on the failure — a `code`, `validation_errors`, `readonly_fields` or `invalid_fields`. The same response shape is returned by `create_*`.
 
 ### Examples
 
@@ -526,11 +588,13 @@ With inline operations, the response also contains:
 }
 ```
 
-When a `ModelAdmin` is registered, the update goes through `ModelAdmin.save_model()` and a `LogEntry` is written for the change. Messages queued with `message_user()` are returned in `messages`, as for `create_*`.
+When a `ModelAdmin` is registered, the update follows the admin's change view: `get_form()` → `save_form()` → `save_model()` → `save_related()` (many-to-many data, then each inline formset through `save_formset()`). A `LogEntry` is written for the change. Messages queued with `message_user()` are returned in `messages`, as for `create_*`.
 
-### Readonly Fields
+### Rejected fields
 
-Attempts to update readonly fields return an error:
+`create_*`, `update_*` and `bulk_*` never drop a field silently. A key the admin form will not consume fails the call (or, in bulk, that item) and nothing is saved.
+
+Read-only fields are resolved through `get_readonly_fields(request, obj)`, so dynamic rules apply:
 
 ```python
 class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
@@ -539,10 +603,27 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 ```json
 {
-  "error": "Cannot update readonly fields: created_at",
-  "readonly_fields": ["created_at"]
+  "error": "Cannot update readonly fields: view_count",
+  "readonly_fields": ["view_count"]
 }
 ```
+
+(`create_*` words it `Cannot set readonly fields: ...`.)
+
+Any other key the form does not read — a typo, a model field with `editable=False`, a field left out by the admin's `fields`/`exclude`, a field the form disables, a file field (files cannot be uploaded over MCP; `<name>-clear: true` clears an optional one) — is reported as:
+
+```json
+{
+  "error": "Invalid field: internal_code",
+  "invalid_fields": ["internal_code"]
+}
+```
+
+What is accepted is derived from the admin form itself, not from the model, so these all work:
+
+- foreign key `_id` aliases (`author_id`)
+- form fields that are not model fields (the stock `UserAdmin` add form takes `password1` / `password2`)
+- the sub-keys of a multi-widget (`starts_at_0` / `starts_at_1`), although a single ISO 8601 string under the field name is simpler
 
 ---
 
@@ -588,7 +669,7 @@ When a `ModelAdmin` is registered, deletion routes through `ModelAdmin.delete_mo
 
 ## Foreign Key Handling
 
-In `create_*` data, foreign keys can be specified in two ways:
+In `create_*`, `update_*` and `bulk_*` data, foreign keys can be specified in two ways:
 
 **By ID (`_id` suffix):**
 
@@ -608,7 +689,7 @@ In `create_*` data, foreign keys can be specified in two ways:
 
 Both are normalized internally to the model field name.
 
-`update_*` accepts **only model field names**: sending `author_id` returns `{"error": "Invalid field: author_id"}`. Filters in `list_*` also require model field names (`{"author": 5}`); `author_id` there is rejected as an unknown field.
+Filters in `list_*` require model field names (`{"author": 5}`); `author_id` there is rejected as an unknown field.
 
 ---
 

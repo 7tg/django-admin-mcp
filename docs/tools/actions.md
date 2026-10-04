@@ -275,7 +275,7 @@ Update multiple records. Each item in `items` contains an `id` and `data`:
 }
 ```
 
-`id` is required per item; items without one fail with `{"index": i, "error": "id is required for update"}`.
+`id` is required per item; items without one fail with `{"index": i, "error": "id is required for update"}`. An item may only contain `id` and `data`: inline operations are not available in bulk, and any other key fails the item with `{"index": i, "error": "Invalid item key: inlines"}`.
 
 ### Bulk Delete
 
@@ -328,10 +328,14 @@ All bulk operations return a standardized response:
 
 Missing objects in update/delete yield `{"index": i, "error": "Object with id X not found"}`.
 
+Fields the admin form will not consume fail their item with the same `readonly_fields` / `invalid_fields` errors as [`create_*` and `update_*`](crud.md#rejected-fields).
+
+Messages the admin queues with `message_user()` while the items are processed are returned in a top-level `messages` list, as for [`create_*`](crud.md#create_model); the key is omitted when there are none or when the admin sets `mcp_return_messages = False`.
+
 ### Bulk Semantics
 
 - Each item runs in its own `transaction.atomic()` block: partial success is possible, and there is **no cross-item rollback** — items that succeeded stay committed even if later items fail.
-- Bulk operations use `form.save()` / `obj.delete()` directly, **bypassing** `ModelAdmin.save_model()`/`delete_model()` and admin-queryset scoping (unlike `create_*`/`update_*`/`delete_*`). Objects are fetched via `model.objects.get(pk=...)`.
+- Each item goes through the same admin pipeline as `create_*`/`update_*`/`delete_*`: the admin form, `save_model()` and `save_related()` for create and update, `delete_model()` for delete, with objects looked up in the admin's queryset.
 - An unknown operation returns `{"error": "operation must be 'create', 'update', or 'delete'"}`.
 
 ---
