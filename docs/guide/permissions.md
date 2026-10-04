@@ -26,6 +26,8 @@ Django Admin MCP integrates with Django's permission system. Every operation che
 
 `action_<model>` with `delete_selected` additionally requires `delete_<model>`, checked before any ID lookup.
 
+`tools/list` applies the same table: a model's tools appear only when the token can view it, and `create_*`, `update_*`, `action_*` and `delete_*` only when the token holds their permission. `bulk_*` is listed when the token holds at least one of `add`, `change` or `delete`. A token with only `view_<model>` therefore sees just the read tools.
+
 ### Permission Checking Flow
 
 ```

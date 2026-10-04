@@ -43,7 +43,8 @@ class MCPMessageStorage(BaseStorage):
 
     Admin hooks commonly call ``ModelAdmin.message_user()``; without a storage
     on the request that raises ``MessageFailure`` and rolls back the write.
-    Messages are collected in memory and discarded with the request.
+    Messages are collected in memory; ``collect_messages()`` drains them into
+    the tool response (issue #119) and the rest is discarded with the request.
     """
 
     def _get(self, *args, **kwargs):
@@ -57,6 +58,42 @@ def attach_messages_storage(request: HttpRequest) -> HttpRequest:
     """Give a synthetic request a messages storage so message_user() works."""
     request._messages = MCPMessageStorage(request)  # type: ignore[attr-defined]
     return request
+
+
+def collect_messages(request: HttpRequest) -> list[dict[str, str]]:
+    """
+    Drain the messages queued on a request during a tool call (issue #119).
+
+    Admin actions and save/delete hooks often report their outcome only
+    through ``message_user()``. Each message becomes ``{"level", "message"}``
+    with the level as Django's tag (``debug``, ``info``, ``success``,
+    ``warning``, ``error``; the numeric level for untagged custom levels).
+    The queue is emptied so a reused request never repeats a message.
+    """
+    storage = getattr(request, "_messages", None)
+    queued = getattr(storage, "_queued_messages", None)
+    if not queued:
+        return []
+    collected = [
+        {"level": message.level_tag or str(message.level), "message": str(message.message)} for message in queued
+    ]
+    queued.clear()
+    return collected
+
+
+def attach_messages(data: dict[str, Any], request: HttpRequest, model_admin: Any) -> dict[str, Any]:
+    """
+    Add the request's queued messages to a response payload; omitted when there are none.
+
+    An admin with ``mcp_return_messages = False`` opts out: its messages may
+    carry data that must not reach MCP clients (MCPTokenAdmin reports a new
+    token's plaintext this way). The queue is drained either way so nothing
+    leaks into a later response.
+    """
+    queued = collect_messages(request)
+    if queued and getattr(model_admin, "mcp_return_messages", True):
+        data["messages"] = queued
+    return data
 
 
 class MCPRequest(HttpRequest):
@@ -78,12 +115,13 @@ class MCPRequest(HttpRequest):
         attach_messages_storage(self)
 
 
-def json_response(data: dict) -> list[TextContent]:
+def json_response(data: dict, indent: int | None = None) -> list[TextContent]:
     """
     Wrap response data in TextContent list.
 
     Args:
         data: Dictionary to serialize as JSON response.
+        indent: Optional indentation for pretty-printed output.
 
     Returns:
         List containing a single TextContent with JSON-serialized data.
@@ -91,7 +129,7 @@ def json_response(data: dict) -> list[TextContent]:
     # Use Pydantic TypeAdapter for JSON serialization with better type safety.
     # fallback=str covers types pydantic can't serialize natively, notably
     # Django's lazy translation proxies (gettext_lazy verbose_names/fieldsets).
-    json_bytes = _JSON_ADAPTER.dump_json(data, by_alias=True, fallback=str)
+    json_bytes = _JSON_ADAPTER.dump_json(data, indent=indent, by_alias=True, fallback=str)
     return [TextContent(text=json_bytes.decode("utf-8"))]
 
 

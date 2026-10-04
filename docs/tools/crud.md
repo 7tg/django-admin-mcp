@@ -335,6 +335,19 @@ Creates a new model instance with validation.
 
 When a `ModelAdmin` is registered, creation goes through `ModelAdmin.save_model()` and a `LogEntry` is written for the addition.
 
+Messages the admin queues with `self.message_user()` during the call are returned in a `messages` list of `{"level", "message"}` objects (levels are Django's `debug`, `info`, `success`, `warning`, `error`); the key is omitted when there are none, or when the admin sets [`mcp_return_messages = False`](../reference/settings.md#mcp_return_messages). The same applies to `update_*` and `delete_*`:
+
+```json
+{
+  "success": true,
+  "id": 43,
+  "object": {"id": 43, "title": "New Article"},
+  "messages": [
+    {"level": "info", "message": "Welcome mail queued"}
+  ]
+}
+```
+
 ### Validation Errors
 
 If validation fails:
@@ -462,7 +475,7 @@ With inline operations, the response also contains:
 }
 ```
 
-When a `ModelAdmin` is registered, the update goes through `ModelAdmin.save_model()` and a `LogEntry` is written for the change.
+When a `ModelAdmin` is registered, the update goes through `ModelAdmin.save_model()` and a `LogEntry` is written for the change. Messages queued with `message_user()` are returned in `messages`, as for `create_*`.
 
 ### Readonly Fields
 
@@ -515,7 +528,7 @@ Deletes a model instance.
 }
 ```
 
-When a `ModelAdmin` is registered, deletion routes through `ModelAdmin.delete_model()`, and a `LogEntry` is written before the deletion (so the audit trail retains the object's representation).
+When a `ModelAdmin` is registered, deletion routes through `ModelAdmin.delete_model()`, and a `LogEntry` is written before the deletion (so the audit trail retains the object's representation). Messages queued with `message_user()` are returned in `messages`, as for `create_*`.
 
 !!! warning "Cascade Deletes"
     Deletion follows Django's cascade rules. Related objects with `on_delete=CASCADE` will also be deleted.

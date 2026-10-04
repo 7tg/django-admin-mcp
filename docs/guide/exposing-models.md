@@ -65,7 +65,7 @@ These models expose 12 tools:
 | `autocomplete_<model>` | view | Search suggestions |
 
 !!! note
-    `tools/list` itself is not permission-filtered — tools for models the caller cannot access are still advertised and fail with a permission error at call time.
+    `tools/list` is filtered by the token's permissions: a model's tools are listed only when the token passes `has_module_permission()` and holds `view`, and each write tool only when the token holds its permission (`add` for `create_*`, `change` for `update_*` and `action_*`, `delete` for `delete_*`, any of the three for `bulk_*`). Permissions are still checked on every call.
 
 ## Mixin Placement
 

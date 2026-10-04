@@ -471,6 +471,26 @@ def get_find_models_tool() -> Tool:
     )
 
 
+# Admin permissions that unlock each write tool in tools/list; any one of the
+# listed permissions is enough. Operations not listed here are view-gated.
+_WRITE_TOOL_PERMISSIONS: dict[str, tuple[str, ...]] = {
+    "create": ("add",),
+    "update": ("change",),
+    "action": ("change",),
+    "delete": ("delete",),
+    "bulk": ("add", "change", "delete"),
+}
+
+
+def _can_use_tool(tool: Tool, request: HttpRequest, model_admin: Any) -> bool:
+    """True when the requesting user holds a permission the tool's operation needs."""
+    operation = tool.name.split("_", 1)[0]
+    required = _WRITE_TOOL_PERMISSIONS.get(operation)
+    if required is None:
+        return True
+    return any(check_permission(request, model_admin, action) for action in required)
+
+
 def get_tools(request: HttpRequest | None = None) -> list[Tool]:
     """
     Generate Tool definitions for all exposed models.
@@ -481,7 +501,9 @@ def get_tools(request: HttpRequest | None = None) -> list[Tool]:
     When ``request`` is given, models the requesting user may not see are
     skipped — the same has_module_permission + view permission filter as
     find_models and resources/list — so tools/list doesn't advertise tool
-    schemas for models the token has no access to (issue #101).
+    schemas for models the token has no access to (issue #101). Write tools
+    are further filtered per operation, so a view-only token isn't offered
+    create/update/delete/bulk/action tools it cannot call (issue #119).
 
     Args:
         request: Optional HttpRequest with user set for permission filtering.
@@ -499,6 +521,9 @@ def get_tools(request: HttpRequest | None = None) -> list[Tool]:
             if not check_permission(request, model_admin, "view"):
                 continue
         model = model_admin.model
-        tools.extend(get_model_tools(model, model_admin))
+        model_tools = get_model_tools(model, model_admin)
+        if request is not None:
+            model_tools = [tool for tool in model_tools if _can_use_tool(tool, request, model_admin)]
+        tools.extend(model_tools)
 
     return tools
