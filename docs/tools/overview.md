@@ -130,7 +130,7 @@ Each tool has a JSON Schema defining its input parameters. The generated `list_*
 ```json
 {
   "name": "list_article",
-  "description": "List article instances with filtering, searching, ordering, and pagination.\n\nFilter lookups: field (exact), field__contains, field__icontains, field__gt, field__gte, field__lt, field__lte, field__in, field__isnull\n\nAvailable fields:\n  - id (AutoField)\n  - title (CharField) [required]\n  - author (ForeignKey) [required]\n  - published (BooleanField)",
+  "description": "List article instances with filtering, searching, ordering, and pagination.\n\nFilter lookups: field (exact), field__iexact, field__contains, field__icontains, field__startswith, field__istartswith, field__endswith, field__iendswith, field__gt, field__gte, field__lt, field__lte, field__in, field__range, field__isnull; date fields also take field__year, field__month, field__day (and field__date on datetimes), optionally followed by a comparison (field__year__gte).\nRelation paths (e.g. category__slug) and custom filter parameters work only when the admin declares them in list_filter / date_hierarchy: describe_article lists them under admin_config.filters. Invalid filters return an error.\n\nAvailable fields:\n  - id (AutoField)\n  - title (CharField) [required]\n  - author (ForeignKey) [required]\n  - published (BooleanField)",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -146,7 +146,7 @@ Each tool has a JSON Schema defining its input parameters. The generated `list_*
       },
       "filters": {
         "type": "object",
-        "description": "Filter criteria. Keys are field names with optional lookups (e.g., {'status': 'published', 'created_at__gte': '2024-01-01'})"
+        "description": "Filter criteria. Keys are field names with optional lookups (e.g., {'status': 'published', 'created_at__gte': '2024-01-01'}), or filter names listed by describe under admin_config.filters"
       },
       "search": {
         "type": "string",

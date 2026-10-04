@@ -187,6 +187,10 @@ Every field with a `related_model` (forward FK/M2M **and** reverse relations) is
   "admin_config": {
     "list_display": ["title", "author", "published", "created_at"],
     "list_filter": ["published", "created_at"],
+    "filters": [
+      {"name": "published", "kind": "field", "type": "BooleanField"},
+      {"name": "created_at", "kind": "field", "type": "DateTimeField"}
+    ],
     "search_fields": ["title", "content"],
     "ordering": ["-created_at"],
     "readonly_fields": ["created_at", "updated_at"]
@@ -196,7 +200,33 @@ Every field with a `related_model` (forward FK/M2M **and** reverse relations) is
 
 `relationships` is a **flat list** of the same field-metadata dicts as `fields` — there is no `forward`/`reverse` grouping and no `related_name` key. `type` values are Django internal types (`ForeignKey`, `ManyToManyField`, `OneToOneField`); reverse relations (which have no internal type) get `"type": "Unknown"`.
 
-`admin_config` always emits `list_display`, `list_filter`, `search_fields`, `ordering`, and `readonly_fields`. It conditionally includes `fieldsets` (as `[{"name", "fields", "classes"}]`), `date_hierarchy`, and `inlines` (as `[{"model", "fk_name"}]`). Non-string entries (callables, filter classes) are stringified to dotted paths.
+`admin_config` always emits `list_display`, `list_filter`, `filters`, `search_fields`, `ordering`, and `readonly_fields`. It conditionally includes `fieldsets` (as `[{"name", "fields", "classes"}]`), `date_hierarchy`, and `inlines` (as `[{"model", "fk_name"}]`). Non-string entries (callables, filter classes) are stringified to dotted paths.
+
+### Usable filters
+
+`admin_config.list_filter` echoes the admin's declaration (via `get_list_filter(request)`). `admin_config.filters` lists what `list_<model>` actually accepts from it, in declaration order, followed by the `date_hierarchy` field:
+
+```json
+"filters": [
+  {"name": "size", "kind": "field", "type": "CharField",
+   "choices": [{"value": "s", "label": "Small"}, {"value": "l", "label": "Large"}]},
+  {"name": "category__slug", "kind": "field", "type": "SlugField"},
+  {"name": "band", "kind": "parameter", "title": "price band",
+   "choices": [{"value": "cheap", "label": "Under 10"}, {"value": "pricey", "label": "10 and over"}]},
+  {"name": "release_date", "kind": "field", "type": "DateField", "date_hierarchy": true}
+]
+```
+
+| Key | Presence | Description |
+|-----|----------|-------------|
+| `name` | always | The key to use in `filters` |
+| `kind` | always | `field` (a field or relation path; takes the [standard lookups](crud.md#supported-filter-lookups)) or `parameter` (a `SimpleListFilter`; exact value only) |
+| `type` | `field` only | Django internal type of the terminal field |
+| `title` | `parameter` only | The filter's title |
+| `choices` | when known | `[{"value", "label"}]`: the field's `choices`, or the filter's `lookups()`; capped at 100 entries, with `"choices_truncated": true` beyond that |
+| `date_hierarchy` | only when `true` | The field is the admin's `date_hierarchy` |
+
+Declared entries that cannot be used over MCP are omitted: fields hidden by `mcp_fields` / `mcp_exclude_fields`, and filter classes that are not `SimpleListFilter` subclasses. The model's own visible fields remain filterable whether or not they appear here.
 
 ### Field Properties
 

@@ -46,12 +46,16 @@ class TestFilterLookupRestrictions:
         with pytest.raises(InvalidFilterError, match="name__iregex"):
             _build_filter_query(Author, {"name__iregex": ".*"})
 
-    def test_startswith_lookup_raises(self):
-        """Undocumented lookups like startswith must be rejected loudly."""
-        with pytest.raises(InvalidFilterError, match="startswith"):
-            _build_filter_query(Author, {"name__startswith": "a"})
-        with pytest.raises(InvalidFilterError, match="endswith"):
-            _build_filter_query(Author, {"name__endswith": "a"})
+    def test_startswith_lookup_allowed(self):
+        """Prefix/suffix lookups are part of the safe set since issue #116."""
+        assert _build_filter_query(Author, {"name__startswith": "a"}) != Q()
+        assert _build_filter_query(Author, {"name__endswith": "a"}) != Q()
+
+    def test_undocumented_lookups_raise(self):
+        """Lookups outside the safe set must be rejected loudly."""
+        for lookup in ("search", "week_day", "quarter", "hour", "time", "unaccent"):
+            with pytest.raises(InvalidFilterError, match=lookup):
+                _build_filter_query(Author, {f"name__{lookup}": "a"})
 
     def test_unknown_field_raises(self):
         """Unknown field names must be rejected loudly."""

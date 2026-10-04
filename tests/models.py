@@ -125,3 +125,49 @@ class CatalogItemB(CatalogItem):
     class Meta:
         proxy = True
         app_label = "tests"
+
+
+class Category(models.Model):
+    """Related model for list_filter relation paths (issue #116)."""
+
+    name = models.CharField(max_length=100)
+    slug = models.SlugField()
+    internal_code = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name
+
+
+class Label(models.Model):
+    """Many-to-many target for multi-valued list_filter paths (issue #116)."""
+
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name
+
+
+class Product(models.Model):
+    """Model whose admin declares list_filter / date_hierarchy (issue #116)."""
+
+    name = models.CharField(max_length=100)
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    size = models.CharField(max_length=1, choices=[("s", "Small"), ("l", "Large")], default="s")
+    release_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    cost_code = models.CharField(max_length=50, blank=True)
+    category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL, related_name="products")
+    customer = models.ForeignKey("auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    labels = models.ManyToManyField(Label, blank=True, related_name="products")
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name

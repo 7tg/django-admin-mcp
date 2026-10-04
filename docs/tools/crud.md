@@ -27,17 +27,68 @@ Only the following lookups are allowed in `filters`:
 | Lookup | Example key | Meaning |
 |--------|-------------|---------|
 | (none) / `exact` | `"published"` or `"published__exact"` | Exact match |
-| `contains` | `"title__contains"` | Case-sensitive substring |
-| `icontains` | `"title__icontains"` | Case-insensitive substring |
+| `iexact` | `"title__iexact"` | Case-insensitive exact match |
+| `contains` / `icontains` | `"title__icontains"` | Substring (case-sensitive / insensitive) |
+| `startswith` / `istartswith` | `"title__startswith"` | Prefix |
+| `endswith` / `iendswith` | `"title__iendswith"` | Suffix |
 | `gt` / `gte` | `"created_at__gte"` | Greater than (or equal) |
 | `lt` / `lte` | `"created_at__lt"` | Less than (or equal) |
-| `in` | `"status__in"` | Value in a list |
-| `isnull` | `"author__isnull"` | Null check |
+| `in` | `"status__in"` | Value in a list (the value must be a list) |
+| `range` | `"price__range"` | Between two values (the value must be a two-item list) |
+| `isnull` | `"author__isnull"` | Null check (the value must be `true` or `false`) |
+| `year` / `month` / `day` | `"created_at__year"` | Date part, on date and datetime fields |
+| `date` | `"created_at__date"` | Date of a datetime field |
 
-Filters apply to **direct model fields only**.
+A date part may be followed by one comparison (`exact`, `gt`, `gte`, `lt`, `lte`, `in`, `range`), e.g. `"created_at__year__gte"`.
+
+### What can be filtered
+
+`filters` reproduces what the admin changelist offers through `list_filter` and `date_hierarchy`:
+
+| Filter key | Allowed when |
+|------------|--------------|
+| A field of the model (`"status"`, `"author"`) | The field is visible over MCP (not hidden by `mcp_fields` / `mcp_exclude_fields`) |
+| A relation path (`"category__slug"`, `"customer__is_staff"`) | The exact path is declared in the admin's `list_filter` — as a string or as a `(field, FilterClass)` tuple — or is its `date_hierarchy` |
+| The related primary key (`"author__id"`, `"author__id__exact"`) | The relation itself may be filtered; this is the form the admin's own related filters use |
+| A `SimpleListFilter` parameter (`"band"`) | The filter class is in `list_filter`; the key is its `parameter_name` and the value must be one of its `lookups()` |
+
+```python
+class PriceBandFilter(admin.SimpleListFilter):
+    title = "price band"
+    parameter_name = "band"
+
+    def lookups(self, request, model_admin):
+        return [("cheap", "Under 10"), ("pricey", "10 and over")]
+
+    def queryset(self, request, queryset):
+        if self.value() == "cheap":
+            return queryset.filter(price__lt=10)
+        if self.value() == "pricey":
+            return queryset.filter(price__gte=10)
+        return queryset
+
+
+class ProductAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    list_filter = ["category__slug", "customer__is_staff", PriceBandFilter]
+    date_hierarchy = "release_date"
+```
+
+```json
+{"filters": {"category__slug": "toys", "release_date__year": 2026, "band": "cheap"}}
+```
+
+`list_filter` is read through `ModelAdmin.get_list_filter(request)`, so per-request filter sets are honored. `describe_<model>` lists every usable filter under `admin_config.filters`.
+
+Rules that keep filters from becoming a side channel:
+
+- A declared path allows that path only. `list_filter = ["customer__is_staff"]` does not allow `customer__email`, and a declared path cannot be extended to further relations.
+- Hidden fields stay unfilterable even when declared: a path is rejected if any field along it is hidden by `mcp_fields` / `mcp_exclude_fields` on the admin of the model that owns it (including the terminal field on the related model's admin).
+- A `SimpleListFilter` is applied through its own `queryset()` and takes no lookups (`band__in` is rejected). A value outside its `lookups()` is an error, because such filters typically ignore values they do not recognize.
+- Filters that traverse a many-to-many or reverse relation return each row once.
 
 !!! warning "Invalid filters are rejected"
-    Any filter with an unknown field, a disallowed lookup (`regex`, `startswith`, `__year`, ...), or relation traversal (e.g. `author__email`) is **rejected with an error response** naming every offending key — the query never runs partially filtered.
+    Any filter with an unknown or hidden field, a disallowed lookup (`regex`, `search`, `week_day`, ...), a malformed value, or an undeclared relation path (e.g. `author__email`) is **rejected with an error response** naming every offending key — the query never runs partially filtered.
 
 Filters use **model field names**, not database column names: `{"author": 5}` filters by the FK, while `{"author_id": 5}` is rejected as an unknown field (the `_id` suffix works in `create_*` data but not in filters).
 

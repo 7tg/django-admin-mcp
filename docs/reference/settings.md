@@ -197,7 +197,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 #### list_filter
 
-Available filter options (informational in `describe_*`):
+Filters the changelist offers. Relation paths and `SimpleListFilter` classes declared here (and the `date_hierarchy` field) become usable in `list_*` `filters`; `describe_*` lists them under `admin_config.filters`. See [Supported filter lookups](../tools/crud.md#supported-filter-lookups):
 
 ```python
 class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):

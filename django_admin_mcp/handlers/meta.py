@@ -8,6 +8,7 @@ This module provides handlers for model metadata and discovery operations:
 
 from typing import Any
 
+from asgiref.sync import sync_to_async
 from django.db import models
 from django.http import HttpRequest
 
@@ -19,6 +20,7 @@ from django_admin_mcp.handlers.base import (
     safe_error_message,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
+from django_admin_mcp.handlers.filters import describe_filters, get_list_filter_entries
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -199,7 +201,17 @@ async def handle_describe(
         admin_config = {}
         if model_admin:
             admin_config["list_display"] = _admin_config_list(getattr(model_admin, "list_display", None))
-            admin_config["list_filter"] = _admin_config_list(getattr(model_admin, "list_filter", None))
+
+            # list_filter as the changelist resolves it, plus the filters
+            # list_* actually accepts (issue #116). Resolved in a sync context:
+            # get_list_filter() and filter lookups() may query the database.
+            @sync_to_async
+            def collect_filters():
+                return get_list_filter_entries(model_admin, request), describe_filters(model, model_admin, request)
+
+            list_filter, usable_filters = await collect_filters()
+            admin_config["list_filter"] = _admin_config_list(list_filter)
+            admin_config["filters"] = usable_filters
             admin_config["search_fields"] = _admin_config_list(getattr(model_admin, "search_fields", None))
             admin_config["ordering"] = _admin_config_list(getattr(model_admin, "ordering", None))
             admin_config["readonly_fields"] = _admin_config_list(getattr(model_admin, "readonly_fields", None))
