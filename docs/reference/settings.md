@@ -125,7 +125,9 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_fields = ['title', 'author', 'published']
 ```
 
-Default: `None` (all editable fields)
+Default: `None` (all fields, including non-editable ones such as `auto_now` timestamps)
+
+The allowlist also governs computed `list_display` / `readonly_fields` entries returned under `_computed`: with an allowlist in effect, a computed entry is served only if it is named here.
 
 ### mcp_exclude_fields
 
@@ -136,6 +138,8 @@ class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
     mcp_exclude_fields = ['password', 'security_token']
 ```
+
+Names of computed `list_display` / `readonly_fields` entries (admin methods, properties) can be listed too, to keep them out of `_computed`.
 
 Default: `None`
 

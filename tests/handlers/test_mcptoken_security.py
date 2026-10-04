@@ -37,9 +37,10 @@ class TestMCPTokenFieldFiltering:
         assert result["name"] == "Test Token"
         assert "user" in result
         assert "is_active" in result
-        # Note: created_at and last_used_at might not be included by model_to_dict
-        # since they are auto fields, but expires_at should be included
         assert "expires_at" in result
+        assert "last_used_at" in result
+        # Non-editable fields are serialized unless hidden (issue #117)
+        assert "created_at" in result
 
     def test_mcptoken_list_operation_excludes_sensitive_fields(self):
         """Test that list operations on MCPToken exclude sensitive fields."""

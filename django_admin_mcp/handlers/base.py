@@ -5,8 +5,12 @@ This module provides shared utilities extracted from the mixin module
 for use across handler implementations.
 """
 
+import datetime
 import logging
+import uuid
 from collections.abc import Mapping, Sequence
+from decimal import Decimal
+from itertools import chain
 from typing import Any
 
 from asgiref.sync import sync_to_async
@@ -15,9 +19,10 @@ from django.contrib.messages.storage.base import BaseStorage
 from django.core.exceptions import FieldError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, OperationalError, models
+from django.db.models.constants import LOOKUP_SEP
 from django.db.models.fields.files import FieldFile
 from django.forms import ModelForm
-from django.forms.models import model_to_dict, modelform_factory
+from django.forms.models import modelform_factory
 from django.http import HttpRequest
 from pydantic import TypeAdapter
 
@@ -535,6 +540,11 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
     When ``model_admin`` is omitted, looks up the registered MCP admin for the
     instance's model so list/related/inline call sites still apply excludes.
 
+    Non-editable concrete fields (``auto_now``/``auto_now_add`` timestamps,
+    ``editable=False`` UUIDs, ...) are serialized like any other field and
+    obey the same visibility rules (issue #117). Private and many-to-many
+    fields keep ``model_to_dict()``'s editable-only behavior.
+
     Fields defined with ``choices`` additionally get a ``<name>_display``
     sidecar carrying their human-readable label (issue #113). Sidecars are
     only added for fields that survived visibility filtering, and never
@@ -552,8 +562,18 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
 
     fields_to_include, fields_to_exclude = resolve_field_visibility(model_admin)
 
-    # Use model_to_dict with fields/exclude parameters
-    obj_dict = model_to_dict(instance, fields=fields_to_include, exclude=fields_to_exclude)
+    # model_to_dict() semantics, except that non-editable concrete fields are
+    # kept: describe_* lists them, so get/list must return them (issue #117)
+    opts = instance._meta
+    obj_dict = {}
+    for field in chain(opts.concrete_fields, opts.private_fields, opts.many_to_many):
+        if not (field.concrete or getattr(field, "editable", False)):
+            continue
+        if fields_to_include is not None and field.name not in fields_to_include:
+            continue
+        if fields_to_exclude and field.name in fields_to_exclude:
+            continue
+        obj_dict[field.name] = field.value_from_object(instance)
 
     # Convert non-serializable fields
     serialized = {}
@@ -584,6 +604,125 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
         serialized[display_key] = getattr(instance, f"get_{field.name}_display")()
 
     return serialized
+
+
+# Scalar types pydantic serializes natively; anything else is stringified.
+_JSON_SCALARS = (bool, int, float, Decimal, datetime.date, datetime.time, datetime.timedelta, uuid.UUID)
+
+
+def _json_safe(value: Any) -> Any:
+    """Reduce a computed admin value to something JSON-serializable."""
+    if value is None or isinstance(value, _JSON_SCALARS):
+        return value
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list | tuple | set | frozenset | models.QuerySet):
+        return [_json_safe(item) for item in value]
+    # Strings (including SafeString / lazy proxies), model instances, files, ...
+    return str(value)
+
+
+def _model_attribute_names(model: type[models.Model]) -> set[str]:
+    """Names that resolve to a model field, FK column, or relation accessor."""
+    names = {"pk"}
+    for field in model._meta.get_fields():
+        names.add(field.name)
+        attname = getattr(field, "attname", None)
+        if attname:
+            names.add(attname)
+        accessor = getattr(field, "get_accessor_name", None)
+        if accessor is not None and accessor():
+            names.add(accessor())
+    return names
+
+
+def get_computed_entries(model_admin: Any, option: str, request: Any, obj: models.Model | None = None) -> list:
+    """
+    Resolve ``readonly_fields`` / ``list_display`` the way the admin does.
+
+    Uses ``get_readonly_fields(request, obj)`` / ``get_list_display(request)``
+    when the admin provides them, falling back to the plain attribute. A
+    failing getter yields no entries rather than failing the response.
+
+    Args:
+        model_admin: The ModelAdmin instance (may be None).
+        option: ``"readonly_fields"`` or ``"list_display"``.
+        request: HttpRequest passed to the admin getter.
+        obj: The instance being served (``readonly_fields`` only).
+    """
+    if model_admin is None:
+        return []
+    getter = getattr(model_admin, f"get_{option}", None)
+    try:
+        if not callable(getter):
+            entries = getattr(model_admin, option, None)
+        elif option == "readonly_fields":
+            entries = getter(request, obj)
+        else:
+            entries = getter(request)
+        return list(entries or [])
+    except Exception:
+        logger.warning(
+            "get_%s failed on %s; computed values omitted", option, type(model_admin).__name__, exc_info=True
+        )
+        return []
+
+
+def serialize_computed_fields(instance: models.Model, model_admin: Any, entries: Sequence[Any]) -> dict[str, Any]:
+    """
+    Evaluate the computed (non-field) entries of an admin option (issue #117).
+
+    ``entries`` is a resolved ``readonly_fields`` or ``list_display`` list.
+    Each entry that is not a model field — an admin method, a model method or
+    property, or a bare callable — is evaluated with the admin's own
+    ``lookup_field`` and returned keyed by its name.
+
+    Hidden data stays hidden:
+
+    - only entries declared on the admin are evaluated; nothing is looked up
+      by caller-supplied name
+    - entries naming a model field, FK column (``author_id``), ``pk`` or a
+      relation accessor are skipped: fields are served by
+      ``serialize_instance()`` under the visibility rules, never from here
+    - entries containing ``__`` (``__str__``, relation traversals such as
+      ``author__email``) are skipped, since they can read through to fields
+      this admin's visibility configuration does not govern
+    - the entry's own name must pass ``is_field_visible()``, so
+      ``mcp_exclude_fields`` / ``mcp_fields`` apply to computed values too
+
+    A failing callable yields ``None`` for its key and is logged; it never
+    fails the response.
+
+    Returns:
+        Dict of name -> JSON-safe value (empty when nothing applies).
+    """
+    if model_admin is None:
+        return {}
+
+    # Deferred import: admin utils require the app registry to be ready
+    from django.contrib.admin.utils import lookup_field  # noqa: PLC0415
+
+    fields_to_include, fields_to_exclude = resolve_field_visibility(model_admin)
+    field_names = _model_attribute_names(type(instance))
+
+    computed: dict[str, Any] = {}
+    for entry in entries:
+        name = entry if isinstance(entry, str) else getattr(entry, "__name__", None)
+        if not isinstance(name, str) or not name or LOOKUP_SEP in name:
+            continue
+        if name in field_names or name in computed:
+            continue
+        if fields_to_exclude is not None and name in fields_to_exclude:
+            continue
+        if fields_to_include is not None and name not in fields_to_include:
+            continue
+        try:
+            _field, _attr, value = lookup_field(entry, instance, model_admin)
+            computed[name] = _json_safe(value)
+        except Exception:
+            logger.warning("Computed admin value '%s' failed on %s", name, type(model_admin).__name__, exc_info=True)
+            computed[name] = None
+    return computed
 
 
 def get_model_name(model: type[models.Model]) -> str:

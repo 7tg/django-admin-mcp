@@ -127,7 +127,11 @@ Filters use **model field names**, not database column names: `{"author": 5}` fi
       "title": "Getting Started with Django",
       "author": 5,
       "published": true,
-      "created_at": "2024-01-15T10:00:00Z"
+      "created_at": "2024-01-15T10:00:00Z",
+      "_computed": {
+        "word_count": 1250,
+        "is_recent": false
+      }
     }
   ],
   "count": 1,
@@ -140,6 +144,39 @@ Filters use **model field names**, not database column names: `{"author": 5}` fi
 | `results` | Array of model instances |
 | `count` | Number of results in this page |
 | `total_count` | Total number of matching records |
+
+Each result contains the model's visible fields, including non-editable ones (`editable=False` fields such as UUIDs, `auto_now`/`auto_now_add` timestamps) — the same set `describe_<model>` lists.
+
+#### Computed columns (`_computed`)
+
+`list_display` entries that are not model fields — admin methods, model methods/properties, callables — are evaluated per row and returned under a separate `_computed` key, so they cannot collide with or be mistaken for writable fields:
+
+```python
+class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    list_display = ['title', 'author', 'word_count', 'is_recent']
+
+    def word_count(self, obj):
+        return len(obj.content.split())
+
+    @admin.display(boolean=True)
+    def is_recent(self, obj):
+        return obj.created_at > timezone.now() - timedelta(days=7)
+```
+
+Computed values are served only when all of the following hold:
+
+- the entry is declared on the admin (resolved through `get_list_display(request)`); nothing is looked up by a caller-supplied name
+- it is not a model field, FK column (`author_id`), `pk`, or relation accessor — fields are returned as regular keys under the visibility rules, never through `_computed`
+- its name does not contain `__` (`__str__` and relation traversals such as `author__email` are skipped)
+- its name passes the same visibility rules as fields: `mcp_exclude_fields` hides it, and an allowlist (`mcp_fields`, or the admin's `fields` fallback) must name it
+
+Values are evaluated the way the admin does (`django.contrib.admin.utils.lookup_field`): admin methods, model methods/properties, and bare callables (keyed by the function's `__name__`). Numbers, booleans, dates, and UUIDs keep their type; everything else (HTML from `format_html`, model instances, ...) is returned as `str(value)`. A callable that raises yields `null` for its key and is logged server-side — it never fails the response. `_computed` is omitted when there is nothing to report. Computed values are read-only: they are not accepted by `create_*`/`update_*`.
+
+!!! warning "Computed values bypass per-field hiding"
+    A method that returns data derived from a hidden field (for example a `token_preview` built from an excluded `token_key`) is served like any other computed value. Add the method's name to `mcp_exclude_fields` to hide it.
+
+Computed columns run once per returned row; a method that queries the database adds a query per row, exactly as it does in the admin changelist.
 
 ---
 
@@ -191,7 +228,7 @@ The schema accepts `id` as an integer or a string. `id=0` (or any falsy value) i
 
 ### Response
 
-Foreign keys serialize as bare primary keys (`"author": 5`), never as nested objects. Many-to-many fields serialize as lists of primary keys.
+Foreign keys serialize as bare primary keys (`"author": 5`), never as nested objects. Many-to-many fields serialize as lists of primary keys. Non-editable fields (`editable=False`, `auto_now`/`auto_now_add`) are returned like any other field, subject to the same `mcp_fields`/`mcp_exclude_fields` visibility rules.
 
 Fields defined with `choices` keep their raw stored value and additionally get a `<field>_display` sidecar with the human-readable label (`"status": 2, "status_display": "Active"`). The sidecar follows the field's visibility rules and is skipped when the model has a real field of that name.
 
@@ -206,6 +243,9 @@ Fields defined with `choices` keep their raw stored value and additionally get a
   "status_display": "Active",
   "published": true,
   "created_at": "2024-01-15T10:00:00Z",
+  "_computed": {
+    "word_count": 1250
+  },
   "_inlines": {
     "comment": [
       {"id": 1, "article": 42, "text": "Great article!"},
@@ -223,6 +263,7 @@ Fields defined with `choices` keep their raw stored value and additionally get a
 
 | Key | Description |
 |-----|-------------|
+| `_computed` | Present when the admin's `readonly_fields` (resolved through `get_readonly_fields(request, obj)`) contain computed entries — admin methods, model methods/properties, callables. Maps each entry's name to its value. Follows the same rules as [`list_*` computed columns](#computed-columns-_computed), with `readonly_fields` in place of `list_display`. Rows under `_inlines` / `_related` carry no `_computed`. |
 | `_inlines` | Present with `include_inlines: true`. Maps each inline model name (from the admin's `inlines`) to a list of serialized instances. |
 | `_related` | Present with `include_related: true` (and only if there is any data). Maps each reverse-relation accessor name to a list of serialized instances, hard-capped at **10 objects per relation**. Use `related_<model>` for full pagination. |
 

@@ -22,6 +22,7 @@ from django_admin_mcp.handlers.base import (
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
+    get_computed_entries,
     is_field_visible,
     is_missing_id,
     json_response,
@@ -30,6 +31,7 @@ from django_admin_mcp.handlers.base import (
     require_object_permission,
     resolve_related_admin,
     safe_error_message,
+    serialize_computed_fields,
     serialize_instance,
     validate_pagination,
 )
@@ -258,7 +260,17 @@ async def handle_list(
 
             # Apply pagination
             queryset = queryset[offset : offset + limit]
-            return total_count, [serialize_instance(obj, model_admin) for obj in queryset]
+
+            # Computed list_display columns ride along under "_computed" (issue #117)
+            computed_entries = get_computed_entries(model_admin, "list_display", request)
+            rows = []
+            for obj in queryset:
+                row = serialize_instance(obj, model_admin)
+                computed = serialize_computed_fields(obj, model_admin, computed_entries)
+                if computed:
+                    row["_computed"] = computed
+                rows.append(row)
+            return total_count, rows
 
         total_count, results = await get_objects()
 
@@ -307,6 +319,13 @@ async def handle_get(
             obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
             require_object_permission(request, model_admin, "view", obj, model_name)
             result = serialize_instance(obj, model_admin)
+
+            # Computed readonly_fields entries ride along under "_computed" (issue #117)
+            computed = serialize_computed_fields(
+                obj, model_admin, get_computed_entries(model_admin, "readonly_fields", request, obj)
+            )
+            if computed:
+                result["_computed"] = computed
 
             # Include inlines if requested
             if include_inlines and model_admin:

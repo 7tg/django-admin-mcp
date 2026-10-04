@@ -2,6 +2,8 @@
 Test models for testing django-admin-mcp
 """
 
+import uuid
+
 from django.db import models
 
 
@@ -109,6 +111,32 @@ class CatalogItem(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Product(models.Model):
+    """Test model with non-editable fields and admin-computed values (issue #117)."""
+
+    name = models.CharField(max_length=200)
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    cost = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    stock = models.IntegerField(default=0)
+    owner = models.ForeignKey(Author, null=True, blank=True, on_delete=models.SET_NULL, related_name="products")
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    internal_code = models.CharField(max_length=50, editable=False, default="")
+    stage = models.CharField(max_length=10, choices=[("new", "New"), ("live", "Live")], default="new", editable=False)
+    manual = models.FileField(upload_to="manuals/", blank=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def label(self):
+        return f"{self.name} ({self.stage})"
 
 
 class CatalogItemA(CatalogItem):
