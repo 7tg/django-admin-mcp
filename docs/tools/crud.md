@@ -610,7 +610,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 (`create_*` words it `Cannot set readonly fields: ...`.)
 
-Any other key the form does not read — a typo, a model field with `editable=False`, a field left out by the admin's `fields`/`exclude`, a field the form disables, a file field (files cannot be uploaded over MCP; `<name>-clear: true` clears an optional one) — is reported as:
+Any other key the form does not read — a typo, a model field with `editable=False`, a field left out by the admin's `fields`/`exclude`, a field the form disables — is reported as:
 
 ```json
 {
@@ -624,6 +624,7 @@ What is accepted is derived from the admin form itself, not from the model, so t
 - foreign key `_id` aliases (`author_id`)
 - form fields that are not model fields (the stock `UserAdmin` add form takes `password1` / `password2`)
 - the sub-keys of a multi-widget (`starts_at_0` / `starts_at_1`), although a single ISO 8601 string under the field name is simpler
+- a file field's name with an upload object, and its `<name>-clear` checkbox — see [File Uploads](#file-uploads)
 
 ---
 
@@ -703,6 +704,75 @@ Many-to-many relationships accept arrays of IDs:
   "tags": [10, 20, 30]
 }
 ```
+
+---
+
+## File Uploads
+
+In `create_*`, `update_*` and `bulk_*` data, and in inline rows, a `FileField` / `ImageField` takes the file as a JSON object:
+
+```json
+{
+  "title": "Manual",
+  "file": {
+    "filename": "manual.pdf",
+    "content_base64": "JVBERi0xLjQK...",
+    "content_type": "application/pdf"
+  }
+}
+```
+
+| Key | Type | Description | Required |
+|-----|------|-------------|----------|
+| `filename` | string | Name of the file. Reduced to its base name: any directory part (`../`, `C:\...`) is dropped | Yes |
+| `content_base64` | string | The file content, base64-encoded (line breaks are tolerated) | Yes |
+| `content_type` | string | MIME type. Guessed from the filename when absent, `application/octet-stream` when it cannot be guessed | No |
+
+The object is decoded into an uploaded file and handed to the admin form the way a browser upload is, so the form field validates it: `required`, the model field's validators (`FileExtensionValidator`, ...), `ImageField`'s image check, and `max_length` on the file name. The file is stored by the field's storage under its `upload_to`, and responses keep returning the stored name (`"file": "documents/manual.pdf"`).
+
+| Value sent for a file field | Effect |
+|-----------------------------|--------|
+| upload object | The file is stored and replaces the current one |
+| field left out | On update the stored file is kept; on create the field is empty |
+| `null` | Clears an optional file (same as `"<name>-clear": true`). On a required field: `This field is required.` |
+| a string, number, array, ... | Validation error. Referencing an existing storage path is not supported |
+
+The decoded content may not exceed [`MCP_UPLOAD_MAX_FILE_BYTES`](../reference/settings.md#mcp_upload_max_file_bytes) (default 5 MiB). The size is computed from the base64 length, so an oversized file is refused without being decoded.
+
+A file value that cannot be used is a validation error on that field, in the same shape as any other form error:
+
+```json
+{
+  "error": "Validation failed",
+  "code": "validation_error",
+  "validation_errors": {
+    "errors": [
+      {"field": "file", "messages": ["content_base64 is not valid base64."]}
+    ],
+    "error_count": 1,
+    "fields_with_errors": ["file"]
+  }
+}
+```
+
+| Cause | Message |
+|-------|---------|
+| Not an object | `A file must be sent as an object {...}, not a string. Referencing an existing storage path is not supported.` |
+| Extra key | `Unknown key in file object: url. Allowed keys: content_base64, content_type, filename.` |
+| `filename` missing, empty or not a file name | `filename is required and must be a non-empty file name.` |
+| `content_base64` missing or not a string | `content_base64 is required and must be a base64 string.` |
+| Invalid base64 | `content_base64 is not valid base64.` |
+| `content_type` not a non-empty string | `content_type must be a non-empty string when given.` |
+| Too large | `File is too large: N bytes exceeds MCP_UPLOAD_MAX_FILE_BYTES (M bytes).` |
+| Upload sent together with `<name>-clear: true` | Django's `Please either submit a file or check the clear checkbox, not both.` |
+
+In an inline row the same `validation_errors` object appears on that row's entry in `inlines.errors`.
+
+!!! note "Audit log"
+    The `LogEntry` written for a create or update records an upload as `{"filename": ..., "size": ...}`. File content is never written to the log.
+
+!!! note "Files and rollback"
+    As in the Django admin, the file is written to storage when the object is saved. If a later step of the same call fails and the database transaction rolls back, the stored file is not removed.
 
 ---
 

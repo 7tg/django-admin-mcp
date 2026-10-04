@@ -35,6 +35,7 @@ from django_admin_mcp.handlers.base import (
     resolve_registered_admin,
     safe_error_message,
 )
+from django_admin_mcp.handlers.uploads import upload_doc
 from django_admin_mcp.protocol.types import TextContent, Tool
 
 # Type alias for handler functions
@@ -177,6 +178,10 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
         "A field the admin form does not accept (unknown, read-only or non-editable) "
         "is rejected with an error, never ignored."
     )
+    # Only models that have a file field are told how to upload one (issue #120)
+    has_file_field = any(f["type"] in ("FileField", "ImageField") for f in fields)
+    if has_file_field:
+        write_doc = f"{write_doc} {upload_doc()}"
     inlines_schema = {
         "type": "object",
         "description": (
@@ -384,7 +389,7 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
                 f"Perform bulk operations on {verbose_name}: create, update, or delete multiple items.\n\n"
                 f"For 'create': items is a list of data objects\n"
                 f"For 'update': items is a list of {{id, data}} objects\n"
-                f"For 'delete': items is a list of IDs"
+                f"For 'delete': items is a list of IDs" + (f"\n\n{upload_doc()}" if has_file_field else "")
             ),
             inputSchema={
                 "type": "object",

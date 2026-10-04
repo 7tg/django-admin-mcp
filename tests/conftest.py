@@ -81,6 +81,8 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
             Author,
             CatalogItemA,
             CatalogItemB,
+            Document,
+            DocumentPage,
             Event,
             EventSession,
             Gadget,
@@ -88,7 +90,7 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
         )
 
         # Clear any existing registrations
-        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket, Event):
+        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket, Event, Document):
             if model in admin.site._registry:
                 admin.site.unregister(model)
 
@@ -160,6 +162,17 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
             inlines = [EventSessionInline]
             mcp_expose = True
 
+        class DocumentPageInline(admin.TabularInline):
+            model = DocumentPage
+            extra = 0
+
+        @admin.register(Document)
+        class DocumentAdmin(MCPAdminMixin, admin.ModelAdmin):
+            """Document admin: required and optional file fields, file-carrying inline (issue #120)."""
+
+            inlines = [DocumentPageInline]
+            mcp_expose = True
+
         _register_filter_admins()
 
         yield
@@ -167,6 +180,6 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
         _unregister_filter_admins()
 
         # Cleanup (optional, as this is session-scoped)
-        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket, Event):
+        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket, Event, Document):
             if model in admin.site._registry:
                 admin.site.unregister(model)

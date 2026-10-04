@@ -202,6 +202,32 @@ Every field with a `related_model` (forward FK/M2M **and** reverse relations) is
 
 `admin_config` always emits `list_display`, `list_filter`, `filters`, `search_fields`, `ordering`, and `readonly_fields`. It conditionally includes `fieldsets` (as `[{"name", "fields", "classes"}]`), `date_hierarchy`, and `inlines` (as `[{"model", "fk_name"}]`). Non-string entries (callables, filter classes) are stringified to dotted paths.
 
+### File fields
+
+An editable `FileField` / `ImageField` carries an `upload` key describing how to send a file in `create_*` / `update_*` / `bulk_*` data (see [File Uploads](crud.md#file-uploads)):
+
+```json
+{
+  "name": "file",
+  "type": "FileField",
+  "verbose_name": "file",
+  "required": true,
+  "max_length": 100,
+  "editable": true,
+  "upload": {
+    "value": {
+      "filename": "string, required; reduced to its base name",
+      "content_base64": "string, required; the file content, base64-encoded",
+      "content_type": "string, optional; guessed from the filename when absent"
+    },
+    "max_bytes": 5242880,
+    "clearable": false
+  }
+}
+```
+
+`max_bytes` is the current `MCP_UPLOAD_MAX_FILE_BYTES`; `clearable` is true for an optional (`blank=True`) field, which `null` clears.
+
 ### Usable filters
 
 `admin_config.list_filter` echoes the admin's declaration (via `get_list_filter(request)`). `admin_config.filters` lists what `list_<model>` actually accepts from it, in declaration order, followed by the `date_hierarchy` field:
