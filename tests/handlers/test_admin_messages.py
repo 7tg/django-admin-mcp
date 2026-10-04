@@ -1,5 +1,6 @@
 """
-Tests for issue #100: admin hooks calling message_user() must not crash MCP writes.
+Tests for issue #100: admin hooks calling message_user() must not crash MCP writes,
+and issue #119: the messages they queue are returned in the tool response.
 
 The synthetic requests used by MCP handlers (MCPRequest and the request built
 in views._request_for_token) need a messages storage so ModelAdmin hooks that
@@ -9,16 +10,25 @@ the surrounding transaction.
 
 import json
 import uuid
+from unittest.mock import patch
 
 import pytest
 from asgiref.sync import sync_to_async
 from django.contrib import messages
 from django.contrib.auth.models import User
 
-from django_admin_mcp.handlers import create_mock_request, handle_create
+from django_admin_mcp.handlers import (
+    create_mock_request,
+    handle_action,
+    handle_create,
+    handle_delete,
+    handle_update,
+)
+from django_admin_mcp.handlers.base import get_model_admin
 from django_admin_mcp.models import MCPToken
 from django_admin_mcp.views import _request_for_token
 from tests.factories import MCPTokenFactory
+from tests.models import Author
 
 
 def unique_id():
@@ -68,3 +78,139 @@ class TestMessageUserDoesNotBreakWrites:
 
         assert data.get("success") is True, data
         assert await sync_to_async(MCPToken.objects.filter(name=f"tok {uid}").exists)()
+
+
+@sync_to_async
+def create_author(uid):
+    return Author.objects.create(name=f"Msg Author {uid}", email=f"msg_author_{uid}@example.com")
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+class TestMessagesReturnedInResponses:
+    """Issue #119: messages queued by admin code are returned to the caller."""
+
+    async def test_action_returns_queued_messages(self):
+        uid = unique_id()
+        request = create_mock_request(await create_superuser(uid))
+        author = await create_author(uid)
+        _, author_admin = get_model_admin("author")
+
+        def discontinue(modeladmin, request, queryset):
+            modeladmin.message_user(request, f"{queryset.count()} authors discontinued", messages.SUCCESS)
+            modeladmin.message_user(request, "1 author skipped", messages.WARNING)
+
+        with patch.object(author_admin, "actions", [discontinue]):
+            result = await handle_action("author", {"action": "discontinue", "ids": [author.pk]}, request)
+        data = json.loads(result[0].text)
+
+        assert data["success"] is True, data
+        assert data["result"] is None
+        assert data["messages"] == [
+            {"level": "success", "message": "1 authors discontinued"},
+            {"level": "warning", "message": "1 author skipped"},
+        ]
+
+    async def test_action_without_messages_omits_key(self):
+        uid = unique_id()
+        request = create_mock_request(await create_superuser(uid))
+        author = await create_author(uid)
+        _, author_admin = get_model_admin("author")
+
+        def quiet(modeladmin, request, queryset):
+            return None
+
+        with patch.object(author_admin, "actions", [quiet]):
+            result = await handle_action("author", {"action": "quiet", "ids": [author.pk]}, request)
+        data = json.loads(result[0].text)
+
+        assert data["success"] is True, data
+        assert "messages" not in data
+
+    async def test_messages_are_not_repeated_on_a_reused_request(self):
+        uid = unique_id()
+        request = create_mock_request(await create_superuser(uid))
+        author = await create_author(uid)
+        _, author_admin = get_model_admin("author")
+
+        def notify(modeladmin, request, queryset):
+            modeladmin.message_user(request, "notified")
+
+        with patch.object(author_admin, "actions", [notify]):
+            await handle_action("author", {"action": "notify", "ids": [author.pk]}, request)
+            result = await handle_action("author", {"action": "notify", "ids": [author.pk]}, request)
+        data = json.loads(result[0].text)
+
+        assert data["messages"] == [{"level": "info", "message": "notified"}]
+
+    async def test_create_returns_messages_from_save_model(self):
+        uid = unique_id()
+        request = create_mock_request(await create_superuser(uid))
+        _, author_admin = get_model_admin("author")
+        original = author_admin.save_model
+
+        def save_model(request, obj, form, change):
+            original(request, obj, form, change)
+            author_admin.message_user(request, "Welcome mail queued", messages.INFO)
+
+        with patch.object(author_admin, "save_model", save_model):
+            result = await handle_create(
+                "author", {"data": {"name": f"New {uid}", "email": f"new_{uid}@example.com"}}, request
+            )
+        data = json.loads(result[0].text)
+
+        assert data["success"] is True, data
+        assert data["messages"] == [{"level": "info", "message": "Welcome mail queued"}]
+
+    async def test_update_returns_messages_from_save_model(self):
+        uid = unique_id()
+        request = create_mock_request(await create_superuser(uid))
+        author = await create_author(uid)
+        _, author_admin = get_model_admin("author")
+        original = author_admin.save_model
+
+        def save_model(request, obj, form, change):
+            original(request, obj, form, change)
+            author_admin.message_user(request, "Search index refreshed", messages.SUCCESS)
+
+        with patch.object(author_admin, "save_model", save_model):
+            result = await handle_update("author", {"id": author.pk, "data": {"name": f"Renamed {uid}"}}, request)
+        data = json.loads(result[0].text)
+
+        assert data["success"] is True, data
+        assert data["messages"] == [{"level": "success", "message": "Search index refreshed"}]
+
+    async def test_delete_returns_messages_from_delete_model(self):
+        uid = unique_id()
+        request = create_mock_request(await create_superuser(uid))
+        author = await create_author(uid)
+        _, author_admin = get_model_admin("author")
+        original = author_admin.delete_model
+
+        def delete_model(request, obj):
+            original(request, obj)
+            author_admin.message_user(request, "Archive copy kept", messages.WARNING)
+
+        with patch.object(author_admin, "delete_model", delete_model):
+            result = await handle_delete("author", {"id": author.pk}, request)
+        data = json.loads(result[0].text)
+
+        assert data["success"] is True, data
+        assert data["messages"] == [{"level": "warning", "message": "Archive copy kept"}]
+
+    async def test_crud_responses_omit_messages_when_none_queued(self):
+        uid = unique_id()
+        request = create_mock_request(await create_superuser(uid))
+
+        result = await handle_create(
+            "author", {"data": {"name": f"Quiet {uid}", "email": f"quiet_{uid}@example.com"}}, request
+        )
+        created = json.loads(result[0].text)
+        result = await handle_update("author", {"id": created["id"], "data": {"name": f"Quieter {uid}"}}, request)
+        updated = json.loads(result[0].text)
+        result = await handle_delete("author", {"id": created["id"]}, request)
+        deleted = json.loads(result[0].text)
+
+        for data in (created, updated, deleted):
+            assert data["success"] is True, data
+            assert "messages" not in data

@@ -22,6 +22,7 @@ from django_admin_mcp.handlers.action_files import (
 from django_admin_mcp.handlers.base import (
     OperationDenied,
     _log_action,
+    attach_messages,
     get_admin_queryset,
     json_response,
     require_deletable,
@@ -300,7 +301,8 @@ async def handle_action(
             return {"error": f"Action '{action_name}' not found"}
 
         result = await execute_action()
-        return json_response(result)
+        # Actions often report their outcome only via message_user() (issue #119)
+        return json_response(attach_messages(result, request))
     except OperationDenied as e:
         return json_response(e.payload)
     except Exception as e:

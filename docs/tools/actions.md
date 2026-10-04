@@ -116,6 +116,21 @@ On success, custom actions return:
 
 `result` is the serialized return value of the action function: `null` for actions returning `None`, a file payload for download responses (see [File downloads](#file-downloads)), and `str(value)` for anything else.
 
+Actions commonly report their outcome only through `self.message_user()`. Messages queued on the request during the call are returned in a `messages` list, each with the Django message `level` (`debug`, `info`, `success`, `warning`, `error`) and its text. The key is omitted when no message was queued:
+
+```json
+{
+  "success": true,
+  "action": "discontinue",
+  "affected_count": 3,
+  "message": "Executed discontinue on 3 objects",
+  "result": null,
+  "messages": [
+    {"level": "success", "message": "3 products discontinued"}
+  ]
+}
+```
+
 `delete_selected` is special-cased: it bypasses Django's HTML confirmation page and calls `queryset.delete()` directly, returning:
 
 ```json
