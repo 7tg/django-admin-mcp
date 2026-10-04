@@ -296,6 +296,8 @@ Tool calls that fail a permission check return HTTP 200 with an error object ins
 - No models have `MCPAdminMixin` with `mcp_expose = True`
 - Check your admin configuration
 
+If a model's read tools appear but `create_*`, `update_*`, `delete_*`, `bulk_*` or `action_*` are missing, the token lacks the corresponding `add`/`change`/`delete` permission.
+
 ## Next Steps
 
 - [Tools Overview](../tools/overview.md) — Learn about available tools

@@ -110,3 +110,76 @@ class TestToolsListEndpointFiltering:
         assert "get_author" in names
         assert "list_article" not in names
         assert "list_mcptoken" not in names
+
+
+WRITE_TOOLS = {"create_author", "update_author", "delete_author", "bulk_author", "action_author"}
+VIEW_TOOLS = {
+    "list_author",
+    "get_author",
+    "describe_author",
+    "actions_author",
+    "related_author",
+    "history_author",
+    "autocomplete_author",
+}
+
+
+def author_tool_names(*codenames):
+    user = User.objects.create_user(username=f"toolslist_{unique_id()}", password="pw")
+    user.user_permissions.add(*Permission.objects.filter(codename__in=codenames))
+    # Re-fetch so the permission cache is fresh
+    request = create_mock_request(User.objects.get(pk=user.pk))
+    return {tool.name for tool in get_tools(request) if tool.name.endswith("_author")}
+
+
+@pytest.mark.django_db(transaction=True)
+class TestGetToolsWriteOperationFiltering:
+    """Issue #119: write tools are listed only when the user holds their permission."""
+
+    def test_view_only_user_sees_no_write_tools(self):
+        assert author_tool_names("view_author") == VIEW_TOOLS
+
+    def test_add_permission_lists_create_and_bulk(self):
+        assert author_tool_names("view_author", "add_author") == VIEW_TOOLS | {"create_author", "bulk_author"}
+
+    def test_change_permission_lists_update_action_and_bulk(self):
+        assert author_tool_names("view_author", "change_author") == VIEW_TOOLS | {
+            "update_author",
+            "action_author",
+            "bulk_author",
+        }
+
+    def test_delete_permission_lists_delete_and_bulk(self):
+        assert author_tool_names("view_author", "delete_author") == VIEW_TOOLS | {"delete_author", "bulk_author"}
+
+    def test_all_permissions_list_every_tool(self):
+        names = author_tool_names("view_author", "add_author", "change_author", "delete_author")
+        assert names == VIEW_TOOLS | WRITE_TOOLS
+
+    def test_without_request_write_tools_are_listed(self):
+        names = {tool.name for tool in get_tools()}
+        assert WRITE_TOOLS <= names
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+class TestToolsListEndpointWriteFiltering:
+    """Issue #119: the JSON-RPC tools/list response hides unusable write tools."""
+
+    async def test_view_only_token_sees_no_write_tools(self):
+        token = await make_token_with_perms("view_author")
+
+        status, data = await list_tools_rpc(token)
+
+        assert status == 200
+        names = {tool["name"] for tool in data["result"]["tools"]}
+        assert names == VIEW_TOOLS | {"find_models"}
+
+    async def test_change_token_sees_update_action_and_bulk(self):
+        token = await make_token_with_perms("view_author", "change_author")
+
+        status, data = await list_tools_rpc(token)
+
+        assert status == 200
+        names = {tool["name"] for tool in data["result"]["tools"]}
+        assert names == VIEW_TOOLS | {"find_models", "update_author", "action_author", "bulk_author"}
