@@ -28,9 +28,9 @@ from django_admin_mcp.handlers.crud import (
     handle_delete,
 )
 from django_admin_mcp.handlers.inlines import (
-    _build_inline_form_class,
+    _build_inline_formset_class,
     _get_inline_data,
-    _update_inlines,
+    prepare_inline_formsets,
 )
 from django_admin_mcp.handlers.meta import _json_safe_admin_item
 from tests.models import Article, Author
@@ -109,23 +109,27 @@ class TestInlineHelpers:
 
         assert _get_inline_data(Author(), FakeAdmin(), create_mock_request()) == {}
 
-    def test_update_inlines_without_admin_or_data(self):
-        empty = {"created": [], "updated": [], "deleted": [], "errors": []}
-        assert _update_inlines(Author(), None, {"article": []}, create_mock_request()) == empty
+    def test_prepare_inline_formsets_without_data(self):
         _, author_admin = get_model_admin("author")
-        assert _update_inlines(Author(), author_admin, {}, create_mock_request()) == empty
+        write = prepare_inline_formsets(Author(), author_admin, {}, create_mock_request(), change=True)
+        assert write.formsets == []
+        assert write.errors == []
+        assert write.results() == {"created": [], "updated": [], "deleted": [], "errors": []}
 
-    def test_update_inlines_skips_unmatched_inline_classes(self):
+    def test_prepare_inline_formsets_rejects_unmatched_inline_names(self):
+        """An inline name no inline class answers to is an error, not a no-op (issue #118)."""
+
         class NoModelInline:
             pass
 
         class FakeAdmin:
             inlines = [NoModelInline]
 
-        result = _update_inlines(Author(), FakeAdmin(), {"article": [{}]}, create_mock_request())
-        assert result["errors"] == []
+        write = prepare_inline_formsets(Author(), FakeAdmin(), {"article": [{}]}, create_mock_request(), change=True)
+        assert write.formsets == []
+        assert [error["code"] for error in write.errors] == ["unknown_inline"]
 
-    def test_build_inline_form_class_prefers_custom_form(self):
+    def test_build_inline_formset_class_prefers_custom_form(self):
         class CustomArticleForm(ModelForm):
             class Meta:
                 model = Article
@@ -136,10 +140,11 @@ class TestInlineHelpers:
             form = CustomArticleForm
 
         _, author_admin = get_model_admin("author")
-        built = _build_inline_form_class(CustomFormInline, Article, author_admin, create_mock_request(), None)
-        assert built is CustomArticleForm
+        built = _build_inline_formset_class(CustomFormInline, Article, author_admin, create_mock_request(), None)
+        assert issubclass(built.form, CustomArticleForm)
+        assert built.fk.name == "author"
 
-    def test_build_inline_form_class_falls_back_to_declared_fields(self):
+    def test_build_inline_formset_class_falls_back_to_declared_fields(self):
         class BrokenInline:
             # Not a real InlineModelAdmin: instantiating its formset fails,
             # forcing the declared-fields fallback.
@@ -148,8 +153,8 @@ class TestInlineHelpers:
             readonly_fields = ["content"]
 
         _, author_admin = get_model_admin("author")
-        built = _build_inline_form_class(BrokenInline, Article, author_admin, create_mock_request(), None)
-        assert list(built.base_fields) == ["title"]
+        built = _build_inline_formset_class(BrokenInline, Article, author_admin, create_mock_request(), None)
+        assert list(built.form.base_fields) == ["title"]
 
 
 @pytest.mark.asyncio
