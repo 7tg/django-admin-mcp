@@ -5,7 +5,7 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0] - 2026-10-04
 
 ### Security
 - **Related models without an MCP admin are no longer served unchecked.** `related_*` and `get_*` with `include_related` previously returned every field of a related model that was not registered through `MCPAdminMixin` (for example the `User` behind a foreign key, password hash included) to any token that could view the parent. Related models now answer to their admin's view permission, queryset scope, and `fields`/`exclude` — the MCP admin, or the default admin site's registration — and models with no admin at all are not served
