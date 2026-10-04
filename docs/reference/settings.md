@@ -151,6 +151,20 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 Default: `True`
 
+### mcp_return_messages
+
+When `True` (the default), messages the admin queues with `self.message_user()` during `action_*`, `create_*`, `update_*` and `delete_*` calls are returned in the response's `messages` list. Set to `False` when those messages may carry data MCP clients must not see, such as a secret the admin UI shows once:
+
+```python
+class ApiKeyAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    mcp_return_messages = False
+```
+
+Default: `True`
+
+The built-in `MCPTokenAdmin` sets this to `False`: it reports a new token's plaintext through `message_user()`, and returning that over MCP would let a narrowed token create a token and read its secret.
+
 ### Standard Django Options
 
 These Django admin options affect MCP behavior:

@@ -73,9 +73,17 @@ def collect_messages(request: HttpRequest) -> list[dict[str, str]]:
     return collected
 
 
-def attach_messages(data: dict[str, Any], request: HttpRequest) -> dict[str, Any]:
-    """Add the request's queued messages to a response payload; omitted when there are none."""
-    if queued := collect_messages(request):
+def attach_messages(data: dict[str, Any], request: HttpRequest, model_admin: Any) -> dict[str, Any]:
+    """
+    Add the request's queued messages to a response payload; omitted when there are none.
+
+    An admin with ``mcp_return_messages = False`` opts out: its messages may
+    carry data that must not reach MCP clients (MCPTokenAdmin reports a new
+    token's plaintext this way). The queue is drained either way so nothing
+    leaks into a later response.
+    """
+    queued = collect_messages(request)
+    if queued and getattr(model_admin, "mcp_return_messages", True):
         data["messages"] = queued
     return data
 

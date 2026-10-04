@@ -294,7 +294,7 @@ Creates a new model instance with validation.
 
 When a `ModelAdmin` is registered, creation goes through `ModelAdmin.save_model()` and a `LogEntry` is written for the addition.
 
-Messages the admin queues with `self.message_user()` during the call are returned in a `messages` list of `{"level", "message"}` objects (levels are Django's `debug`, `info`, `success`, `warning`, `error`); the key is omitted when there are none. The same applies to `update_*` and `delete_*`:
+Messages the admin queues with `self.message_user()` during the call are returned in a `messages` list of `{"level", "message"}` objects (levels are Django's `debug`, `info`, `success`, `warning`, `error`); the key is omitted when there are none, or when the admin sets [`mcp_return_messages = False`](../reference/settings.md#mcp_return_messages). The same applies to `update_*` and `delete_*`:
 
 ```json
 {

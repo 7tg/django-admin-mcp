@@ -214,3 +214,128 @@ class TestMessagesReturnedInResponses:
         for data in (created, updated, deleted):
             assert data["success"] is True, data
             assert "messages" not in data
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+class TestReturnMessagesOptOut:
+    """Issue #119: mcp_return_messages = False keeps queued messages out of responses."""
+
+    async def test_opted_out_admin_returns_no_messages(self):
+        uid = unique_id()
+        request = create_mock_request(await create_superuser(uid))
+        author = await create_author(uid)
+        doomed = await create_author(unique_id())
+        _, author_admin = get_model_admin("author")
+        original_save = author_admin.save_model
+        original_delete = author_admin.delete_model
+
+        def save_model(request, obj, form, change):
+            original_save(request, obj, form, change)
+            author_admin.message_user(request, "internal detail")
+
+        def delete_model(request, obj):
+            original_delete(request, obj)
+            author_admin.message_user(request, "internal detail")
+
+        def notify(modeladmin, request, queryset):
+            modeladmin.message_user(request, "internal detail")
+
+        with (
+            patch.object(author_admin, "mcp_return_messages", False, create=True),
+            patch.object(author_admin, "save_model", save_model),
+            patch.object(author_admin, "delete_model", delete_model),
+            patch.object(author_admin, "actions", [notify]),
+        ):
+            results = [
+                await handle_create(
+                    "author", {"data": {"name": f"Opt {uid}", "email": f"opt_{uid}@example.com"}}, request
+                ),
+                await handle_update("author", {"id": author.pk, "data": {"name": f"Opted {uid}"}}, request),
+                await handle_action("author", {"action": "notify", "ids": [author.pk]}, request),
+                await handle_delete("author", {"id": doomed.pk}, request),
+            ]
+
+        for result in results:
+            data = json.loads(result[0].text)
+            assert data["success"] is True, data
+            assert "messages" not in data
+            assert "internal detail" not in result[0].text
+
+    async def test_opted_out_messages_are_drained_not_carried_over(self):
+        """Suppressed messages must not surface on a later call that reuses the request."""
+        uid = unique_id()
+        request = create_mock_request(await create_superuser(uid))
+        author = await create_author(uid)
+        _, author_admin = get_model_admin("author")
+
+        def notify(modeladmin, request, queryset):
+            modeladmin.message_user(request, "internal detail")
+
+        def quiet(modeladmin, request, queryset):
+            return None
+
+        with patch.object(author_admin, "actions", [notify, quiet]):
+            with patch.object(author_admin, "mcp_return_messages", False, create=True):
+                await handle_action("author", {"action": "notify", "ids": [author.pk]}, request)
+            result = await handle_action("author", {"action": "quiet", "ids": [author.pk]}, request)
+
+        assert "messages" not in json.loads(result[0].text)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+class TestMCPTokenAdminNeverReturnsTokenMaterial:
+    """
+    Issue #119: MCPTokenAdmin reports a new token's plaintext via message_user().
+    Returning it over MCP would let a narrowed token mint a wider one and read
+    its secret, so the token admin opts out of returning messages.
+    """
+
+    async def test_create_mcptoken_does_not_return_plaintext(self):
+        uid = unique_id()
+        user = await create_superuser(uid)
+        request = create_mock_request(user)
+        plaintexts = []
+        original = MCPToken.get_plaintext_token
+
+        def recording(self):
+            plaintext = original(self)
+            if plaintext:
+                plaintexts.append(plaintext)
+            return plaintext
+
+        with patch.object(MCPToken, "get_plaintext_token", recording):
+            result = await handle_create(
+                "mcptoken", {"data": {"name": f"tok {uid}", "user": user.pk, "is_active": True}}, request
+            )
+        text = result[0].text
+        data = json.loads(text)
+
+        assert data.get("success") is True, data
+        assert "messages" not in data
+        # The admin did queue the plaintext; none of it may reach the response
+        assert len(plaintexts) == 1
+        key, secret = plaintexts[0][len("mcp_") :].split(".", 1)
+        assert plaintexts[0] not in text
+        assert key not in text
+        assert secret not in text
+
+    async def test_update_and_delete_selected_mcptoken_return_no_token_material(self):
+        uid = unique_id()
+        user = await create_superuser(uid)
+        request = create_mock_request(user)
+        token = await sync_to_async(MCPTokenFactory)(user=user)
+        key, secret = token.plaintext_token[len("mcp_") :].split(".", 1)
+
+        results = [
+            await handle_update("mcptoken", {"id": token.pk, "data": {"name": f"renamed {uid}"}}, request),
+            await handle_action("mcptoken", {"action": "delete_selected", "ids": [token.pk]}, request),
+        ]
+
+        for result in results:
+            data = json.loads(result[0].text)
+            assert data["success"] is True, data
+            assert "messages" not in data
+            assert key not in result[0].text
+            assert secret not in result[0].text

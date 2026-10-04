@@ -51,6 +51,10 @@ class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 When `True` (the default), list/get, actions, and bulk operations start from `ModelAdmin.get_queryset(request)`, matching the admin changelist (proxy filters, soft-delete, multi-tenant scoping). Set to `False` to use `model.objects.all()` instead.
 
+### mcp_return_messages
+
+When `True` (the default), messages queued with `self.message_user()` by actions and save/delete hooks are returned in the tool response's `messages` list. Set to `False` on admins whose messages may contain data MCP clients must not see.
+
 ### Standard Django Admin Options
 
 Django Admin MCP respects standard ModelAdmin options:

@@ -40,6 +40,10 @@ class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
     # Enable MCP exposure with restricted fields for security
     mcp_expose = True
     mcp_exclude_fields = ["token_key", "token_hash", "salt"]  # Never expose sensitive token data via MCP
+    # save_model() reports a new token's plaintext through message_user(). Over
+    # MCP that would let a narrowed token create a token and read its secret,
+    # widening its own access, so messages are never returned for this admin.
+    mcp_return_messages = False
 
     list_display = [
         "name",

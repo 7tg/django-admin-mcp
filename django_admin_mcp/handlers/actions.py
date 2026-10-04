@@ -302,7 +302,7 @@ async def handle_action(
 
         result = await execute_action()
         # Actions often report their outcome only via message_user() (issue #119)
-        return json_response(attach_messages(result, request))
+        return json_response(attach_messages(result, request, model_admin))
     except OperationDenied as e:
         return json_response(e.payload)
     except Exception as e:

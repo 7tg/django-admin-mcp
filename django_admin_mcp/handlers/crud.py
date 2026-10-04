@@ -446,7 +446,7 @@ async def handle_create(
             object=result_data,
         )
 
-        return json_response(attach_messages(response.model_dump(), request), indent=2)
+        return json_response(attach_messages(response.model_dump(), request, model_admin), indent=2)
     except Exception as e:
         return json_response({"error": safe_error_message(e)})
 
@@ -584,7 +584,7 @@ async def handle_update(
             inlines=inlines_result if inlines_result and any(inlines_result.values()) else None,
         )
 
-        return json_response(attach_messages(response.model_dump(), request), indent=2)
+        return json_response(attach_messages(response.model_dump(), request, model_admin), indent=2)
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
     except OperationDenied as e:
@@ -655,7 +655,7 @@ async def handle_delete(
         await delete_object()
 
         return json_response(
-            attach_messages({"success": True, "message": f"{model_name} deleted successfully"}, request)
+            attach_messages({"success": True, "message": f"{model_name} deleted successfully"}, request, model_admin)
         )
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
