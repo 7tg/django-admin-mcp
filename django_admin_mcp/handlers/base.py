@@ -29,6 +29,7 @@ from django.utils.datastructures import MultiValueDict
 from django.utils.text import slugify
 from pydantic import TypeAdapter
 
+from django_admin_mcp.handlers.uploads import bind_upload, summarize_uploads
 from django_admin_mcp.protocol.types import TextContent
 
 logger = logging.getLogger("django_admin_mcp")
@@ -176,7 +177,8 @@ def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500, model_a
 
     Values of sensitive-looking keys (passwords, tokens, secrets, ...) and of
     fields hidden from MCP by ``model_admin`` are redacted so they never
-    reach the audit trail.
+    reach the audit trail. An uploaded file (issue #120) is logged as its
+    filename and size, never its content.
 
     Args:
         data: Dictionary to serialize for logging.
@@ -187,7 +189,8 @@ def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500, model_a
         Serialized JSON string, truncated if necessary with ellipsis.
     """
     adapter = TypeAdapter(dict[str, Any])
-    data_json = adapter.dump_json(_redact_sensitive(data, model_admin), fallback=str).decode("utf-8")
+    loggable = _redact_sensitive(summarize_uploads(data), model_admin)
+    data_json = adapter.dump_json(loggable, fallback=str).decode("utf-8")
 
     if len(data_json) > max_length:
         return data_json[: max_length - 3] + "..."
@@ -967,6 +970,9 @@ def build_admin_form(
     - fields the caller sent are reshaped for their widget: a single value is
       split across a ``MultiWidget`` by the widget's ``decompress()``, other
       non-string values go through the field's ``prepare_value()``;
+    - a file field's value moves from the data into the form's ``files``:
+      a ``{"filename", "content_base64"}`` object becomes an upload and
+      ``null`` clears the field (issue #120, see ``uploads.bind_upload()``);
     - on update (``instance`` given), every field the caller did not send is
       disabled, so Django cleans it from the instance's value and the update
       changes only the fields that were sent;
@@ -1001,7 +1007,8 @@ def shape_admin_form(
 
     Inline formsets construct their own forms, bound to the formset's POST
     dict under a per-row prefix; this gives those forms the same treatment.
-    ``form.data`` must be a mutable dict and is rewritten in place.
+    ``form.data`` must be a mutable dict and is rewritten in place; uploads
+    are added to ``form.files``, which the forms of a formset share.
     """
     post = form.data
 
@@ -1010,7 +1017,10 @@ def shape_admin_form(
 
     for name, field in form.fields.items():
         key = form.add_prefix(name)
-        if _field_was_sent(field, post, key):
+        if isinstance(field, FileFormField) and key in post and not field.disabled:
+            # A file field reads form.files, never form.data (issue #120)
+            bind_upload(form, field, post, key)
+        elif _field_was_sent(field, post, key):
             _shape_sent_value(form, name, field, post, key)
         elif instance is not None:
             _keep_stored_value(field)
@@ -1053,11 +1063,12 @@ def unconsumed_keys(form: Any, data: Mapping[str, Any], skip_fields: Sequence[st
       own name for most widgets, the ``<name>_0`` / ``<name>_1`` sub-keys of
       a ``MultiWidget``, the ``<name>-clear`` checkbox of a file input;
     - the name of a ``MultiWidget`` field, whose single value
-      ``shape_admin_form()`` splits across the sub-keys.
+      ``shape_admin_form()`` splits across the sub-keys;
+    - the name of a file field, whose value ``shape_admin_form()`` turns into
+      an upload (issue #120).
 
     A field the form itself disables (``UserChangeForm.password``) ignores
-    submitted data, and a file field reads uploads rather than POST data, so
-    their names are reported as unconsumed. Call this after
+    submitted data, so its name is reported as unconsumed. Call this after
     ``build_admin_form()`` / ``shape_admin_form()``: the fields they disable
     are exactly those the caller did not send.
 
@@ -1078,7 +1089,7 @@ def unconsumed_keys(form: Any, data: Mapping[str, Any], skip_fields: Sequence[st
         if field.disabled or name in skip_fields:
             continue
         key = form.add_prefix(name)
-        if isinstance(field.widget, MultiWidget):
+        if isinstance(field.widget, MultiWidget) or isinstance(field, FileFormField):
             accepted.add(key)
         recorder.read.clear()
         try:

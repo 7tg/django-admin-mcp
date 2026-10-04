@@ -21,6 +21,7 @@ from django_admin_mcp.handlers.base import (
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
 from django_admin_mcp.handlers.filters import describe_filters, get_list_filter_entries
+from django_admin_mcp.handlers.uploads import describe_upload
 from django_admin_mcp.protocol.types import TextContent
 
 
@@ -118,6 +119,10 @@ def _get_field_metadata(field) -> dict[str, Any]:
     # Editable
     if hasattr(field, "editable"):
         metadata["editable"] = field.editable
+
+    # How to send a file over MCP (issue #120)
+    if isinstance(field, models.FileField) and field.editable:
+        metadata["upload"] = describe_upload(required=not blank_allowed)
 
     return metadata
 

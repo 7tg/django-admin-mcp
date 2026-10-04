@@ -4,6 +4,7 @@ Test models for testing django-admin-mcp
 
 import uuid
 
+from django.core.validators import FileExtensionValidator
 from django.db import models
 
 
@@ -239,3 +240,31 @@ class Widget(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Document(models.Model):
+    """Test model with a required, extension-validated file field (issue #120)."""
+
+    title = models.CharField(max_length=200)
+    file = models.FileField(upload_to="documents/", validators=[FileExtensionValidator(["pdf", "txt"])])
+    appendix = models.FileField(upload_to="documents/appendix/", blank=True)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.title
+
+
+class DocumentPage(models.Model):
+    """Inline child of Document carrying a file of its own (issue #120)."""
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="pages")
+    label = models.CharField(max_length=100)
+    scan = models.FileField(upload_to="pages/")
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.label

@@ -987,7 +987,7 @@ class TestSaveThroughAdminSync:
 @pytest.mark.asyncio
 @pytest.mark.django_db
 class TestFileFields:
-    """A file field reads uploads, which MCP cannot send: its name is not a consumed key."""
+    """A file field takes an upload object (issue #120); a path string is rejected, never ignored."""
 
     async def test_file_field_value_is_rejected_instead_of_ignored(self):
         request = await superuser_request()
@@ -998,7 +998,8 @@ class TestFileFields:
 
         for data in (created, updated):
             assert "success" not in data, data
-            assert data["invalid_fields"] == ["brochure"]
+            assert data["code"] == "validation_error"
+            assert data["validation_errors"]["fields_with_errors"] == ["brochure"]
 
     async def test_file_field_can_be_cleared_through_the_widget_key(self):
         request = await superuser_request()

@@ -277,6 +277,8 @@ Update multiple records. Each item in `items` contains an `id` and `data`:
 
 `id` is required per item; items without one fail with `{"index": i, "error": "id is required for update"}`. An item may only contain `id` and `data`: inline operations are not available in bulk, and any other key fails the item with `{"index": i, "error": "Invalid item key: inlines"}`.
 
+File fields take the same [upload object](crud.md#file-uploads) in bulk create and bulk update data as in `create_*` / `update_*`; the size cap applies to each file.
+
 ### Bulk Delete
 
 Delete multiple records. `items` is an array of IDs:
