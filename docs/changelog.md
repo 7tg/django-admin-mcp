@@ -5,6 +5,18 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **Related models without an MCP admin are no longer served unchecked.** `related_*` and `get_*` with `include_related` previously returned every field of a related model that was not registered through `MCPAdminMixin` (for example the `User` behind a foreign key, password hash included) to any token that could view the parent. Related models now answer to their admin's view permission, queryset scope, and `fields`/`exclude` — the MCP admin, or the default admin site's registration — and models with no admin at all are not served
+- **Inline rows require view permission on the inline.** `include_inlines` now calls the inline's own `has_view_permission` (as the admin change page does) and serializes rows under the inline's `fields`/`exclude`
+- **Object-level permissions are enforced.** `get_*`, `update_*`, `delete_*`, `bulk_*`, `related_*`, `history_*`, and `delete_selected` now call `has_view/change/delete_permission(request, obj)` with the target row, so admins that restrict access per object are honored
+- **Deletes no longer cascade past the caller's permissions.** `delete_*`, `bulk_*` delete, and `delete_selected` run the admin's `get_deleted_objects()` check and refuse when the cascade reaches related objects the token may not delete, or protected objects
+- **Hidden fields cannot be probed.** `list_*` `filters` and `order_by` accept only MCP-visible fields (plus the primary key) and no reverse relations; `autocomplete_*` no longer falls back to searching hidden fields; `related_*` no longer serves a hidden forward relation; and values written to hidden fields are redacted from the admin history that `history_*` returns
+- **Non-superusers manage only their own MCP tokens.** In `MCPTokenAdmin` (and therefore over MCP), a non-superuser sees, edits, and regenerates only tokens linked to their own user and can link a token only to themselves; previously MCPToken add/change permission was enough to mint or take over a token carrying another user's — including a superuser's — authority
+- `confirmation_data` can no longer override the `action`, `index`, `select_across`, or `_selected_action` fields of an admin action request
+- Inline `fields`/`exclude`/`readonly_fields` now also apply to inlines that declare a custom `form`
+
 ## [0.8.1] - 2026-09-29
 
 ### Added

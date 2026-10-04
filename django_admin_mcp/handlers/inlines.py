@@ -28,8 +28,11 @@ def _get_inline_data(obj: models.Model, admin: Any, request: HttpRequest) -> dic
     """
     Get inline related objects for a model instance.
 
-    Inlines whose model the requesting user may not view are omitted, and rows
-    come from the registered admin's queryset scope (issue #91).
+    Inlines the requesting user may not view are omitted — per the inline's
+    own ``has_view_permission`` and, when the inline model has a registered
+    admin, that admin's too — and rows come from the registered admin's
+    queryset scope (issue #91). Rows of inline models without a registered
+    admin are serialized under the inline's ``fields``/``exclude``.
 
     Args:
         obj: The parent model instance.
@@ -54,6 +57,8 @@ def _get_inline_data(obj: models.Model, admin: Any, request: HttpRequest) -> dic
 
         # Omit inlines the user may not view (issue #91)
         inline_admin = resolve_registered_admin(inline_model)
+        if not check_inline_permission(inline_class, admin, request, obj, "view"):
+            continue
         if not check_permission(request, inline_admin, "view"):
             continue
 
@@ -71,7 +76,7 @@ def _get_inline_data(obj: models.Model, admin: Any, request: HttpRequest) -> dic
             filter_kwargs = {related_name: obj}
             related_objects = get_admin_queryset(inline_model, inline_admin, request).filter(**filter_kwargs)
             inlines_data[inline_model._meta.model_name] = [
-                serialize_instance(related_obj) for related_obj in related_objects
+                serialize_instance(related_obj, inline_admin or inline_class) for related_obj in related_objects
             ]
 
     return inlines_data
@@ -91,14 +96,13 @@ def _build_inline_form_class(inline_class, inline_model, parent_admin, request, 
     from django.contrib.admin.sites import site  # noqa: PLC0415
     from django.contrib.admin.utils import flatten  # noqa: PLC0415
 
-    custom_form = getattr(inline_class, "form", None)
-    if custom_form is not None and custom_form is not ModelForm:
-        return custom_form
-
     try:
         inline_instance = inline_class(parent_admin.model, getattr(parent_admin, "admin_site", site))
         return inline_instance.get_formset(request, parent_obj).form
     except Exception:
+        custom_form = getattr(inline_class, "form", None)
+        if custom_form is not None and custom_form is not ModelForm:
+            return custom_form
         readonly = [f for f in (getattr(inline_class, "readonly_fields", None) or []) if isinstance(f, str)]
         exclude = list(getattr(inline_class, "exclude", None) or []) + readonly
         declared = getattr(inline_class, "fields", None)

@@ -4,6 +4,7 @@ Admin configuration for django-admin-mcp models
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.urls import path, reverse
@@ -93,6 +94,25 @@ class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
             },
         ),
     )
+
+    def get_queryset(self, request):
+        """Non-superusers manage only their own tokens.
+
+        A token carries its linked user's authority, so editing or
+        regenerating someone else's token (or binding a token to another
+        user, see ``formfield_for_foreignkey``) would hand over that user's
+        access.
+        """
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        return queryset.filter(user_id=request.user.pk)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Non-superusers can link tokens only to themselves."""
+        if db_field.name == "user" and not request.user.is_superuser:
+            kwargs["queryset"] = get_user_model()._default_manager.filter(pk=request.user.pk)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def get_urls(self):
         """Add custom URL for regenerating tokens."""

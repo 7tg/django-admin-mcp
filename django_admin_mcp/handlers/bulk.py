@@ -12,6 +12,7 @@ from django.db import transaction
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
+    OperationDenied,
     _log_action,
     _serialize_data_for_log,
     format_form_errors,
@@ -20,6 +21,8 @@ from django_admin_mcp.handlers.base import (
     is_missing_id,
     json_response,
     normalize_fk_fields,
+    require_deletable,
+    require_object_permission,
     safe_error_message,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
@@ -153,6 +156,7 @@ async def handle_bulk_update(
 
                 # Scoped to the admin queryset (issue #88)
                 obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
+                require_object_permission(request, model_admin, "change", obj, model_name)
 
                 normalized_data = normalize_fk_fields(model, data)
                 form_class = get_admin_form_class(model, model_admin, request, obj=obj)
@@ -181,15 +185,18 @@ async def handle_bulk_update(
                     else:
                         obj = form.save()
                     # Same redacting serializer as the single-update path (issue #104)
+                    data_json = _serialize_data_for_log(data, model_admin=model_admin)
                     _log_action(
                         user=user,
                         obj=obj,
                         action_flag=CHANGE,
-                        change_message=f"Bulk updated via MCP: {_serialize_data_for_log(data)}",
+                        change_message=f"Bulk updated via MCP: {data_json}",
                     )
                 results["success"].append({"index": i, "id": obj_id, "updated": True})
             except model.DoesNotExist:
                 results["errors"].append({"index": i, "error": f"Object with id {obj_id} not found"})
+            except OperationDenied as e:
+                results["errors"].append({"index": i, **e.payload})
             except Exception as e:
                 results["errors"].append({"index": i, "error": safe_error_message(e)})
 
@@ -223,6 +230,7 @@ async def handle_bulk_delete(
             try:
                 # Scoped to the admin queryset (issue #88)
                 obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
+                require_deletable(request, model_admin, [obj], model_name)
                 with transaction.atomic():
                     _log_action(user=user, obj=obj, action_flag=DELETION, change_message="Bulk deleted via MCP")
                     # Same admin pipeline as handle_delete: delete_model() when
@@ -234,6 +242,8 @@ async def handle_bulk_delete(
                 results["success"].append({"index": i, "id": obj_id, "deleted": True})
             except model.DoesNotExist:
                 results["errors"].append({"index": i, "error": f"Object with id {obj_id} not found"})
+            except OperationDenied as e:
+                results["errors"].append({"index": i, **e.payload})
             except Exception as e:
                 results["errors"].append({"index": i, "error": safe_error_message(e)})
 

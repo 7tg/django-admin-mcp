@@ -207,9 +207,9 @@ class TestRegenerateTokenView:
         assert token.token_key == original_key
 
     def test_post_without_change_permission_is_denied(self):
-        token = MCPTokenFactory()
-        original_key = token.token_key
         staff = UserFactory(is_staff=True)  # staff but no MCPToken permissions
+        token = MCPTokenFactory(user=staff)
+        original_key = token.token_key
         request = RequestFactory().post(f"/admin/django_admin_mcp/mcptoken/{token.pk}/regenerate/")
         request.user = staff
 

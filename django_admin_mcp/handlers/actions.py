@@ -18,9 +18,11 @@ from django_admin_mcp.handlers.action_files import (
     serialize_action_result,
 )
 from django_admin_mcp.handlers.base import (
+    OperationDenied,
     _log_action,
     get_admin_queryset,
     json_response,
+    require_deletable,
     safe_error_message,
 )
 from django_admin_mcp.handlers.bulk import _get_bulk_user
@@ -29,6 +31,10 @@ from django_admin_mcp.protocol.types import TextContent
 
 # Truncation limit for intermediate confirmation page content in responses
 _CONFIRMATION_PAGE_MAX_CHARS = 4000
+
+# Changelist POST fields set from the validated call; confirmation_data must
+# not override them (e.g. swapping in a selection outside the scoped queryset)
+_RESERVED_ACTION_FIELDS = frozenset({"action", "index", "select_across", "_selected_action"})
 
 
 def _prepare_action_request(
@@ -57,7 +63,8 @@ def _prepare_action_request(
         post["confirm"] = "yes"
         post["apply"] = "yes"
         for key, value in confirmation_data.items():
-            post[key] = str(value)
+            if key not in _RESERVED_ACTION_FIELDS:
+                post[key] = str(value)
     post._mutable = False
     request.method = "POST"
     request.POST = post  # type: ignore[assignment]
@@ -228,6 +235,9 @@ async def handle_action(
 
                 deleted_count = count
                 user = _get_bulk_user(request)
+                # Same refusals as Django's delete_selected: object-level
+                # permission, undeletable cascades, protected objects
+                require_deletable(request, model_admin, queryset, model_name)
                 with transaction.atomic():
                     for obj in queryset:
                         _log_action(user=user, obj=obj, action_flag=DELETION, change_message="Deleted via MCP")
@@ -270,5 +280,7 @@ async def handle_action(
 
         result = await execute_action()
         return json_response(result)
+    except OperationDenied as e:
+        return json_response(e.payload)
     except Exception as e:
         return json_response({"error": safe_error_message(e)})

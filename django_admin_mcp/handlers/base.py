@@ -108,33 +108,40 @@ def safe_error_message(exc: Exception) -> str:
 SENSITIVE_KEY_MARKERS = ("password", "token", "secret", "api_key", "auth", "credential")
 
 
-def _redact_sensitive(data: dict[str, Any]) -> dict[str, Any]:
-    """Replace values of sensitive-looking keys before audit logging."""
+def _redact_sensitive(data: dict[str, Any], model_admin: Any = None) -> dict[str, Any]:
+    """Replace values of sensitive-looking keys before audit logging.
+
+    Fields hidden from MCP by the admin's visibility configuration are
+    redacted too: history_* serves these messages to anyone with view
+    permission, so a logged value would leak the hidden field.
+    """
     redacted = {}
     for key, value in data.items():
-        if any(marker in key.lower() for marker in SENSITIVE_KEY_MARKERS):
+        if any(marker in key.lower() for marker in SENSITIVE_KEY_MARKERS) or not is_field_visible(model_admin, key):
             redacted[key] = "***REDACTED***"
         else:
             redacted[key] = value
     return redacted
 
 
-def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500) -> str:
+def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500, model_admin: Any = None) -> str:
     """
     Serialize data for Django admin log message with size limit.
 
-    Values of sensitive-looking keys (passwords, tokens, secrets, ...) are
-    redacted so they never reach the audit trail.
+    Values of sensitive-looking keys (passwords, tokens, secrets, ...) and of
+    fields hidden from MCP by ``model_admin`` are redacted so they never
+    reach the audit trail.
 
     Args:
         data: Dictionary to serialize for logging.
         max_length: Maximum length of the serialized string (default 500).
+        model_admin: Optional ModelAdmin whose hidden fields are redacted.
 
     Returns:
         Serialized JSON string, truncated if necessary with ellipsis.
     """
     adapter = TypeAdapter(dict[str, Any])
-    data_json = adapter.dump_json(_redact_sensitive(data), fallback=str).decode("utf-8")
+    data_json = adapter.dump_json(_redact_sensitive(data, model_admin), fallback=str).decode("utf-8")
 
     if len(data_json) > max_length:
         return data_json[: max_length - 3] + "..."
@@ -256,6 +263,95 @@ def resolve_registered_admin(model: type[models.Model]) -> Any | None:
     if registered_model is not None and registered_model._meta.concrete_model is model._meta.concrete_model:
         return model_admin
     return None
+
+
+def resolve_related_admin(model: type[models.Model]) -> Any | None:
+    """
+    Return the admin that governs access to a related model, or None.
+
+    Prefers the MCP-registered admin and falls back to the default admin
+    site's registration, so models reached through a relation are still
+    subject to their admin's permissions and field configuration even when
+    they were never exposed to MCP themselves.
+    """
+    model_admin = resolve_registered_admin(model)
+    if model_admin is not None:
+        return model_admin
+    return site._registry.get(model)
+
+
+def check_related_view_permission(request: HttpRequest, related_admin: Any | None) -> bool:
+    """
+    Check view permission on a model reached through a relation.
+
+    Fails closed: a related model without any admin has no permission
+    surface to consult, so its rows are not served.
+    """
+    # If no user is set on request, skip permission checks (backwards compat)
+    if getattr(request, "user", None) is None:
+        return True
+    if related_admin is None:
+        return False
+    return check_permission(request, related_admin, "view")
+
+
+class OperationDenied(Exception):
+    """An operation was refused after its target objects were resolved."""
+
+    def __init__(self, error: str, code: str = "permission_denied"):
+        super().__init__(error)
+        self.payload = {"error": error, "code": code}
+
+
+def check_object_permission(request: HttpRequest, model_admin: Any, action: str, obj: models.Model) -> bool:
+    """
+    Check Django admin object-level permission for action.
+
+    The admin's change/delete/detail views call ``has_*_permission(request,
+    obj)`` with the target row; admins that restrict access per object rely
+    on that call, so row handlers must make it too.
+    """
+    if model_admin is None or getattr(request, "user", None) is None:
+        return True
+
+    method_name = {
+        "view": "has_view_permission",
+        "change": "has_change_permission",
+        "delete": "has_delete_permission",
+    }[action]
+    return bool(getattr(model_admin, method_name)(request, obj))
+
+
+def require_object_permission(
+    request: HttpRequest, model_admin: Any, action: str, obj: models.Model, model_name: str
+) -> None:
+    """Raise OperationDenied unless the object-level permission is granted."""
+    if not check_object_permission(request, model_admin, action, obj):
+        raise OperationDenied(f"Permission denied: cannot {action} {model_name}")
+
+
+def require_deletable(request: HttpRequest, model_admin: Any, objs: Any, model_name: str) -> None:
+    """
+    Raise OperationDenied unless the admin's delete views would delete objs.
+
+    Mirrors ``delete_view`` / ``delete_selected``: deletion is refused when
+    the cascade reaches related objects the user may not delete, or objects
+    protected by ``on_delete=PROTECT``.
+    """
+    if model_admin is None or getattr(request, "user", None) is None:
+        return
+
+    for obj in objs:
+        require_object_permission(request, model_admin, "delete", obj, model_name)
+
+    _deleted, _counts, perms_needed, protected = model_admin.get_deleted_objects(objs, request)
+    if perms_needed:
+        names = ", ".join(sorted(str(name) for name in perms_needed))
+        raise OperationDenied(
+            f"Permission denied: deleting {model_name} would also delete related objects you cannot delete ({names})"
+        )
+    if protected:
+        raise OperationDenied(f"Cannot delete {model_name}: protected related objects reference it", code="protected")
 
 
 def create_mock_request(user=None) -> HttpRequest:
@@ -418,6 +514,14 @@ def resolve_field_visibility(model_admin: Any) -> tuple[list | None, list | None
         fields_to_exclude = flatten(fields_to_exclude)
 
     return fields_to_include, fields_to_exclude
+
+
+def is_field_visible(model_admin: Any, field_name: str) -> bool:
+    """True when ``resolve_field_visibility()`` leaves the field exposed to MCP."""
+    fields_to_include, fields_to_exclude = resolve_field_visibility(model_admin)
+    if fields_to_exclude is not None and field_name in fields_to_exclude:
+        return False
+    return fields_to_include is None or field_name in fields_to_include
 
 
 def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
@@ -641,7 +745,7 @@ def check_inline_permission(
         parent_admin: The parent ModelAdmin instance.
         request: HttpRequest with user set.
         parent_obj: The parent model instance being edited.
-        action: One of 'add', 'change', 'delete'.
+        action: One of 'view', 'add', 'change', 'delete'.
 
     Returns:
         True if permission granted, False otherwise.
@@ -655,6 +759,7 @@ def check_inline_permission(
         return True
 
     permission_methods = {
+        "view": "has_view_permission",
         "add": "has_add_permission",
         "change": "has_change_permission",
         "delete": "has_delete_permission",

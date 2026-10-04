@@ -13,11 +13,13 @@ from django.db.models import Q
 from django.http import HttpRequest
 
 from django_admin_mcp.handlers.base import (
-    check_permission,
+    check_object_permission,
+    check_related_view_permission,
     get_admin_queryset,
+    is_field_visible,
     is_missing_id,
     json_response,
-    resolve_registered_admin,
+    resolve_related_admin,
     safe_error_message,
     serialize_instance,
     validate_pagination,
@@ -80,6 +82,9 @@ async def handle_related(
         except (model.DoesNotExist, ValueError, TypeError):
             return {"error": f"{model_name} not found"}
 
+        if not check_object_permission(request, model_admin, "view", obj):
+            return {"error": f"Permission denied: cannot view {model_name}", "code": "permission_denied"}
+
         # Only actual relations are served: plain fields, properties, and
         # methods must not be reachable here — that would bypass
         # mcp_fields/mcp_exclude_fields serialization filtering (issue #90)
@@ -88,7 +93,9 @@ async def handle_related(
             if not field.is_relation:
                 continue
             if field.concrete:
-                relation_names.add(field.name)  # forward FK/O2O/M2M
+                # forward FK/O2O/M2M — unless the field itself is hidden
+                if is_field_visible(model_admin, field.name):
+                    relation_names.add(field.name)
             else:
                 accessor = getattr(field, "get_accessor_name", lambda: None)()
                 if accessor:  # reverse relations; None for related_name="+"
@@ -110,8 +117,7 @@ async def handle_related(
 
         def denied_unless_viewable(related_model):
             """Permission check on the related model's admin (issue #91)."""
-            related_admin = resolve_registered_admin(related_model)
-            if not check_permission(request, related_admin, "view"):
+            if not check_related_view_permission(request, resolve_related_admin(related_model)):
                 return {
                     "error": f"Permission denied: cannot view {related_model._meta.model_name}",
                     "code": "permission_denied",
@@ -125,7 +131,7 @@ async def handle_related(
             denied = denied_unless_viewable(related_model)
             if denied:
                 return denied
-            related_admin = resolve_registered_admin(related_model)
+            related_admin = resolve_related_admin(related_model)
             # Intersect with the related admin's queryset scope (issue #91)
             queryset = related_attr.all() & get_admin_queryset(related_model, related_admin, request)
             total_count = queryset.count()
@@ -135,7 +141,7 @@ async def handle_related(
                 "type": "many",
                 "count": len(related_objects),
                 "total_count": total_count,
-                "results": [serialize_instance(r) for r in related_objects],
+                "results": [serialize_instance(r, related_admin) for r in related_objects],
             }
         elif hasattr(related_attr, "_meta"):
             # Single relation (FK, OneToOne)
@@ -143,13 +149,13 @@ async def handle_related(
             denied = denied_unless_viewable(related_model)
             if denied:
                 return denied
-            related_admin = resolve_registered_admin(related_model)
+            related_admin = resolve_related_admin(related_model)
             if not get_admin_queryset(related_model, related_admin, request).filter(pk=related_attr.pk).exists():
                 return {"error": f"Relation '{relation}' not found on model"}
             return {
                 "relation": relation,
                 "type": "single",
-                "result": serialize_instance(related_attr),
+                "result": serialize_instance(related_attr, related_admin),
             }
         else:  # pragma: no cover — relations resolve to managers, instances, or None
             return {"relation": relation, "type": "single", "result": None}
@@ -216,6 +222,9 @@ async def handle_history(
             obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
         except (model.DoesNotExist, ValueError, TypeError):
             return {"error": f"{model_name} not found"}
+
+        if not check_object_permission(request, model_admin, "view", obj):
+            return {"error": f"Permission denied: cannot view {model_name}", "code": "permission_denied"}
 
         # Get content type for this model
         content_type = ContentType.objects.get_for_model(model)
@@ -307,11 +316,13 @@ async def handle_autocomplete(
         if model_admin:
             admin_search_fields = list(getattr(model_admin, "search_fields", []))
 
-        # If no admin search_fields, try to find text fields to search
+        # If no admin search_fields, try to find text fields to search.
+        # Hidden fields are skipped: matching on them would reveal their
+        # contents one search term at a time
         fallback_fields = []
         if not admin_search_fields:
             for field in model._meta.get_fields():
-                if hasattr(field, "get_internal_type"):
+                if hasattr(field, "get_internal_type") and is_field_visible(model_admin, field.name):
                     if field.get_internal_type() in ("CharField", "TextField"):
                         fallback_fields.append(field.name)
                         if len(fallback_fields) >= 3:  # Limit to 3 fields

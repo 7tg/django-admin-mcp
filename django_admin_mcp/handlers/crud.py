@@ -15,16 +15,20 @@ from django.http import HttpRequest
 from pydantic import TypeAdapter
 
 from django_admin_mcp.handlers.base import (
+    OperationDenied,
     _log_action,
     _serialize_data_for_log,
-    check_permission,
+    check_related_view_permission,
     format_form_errors,
     get_admin_form_class,
     get_admin_queryset,
+    is_field_visible,
     is_missing_id,
     json_response,
     normalize_fk_fields,
-    resolve_registered_admin,
+    require_deletable,
+    require_object_permission,
+    resolve_related_admin,
     safe_error_message,
     serialize_instance,
     validate_pagination,
@@ -43,11 +47,31 @@ class InvalidFilterError(ValueError):
     """A list filter or ordering parameter was rejected (issue #111)."""
 
 
-def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q:
+def _queryable_field_names(model: type[models.Model], model_admin: Any = None) -> set[str]:
+    """
+    Names of the fields a caller may filter and order by.
+
+    Only the model's own fields that are visible over MCP (plus the primary
+    key): filtering or ordering on a field hidden by mcp_fields /
+    mcp_exclude_fields would let a caller recover its value one comparison
+    at a time, and reverse relations would probe models the caller may not
+    be able to view.
+    """
+    names = set()
+    for field in model._meta.get_fields():
+        if field.auto_created and not field.concrete:
+            continue  # reverse relation
+        if getattr(field, "primary_key", False) or is_field_visible(model_admin, field.name):
+            names.add(field.name)
+    return names
+
+
+def _build_filter_query(model: type[models.Model], filters: dict[str, Any], model_admin: Any = None) -> Q:
     """
     Build a Q object from filter parameters.
 
-    Supports lookups on direct model fields only (no relation traversal):
+    Supports lookups on direct, MCP-visible model fields only (no relation
+    traversal):
     - field: exact match (default)
     - field__exact, field__contains, field__icontains
     - field__gt, field__gte, field__lt, field__lte
@@ -57,6 +81,7 @@ def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q
     Args:
         model: The Django model class.
         filters: Dictionary of field:value filter criteria.
+        model_admin: Optional ModelAdmin with field visibility configuration.
 
     Returns:
         Q object for filtering queryset.
@@ -68,7 +93,7 @@ def _build_filter_query(model: type[models.Model], filters: dict[str, Any]) -> Q
             result set.
     """
     q = Q()
-    valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, "name")}
+    valid_fields = _queryable_field_names(model, model_admin)
     allowed = ", ".join(sorted(SAFE_FILTER_LOOKUPS))
 
     problems = []
@@ -188,13 +213,14 @@ async def handle_list(
         filter_q = None
         if filters:
             try:
-                filter_q = _build_filter_query(model, filters)
+                filter_q = _build_filter_query(model, filters, model_admin)
             except InvalidFilterError as e:
                 return json_response({"error": str(e)})
 
         if order_by:
-            valid_ordering = _get_valid_ordering_fields(model)
-            invalid_order = [o for o in order_by if o not in valid_ordering]
+            # Caller-supplied ordering is limited to visible fields, like filters
+            queryable = _queryable_field_names(model, model_admin)
+            invalid_order = [o for o in order_by if not isinstance(o, str) or o.removeprefix("-") not in queryable]
             if invalid_order:
                 names = ", ".join(f"'{o}'" for o in invalid_order)
                 return json_response({"error": f"Invalid order_by — unknown fields: {names}"})
@@ -279,6 +305,7 @@ async def handle_get(
         @sync_to_async
         def get_object():
             obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
+            require_object_permission(request, model_admin, "view", obj, model_name)
             result = serialize_instance(obj, model_admin)
 
             # Include inlines if requested
@@ -302,14 +329,14 @@ async def handle_get(
                                     # Omit related models the user may not view,
                                     # and honor their admin queryset scope (issue #91)
                                     related_model = field.related_model
-                                    related_admin = resolve_registered_admin(related_model)
-                                    if not check_permission(request, related_admin, "view"):
+                                    related_admin = resolve_related_admin(related_model)
+                                    if not check_related_view_permission(request, related_admin):
                                         continue
                                     related_qs = related_manager.all() & get_admin_queryset(
                                         related_model, related_admin, request
                                     )
                                     related_data[accessor_name] = [
-                                        serialize_instance(r)
+                                        serialize_instance(r, related_admin)
                                         for r in related_qs[:10]  # Limit to 10
                                     ]
                 if related_data:
@@ -324,6 +351,8 @@ async def handle_get(
         return [TextContent(text=adapter.dump_json(obj_dict, indent=2).decode("utf-8"))]
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
+    except OperationDenied as e:
+        return json_response(e.payload)
     except Exception as e:
         return json_response({"error": safe_error_message(e)})
 
@@ -388,7 +417,7 @@ async def handle_create(
                     obj = form.save()
 
                 # Log the action - use Pydantic for serialization (truncated for log size)
-                data_json = _serialize_data_for_log(data)
+                data_json = _serialize_data_for_log(data, model_admin=model_admin)
                 _log_action(
                     user=user,
                     obj=obj,
@@ -485,6 +514,7 @@ async def handle_update(
             # Scope the lookup to the admin queryset so rows hidden from the
             # changelist can't be updated by pk (issue #88)
             obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
+            require_object_permission(request, model_admin, "change", obj, model_name)
 
             # Normalize FK field names (convert field_id to field)
             normalized_data = normalize_fk_fields(model, data)
@@ -522,7 +552,7 @@ async def handle_update(
                 # Log the action - use Pydantic for serialization (truncated for log size)
                 change_message = []
                 if data:
-                    data_json = _serialize_data_for_log(data)
+                    data_json = _serialize_data_for_log(data, model_admin=model_admin)
                     change_message.append(f"Changed via MCP: {data_json}")
                 if inlines_data:
                     change_message.append(f"Updated inlines: {list(inlines_data.keys())}")
@@ -556,6 +586,8 @@ async def handle_update(
         return [TextContent(text=response.model_dump_json(indent=2))]
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
+    except OperationDenied as e:
+        return json_response(e.payload)
     except Exception as e:
         return json_response({"error": safe_error_message(e)})
 
@@ -597,6 +629,9 @@ async def handle_delete(
             # Scope the lookup to the admin queryset so rows hidden from the
             # changelist can't be deleted by pk (issue #88)
             obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
+            # Object-level permission, plus the cascade/protection checks of
+            # the admin's delete view
+            require_deletable(request, model_admin, [obj], model_name)
             obj_repr = str(obj)
 
             # Wrap logging and deletion in transaction for atomicity
@@ -626,5 +661,7 @@ async def handle_delete(
         )
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
+    except OperationDenied as e:
+        return json_response(e.payload)
     except Exception as e:
         return json_response({"error": safe_error_message(e)})
