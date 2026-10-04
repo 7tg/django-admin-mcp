@@ -39,7 +39,10 @@ class MCPTokenAdmin(MCPAdminMixin, admin.ModelAdmin):
 
     # Enable MCP exposure with restricted fields for security
     mcp_expose = True
-    mcp_exclude_fields = ["token_key", "token_hash", "salt"]  # Never expose sensitive token data via MCP
+    # Never expose sensitive token data via MCP. token_preview renders the
+    # hidden token_key, and the regenerate button is admin-only HTML, so both
+    # computed columns are excluded as well.
+    mcp_exclude_fields = ["token_key", "token_hash", "salt", "token_preview", "regenerate_token_button"]
 
     list_display = [
         "name",

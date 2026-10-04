@@ -86,7 +86,7 @@ class ArticleAdmin(MCPAdminMixin, SomeOtherMixin, admin.ModelAdmin):
 
 ### List Display
 
-`list_display` is reported by `describe_<model>` as admin metadata. It does **not** change which fields `list_<model>` returns — use `mcp_fields`/`mcp_exclude_fields` for that:
+`list_display` is reported by `describe_<model>` as admin metadata. It does **not** change which model fields `list_<model>` returns — use `mcp_fields`/`mcp_exclude_fields` for that. Entries that are not model fields (admin methods, model properties, callables) are evaluated and returned per row under a `_computed` key; computed `readonly_fields` entries are returned the same way by `get_<model>`. See [computed columns](../tools/crud.md#computed-columns-_computed):
 
 ```python
 class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
@@ -176,8 +176,10 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 3. **Exclusion wins over inclusion** — If a field is in both `mcp_fields` and `mcp_exclude_fields`, it's excluded
 4. **No configuration = all fields** — If no field configuration is provided, all model fields are exposed
 
-!!! note "Non-editable fields are always excluded"
-    Serialization uses Django's `model_to_dict()`, which skips every `editable=False` field — including auto primary keys, `auto_now_add`/`auto_now` timestamps, and any field declared `editable=False`. This means `list_*`/`get_*` payloads do **not** contain an `id` key; use `get_*`'s input `id` (or `create_*`'s returned `id`) to track object identity. Regular date fields like `expires_at` are included normally.
+!!! note "Non-editable fields are serialized"
+    `editable=False` fields — `auto_now_add`/`auto_now` timestamps, UUIDs, and any field declared `editable=False` — are returned by `list_*`/`get_*` (and in related and inline rows) like any other field, and obey the same rules above. If such a field must stay private, list it in `mcp_exclude_fields` or leave it out of `mcp_fields`.
+
+    The same rules apply to computed `list_display` / `readonly_fields` entries returned under `_computed`: `mcp_exclude_fields` hides them by name, and an allowlist must name them.
 
 #### Example — Protecting Sensitive Data
 
@@ -197,6 +199,7 @@ When listing or getting customers via MCP, excluded fields are filtered out:
 
 ```json
 {
+  "id": 7,
   "name": "Acme Corp",
   "email": "billing@acme.example",
   "is_active": true,
@@ -204,7 +207,7 @@ When listing or getting customers via MCP, excluded fields are filtered out:
 }
 ```
 
-Foreign keys serialize as bare primary keys and many-to-many fields as lists of primary keys. `card_number` and `internal_notes` are not included; neither are non-editable fields such as the auto primary key or `auto_now_add` timestamps.
+Foreign keys serialize as bare primary keys and many-to-many fields as lists of primary keys. `card_number` and `internal_notes` are not included.
 
 ### Custom Actions
 
