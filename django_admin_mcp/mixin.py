@@ -54,6 +54,11 @@ class MCPAdminMixin:
             ``ModelAdmin.get_queryset(request)`` so MCP row scope matches the admin
             changelist (proxy filters, soft-delete, multi-tenant scoping, etc.).
             Set to False to use ``model.objects.all()`` instead.
+        mcp_return_messages (bool): When True (default), messages the admin queues
+            with ``message_user()`` during action/create/update/delete calls are
+            returned in the response's ``messages`` list. Set to False when those
+            messages may carry data MCP clients must not see (e.g. secrets shown
+            once in the admin UI).
     """
 
     # Type annotations for MCP-specific attributes (set by subclasses)
@@ -61,6 +66,7 @@ class MCPAdminMixin:
     mcp_fields: list[str] | None
     mcp_exclude_fields: list[str] | None
     mcp_use_admin_queryset: bool = True
+    mcp_return_messages: bool = True
 
     # Class-level registry to track registered models
     _registered_models: dict[str, dict[str, Any]] = {}

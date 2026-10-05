@@ -203,7 +203,7 @@ The server answers with an empty HTTP 202 response (notifications carry no `id` 
 
 ### tools/list
 
-Lists all available MCP tools.
+Lists the MCP tools the token can use: models it cannot view are skipped, and write tools (`create_*`, `update_*`, `delete_*`, `bulk_*`, `action_*`) are listed only when the token holds the matching permission.
 
 **Request:**
 

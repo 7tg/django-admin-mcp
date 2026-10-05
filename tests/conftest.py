@@ -13,16 +13,84 @@ register(UserFactory)
 register(MCPTokenFactory)
 
 
+def _register_filter_admins():
+    """Register the admins exercising list_filter / date_hierarchy (issue #116)."""
+    # Deferred import: must wait for Django app registry to be ready
+    from django_admin_mcp import MCPAdminMixin  # noqa: PLC0415
+    from tests.models import Category, Widget  # noqa: PLC0415
+
+    _unregister_filter_admins()
+
+    class PriceBandFilter(admin.SimpleListFilter):
+        title = "price band"
+        parameter_name = "band"
+
+        def lookups(self, request, model_admin):
+            return [("cheap", "Under 10"), ("pricey", "10 and over")]
+
+        def queryset(self, request, queryset):
+            if self.value() == "cheap":
+                return queryset.filter(price__lt=10)
+            if self.value() == "pricey":
+                return queryset.filter(price__gte=10)
+            return queryset
+
+    @admin.register(Category)
+    class CategoryAdmin(MCPAdminMixin, admin.ModelAdmin):
+        """Category admin hiding internal_code from MCP."""
+
+        mcp_expose = True
+        mcp_exclude_fields = ["internal_code"]
+
+    @admin.register(Widget)
+    class WidgetAdmin(MCPAdminMixin, admin.ModelAdmin):
+        """Widget admin declaring relation filters, a SimpleListFilter and a date hierarchy."""
+
+        mcp_expose = True
+        mcp_exclude_fields = ["cost_code"]
+        list_filter = [
+            "size",
+            "category__slug",
+            "customer__is_staff",
+            ("category__name", admin.AllValuesFieldListFilter),
+            "labels__name",
+            PriceBandFilter,
+            # Declared, yet hidden over MCP: must stay unfilterable
+            "category__internal_code",
+            "cost_code",
+        ]
+        date_hierarchy = "release_date"
+
+
+def _unregister_filter_admins():
+    from tests.models import Category, Widget  # noqa: PLC0415
+
+    for model in (Category, Widget):
+        if model in admin.site._registry:
+            admin.site.unregister(model)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def django_setup_with_admin(django_db_setup, django_db_blocker):
     """Register admin classes after Django is set up."""
     with django_db_blocker.unblock():
         # Deferred import: must wait for Django app registry to be ready
         from django_admin_mcp import MCPAdminMixin  # noqa: PLC0415
-        from tests.models import Article, Author, CatalogItemA, CatalogItemB, Gadget, Ticket  # noqa: PLC0415
+        from tests.models import (  # noqa: PLC0415
+            Article,
+            Author,
+            CatalogItemA,
+            CatalogItemB,
+            Document,
+            DocumentPage,
+            Event,
+            EventSession,
+            Gadget,
+            Ticket,
+        )
 
         # Clear any existing registrations
-        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket):
+        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket, Event, Document):
             if model in admin.site._registry:
                 admin.site.unregister(model)
 
@@ -82,9 +150,36 @@ def django_setup_with_admin(django_db_setup, django_db_blocker):
             def get_queryset(self, request):
                 return super().get_queryset(request).filter(channel="B")
 
+        class EventSessionInline(admin.TabularInline):
+            model = EventSession
+            extra = 0
+
+        @admin.register(Event)
+        class EventAdmin(MCPAdminMixin, admin.ModelAdmin):
+            """Event admin: split datetime widgets, JSON, M2M, file, defaults, prepopulated slug."""
+
+            prepopulated_fields = {"slug": ["name"]}
+            inlines = [EventSessionInline]
+            mcp_expose = True
+
+        class DocumentPageInline(admin.TabularInline):
+            model = DocumentPage
+            extra = 0
+
+        @admin.register(Document)
+        class DocumentAdmin(MCPAdminMixin, admin.ModelAdmin):
+            """Document admin: required and optional file fields, file-carrying inline (issue #120)."""
+
+            inlines = [DocumentPageInline]
+            mcp_expose = True
+
+        _register_filter_admins()
+
         yield
 
+        _unregister_filter_admins()
+
         # Cleanup (optional, as this is session-scoped)
-        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket):
+        for model in (Author, Article, CatalogItemA, CatalogItemB, Gadget, Ticket, Event, Document):
             if model in admin.site._registry:
                 admin.site.unregister(model)

@@ -46,7 +46,7 @@ path('admin-api/', include('django_admin_mcp.urls')),
 
 ### Optional Settings
 
-Four optional Django settings:
+Five optional Django settings:
 
 ```python title="settings.py"
 # Maximum page size for list_*, related_*, history_*, and autocomplete_*
@@ -58,6 +58,11 @@ MCP_MAX_LIST_LIMIT = 1000
 # rejected with an error. Default: 5 MiB
 MCP_ACTION_MAX_FILE_BYTES = 5 * 1024 * 1024
 
+# Maximum decoded size of one file uploaded to a FileField / ImageField
+# through create_*, update_* or bulk_*. Larger files are rejected with a
+# validation error on the field. Default: 5 MiB
+MCP_UPLOAD_MAX_FILE_BYTES = 5 * 1024 * 1024
+
 # Write resolution for MCPToken.last_used_at, in seconds. Within this
 # window of the recorded timestamp, further uses are not written to the
 # database. Set to 0 to record every use. Default: 60
@@ -67,6 +72,12 @@ MCP_LAST_USED_RESOLUTION = 60
 # send an Authorization header. Default: False
 MCP_ALLOW_URL_TOKEN = False
 ```
+
+### MCP_UPLOAD_MAX_FILE_BYTES
+
+Caps the decoded size of each file sent as a [`{"filename", "content_base64"}` object](../tools/crud.md#file-uploads) for a `FileField` / `ImageField`. The limit applies per file, not per request, and is checked from the base64 length before the content is decoded. A file over the limit fails that field with `File is too large: N bytes exceeds MCP_UPLOAD_MAX_FILE_BYTES (M bytes).` and nothing is saved.
+
+Base64 inflates content by a third, so the request body carrying a file at the limit is larger than the limit itself; Django's `DATA_UPLOAD_MAX_MEMORY_SIZE` (2.5 MB by default) still bounds the whole request body and may need raising to make use of the full cap.
 
 ### MCP_ALLOW_URL_TOKEN
 
@@ -125,7 +136,9 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_fields = ['title', 'author', 'published']
 ```
 
-Default: `None` (all editable fields)
+Default: `None` (all fields, including non-editable ones such as `auto_now` timestamps)
+
+The allowlist also governs computed `list_display` / `readonly_fields` entries returned under `_computed`: with an allowlist in effect, a computed entry is served only if it is named here.
 
 ### mcp_exclude_fields
 
@@ -136,6 +149,8 @@ class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
     mcp_expose = True
     mcp_exclude_fields = ['password', 'security_token']
 ```
+
+Names of computed `list_display` / `readonly_fields` entries (admin methods, properties) can be listed too, to keep them out of `_computed`.
 
 Default: `None`
 
@@ -150,6 +165,20 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 ```
 
 Default: `True`
+
+### mcp_return_messages
+
+When `True` (the default), messages the admin queues with `self.message_user()` during `action_*`, `create_*`, `update_*` and `delete_*` calls are returned in the response's `messages` list. Set to `False` when those messages may carry data MCP clients must not see, such as a secret the admin UI shows once:
+
+```python
+class ApiKeyAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    mcp_return_messages = False
+```
+
+Default: `True`
+
+The built-in `MCPTokenAdmin` sets this to `False`: it reports a new token's plaintext through `message_user()`, and returning that over MCP would let a narrowed token create a token and read its secret.
 
 ### Standard Django Options
 
@@ -197,7 +226,7 @@ class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 #### list_filter
 
-Available filter options (informational in `describe_*`):
+Filters the changelist offers. Relation paths and `SimpleListFilter` classes declared here (and the `date_hierarchy` field) become usable in `list_*` `filters`; `describe_*` lists them under `admin_config.filters`. See [Supported filter lookups](../tools/crud.md#supported-filter-lookups):
 
 ```python
 class ArticleAdmin(MCPAdminMixin, admin.ModelAdmin):

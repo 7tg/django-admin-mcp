@@ -35,6 +35,7 @@ from django_admin_mcp.handlers.base import (
     resolve_registered_admin,
     safe_error_message,
 )
+from django_admin_mcp.handlers.uploads import upload_doc
 from django_admin_mcp.protocol.types import TextContent, Tool
 
 # Type alias for handler functions
@@ -169,6 +170,26 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
 
     fields = _get_field_info(model, model_admin)
     fields_doc = _format_fields_doc(fields)
+    # Shared by create_* and update_*: what the write pipeline accepts (issue #118)
+    write_doc = (
+        "Date and datetime fields take a single ISO 8601 string "
+        "(e.g. '2026-03-01' or '2026-03-01T09:30:00Z'). "
+        "Foreign keys take the related object's ID, many-to-many fields a list of IDs. "
+        "A field the admin form does not accept (unknown, read-only or non-editable) "
+        "is rejected with an error, never ignored."
+    )
+    # Only models that have a file field are told how to upload one (issue #120)
+    has_file_field = any(f["type"] in ("FileField", "ImageField") for f in fields)
+    if has_file_field:
+        write_doc = f"{write_doc} {upload_doc()}"
+    inlines_schema = {
+        "type": "object",
+        "description": (
+            "Inline rows saved with the object, keyed by inline model name: "
+            "{model_name: [{data} to add, {id, data} to update, {id, _delete: true} to delete]}. "
+            "All-or-nothing: any inline error rejects the whole call and nothing is saved"
+        ),
+    }
 
     return [
         Tool(
@@ -176,9 +197,16 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
             description=(
                 f"List {verbose_name} instances with filtering, searching, "
                 f"ordering, and pagination.\n\n"
-                f"Filter lookups: field (exact), field__contains, field__icontains, "
-                f"field__gt, field__gte, field__lt, field__lte, field__in, "
-                f"field__isnull\n\n"
+                f"Filter lookups: field (exact), field__iexact, field__contains, field__icontains, "
+                f"field__startswith, field__istartswith, field__endswith, field__iendswith, "
+                f"field__gt, field__gte, field__lt, field__lte, field__in, field__range, "
+                f"field__isnull; date fields also take field__year, field__month, field__day "
+                f"(and field__date on datetimes), optionally followed by a comparison "
+                f"(field__year__gte).\n"
+                f"Relation paths (e.g. category__slug) and custom filter parameters work only "
+                f"when the admin declares them in list_filter / date_hierarchy: "
+                f"describe_{model_name} lists them under admin_config.filters. "
+                f"Invalid filters return an error.\n\n"
                 f"Available fields:\n{fields_doc}"
             ),
             inputSchema={
@@ -198,7 +226,8 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
                         "type": "object",
                         "description": (
                             "Filter criteria. Keys are field names with optional lookups "
-                            "(e.g., {'status': 'published', 'created_at__gte': '2024-01-01'})"
+                            "(e.g., {'status': 'published', 'created_at__gte': '2024-01-01'}), or "
+                            "filter names listed by describe under admin_config.filters"
                         ),
                     },
                     "search": {
@@ -241,21 +270,34 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
         ),
         Tool(
             name=f"create_{model_name}",
-            description=f"Create a new {verbose_name}\n\nFields:\n{fields_doc}",
+            description=(
+                f"Create a new {verbose_name}, optionally with inline rows.\n\n{write_doc}\n\nFields:\n{fields_doc}"
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "data": {
                         "type": "object",
                         "description": f"The data for the new {verbose_name}",
-                    }
+                    },
+                    "inlines": {
+                        **inlines_schema,
+                        "description": (
+                            "Inline rows to create with the object, keyed by inline model name: "
+                            "{model_name: [{data}, ...]}. "
+                            "All-or-nothing: any inline error rejects the whole call and nothing is saved"
+                        ),
+                    },
                 },
                 "required": ["data"],
             },
         ),
         Tool(
             name=f"update_{model_name}",
-            description=(f"Update an existing {verbose_name} with optional inline updates.\n\nFields:\n{fields_doc}"),
+            description=(
+                f"Update an existing {verbose_name} with optional inline updates. "
+                f"Only the fields sent are changed.\n\n{write_doc}\n\nFields:\n{fields_doc}"
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -267,12 +309,7 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
                         "type": "object",
                         "description": "The fields to update",
                     },
-                    "inlines": {
-                        "type": "object",
-                        "description": (
-                            "Inline updates: {model_name: [{id, data}, {data for new}, {id, _delete: true}]}"
-                        ),
-                    },
+                    "inlines": inlines_schema,
                 },
                 "required": ["id"],
             },
@@ -352,7 +389,7 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
                 f"Perform bulk operations on {verbose_name}: create, update, or delete multiple items.\n\n"
                 f"For 'create': items is a list of data objects\n"
                 f"For 'update': items is a list of {{id, data}} objects\n"
-                f"For 'delete': items is a list of IDs"
+                f"For 'delete': items is a list of IDs" + (f"\n\n{upload_doc()}" if has_file_field else "")
             ),
             inputSchema={
                 "type": "object",
@@ -471,6 +508,26 @@ def get_find_models_tool() -> Tool:
     )
 
 
+# Admin permissions that unlock each write tool in tools/list; any one of the
+# listed permissions is enough. Operations not listed here are view-gated.
+_WRITE_TOOL_PERMISSIONS: dict[str, tuple[str, ...]] = {
+    "create": ("add",),
+    "update": ("change",),
+    "action": ("change",),
+    "delete": ("delete",),
+    "bulk": ("add", "change", "delete"),
+}
+
+
+def _can_use_tool(tool: Tool, request: HttpRequest, model_admin: Any) -> bool:
+    """True when the requesting user holds a permission the tool's operation needs."""
+    operation = tool.name.split("_", 1)[0]
+    required = _WRITE_TOOL_PERMISSIONS.get(operation)
+    if required is None:
+        return True
+    return any(check_permission(request, model_admin, action) for action in required)
+
+
 def get_tools(request: HttpRequest | None = None) -> list[Tool]:
     """
     Generate Tool definitions for all exposed models.
@@ -481,7 +538,9 @@ def get_tools(request: HttpRequest | None = None) -> list[Tool]:
     When ``request`` is given, models the requesting user may not see are
     skipped — the same has_module_permission + view permission filter as
     find_models and resources/list — so tools/list doesn't advertise tool
-    schemas for models the token has no access to (issue #101).
+    schemas for models the token has no access to (issue #101). Write tools
+    are further filtered per operation, so a view-only token isn't offered
+    create/update/delete/bulk/action tools it cannot call (issue #119).
 
     Args:
         request: Optional HttpRequest with user set for permission filtering.
@@ -499,6 +558,9 @@ def get_tools(request: HttpRequest | None = None) -> list[Tool]:
             if not check_permission(request, model_admin, "view"):
                 continue
         model = model_admin.model
-        tools.extend(get_model_tools(model, model_admin))
+        model_tools = get_model_tools(model, model_admin)
+        if request is not None:
+            model_tools = [tool for tool in model_tools if _can_use_tool(tool, request, model_admin)]
+        tools.extend(model_tools)
 
     return tools

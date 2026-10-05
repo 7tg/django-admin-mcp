@@ -5,22 +5,31 @@ This module provides shared utilities extracted from the mixin module
 for use across handler implementations.
 """
 
+import datetime
 import logging
+import uuid
 from collections.abc import Mapping, Sequence
+from decimal import Decimal
+from itertools import chain
 from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.contrib.admin.sites import site
 from django.contrib.messages.storage.base import BaseStorage
-from django.core.exceptions import FieldError
+from django.core.exceptions import FieldDoesNotExist, FieldError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, OperationalError, models
+from django.db.models.constants import LOOKUP_SEP
 from django.db.models.fields.files import FieldFile
-from django.forms import ModelForm
-from django.forms.models import model_to_dict, modelform_factory
+from django.forms import FileField as FileFormField
+from django.forms import ModelForm, MultiWidget
+from django.forms.models import modelform_factory
 from django.http import HttpRequest
+from django.utils.datastructures import MultiValueDict
+from django.utils.text import slugify
 from pydantic import TypeAdapter
 
+from django_admin_mcp.handlers.uploads import bind_upload, summarize_uploads
 from django_admin_mcp.protocol.types import TextContent
 
 logger = logging.getLogger("django_admin_mcp")
@@ -35,7 +44,8 @@ class MCPMessageStorage(BaseStorage):
 
     Admin hooks commonly call ``ModelAdmin.message_user()``; without a storage
     on the request that raises ``MessageFailure`` and rolls back the write.
-    Messages are collected in memory and discarded with the request.
+    Messages are collected in memory; ``collect_messages()`` drains them into
+    the tool response (issue #119) and the rest is discarded with the request.
     """
 
     def _get(self, *args, **kwargs):
@@ -49,6 +59,42 @@ def attach_messages_storage(request: HttpRequest) -> HttpRequest:
     """Give a synthetic request a messages storage so message_user() works."""
     request._messages = MCPMessageStorage(request)  # type: ignore[attr-defined]
     return request
+
+
+def collect_messages(request: HttpRequest) -> list[dict[str, str]]:
+    """
+    Drain the messages queued on a request during a tool call (issue #119).
+
+    Admin actions and save/delete hooks often report their outcome only
+    through ``message_user()``. Each message becomes ``{"level", "message"}``
+    with the level as Django's tag (``debug``, ``info``, ``success``,
+    ``warning``, ``error``; the numeric level for untagged custom levels).
+    The queue is emptied so a reused request never repeats a message.
+    """
+    storage = getattr(request, "_messages", None)
+    queued = getattr(storage, "_queued_messages", None)
+    if not queued:
+        return []
+    collected = [
+        {"level": message.level_tag or str(message.level), "message": str(message.message)} for message in queued
+    ]
+    queued.clear()
+    return collected
+
+
+def attach_messages(data: dict[str, Any], request: HttpRequest, model_admin: Any) -> dict[str, Any]:
+    """
+    Add the request's queued messages to a response payload; omitted when there are none.
+
+    An admin with ``mcp_return_messages = False`` opts out: its messages may
+    carry data that must not reach MCP clients (MCPTokenAdmin reports a new
+    token's plaintext this way). The queue is drained either way so nothing
+    leaks into a later response.
+    """
+    queued = collect_messages(request)
+    if queued and getattr(model_admin, "mcp_return_messages", True):
+        data["messages"] = queued
+    return data
 
 
 class MCPRequest(HttpRequest):
@@ -70,12 +116,13 @@ class MCPRequest(HttpRequest):
         attach_messages_storage(self)
 
 
-def json_response(data: dict) -> list[TextContent]:
+def json_response(data: dict, indent: int | None = None) -> list[TextContent]:
     """
     Wrap response data in TextContent list.
 
     Args:
         data: Dictionary to serialize as JSON response.
+        indent: Optional indentation for pretty-printed output.
 
     Returns:
         List containing a single TextContent with JSON-serialized data.
@@ -83,7 +130,7 @@ def json_response(data: dict) -> list[TextContent]:
     # Use Pydantic TypeAdapter for JSON serialization with better type safety.
     # fallback=str covers types pydantic can't serialize natively, notably
     # Django's lazy translation proxies (gettext_lazy verbose_names/fieldsets).
-    json_bytes = _JSON_ADAPTER.dump_json(data, by_alias=True, fallback=str)
+    json_bytes = _JSON_ADAPTER.dump_json(data, indent=indent, by_alias=True, fallback=str)
     return [TextContent(text=json_bytes.decode("utf-8"))]
 
 
@@ -130,7 +177,8 @@ def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500, model_a
 
     Values of sensitive-looking keys (passwords, tokens, secrets, ...) and of
     fields hidden from MCP by ``model_admin`` are redacted so they never
-    reach the audit trail.
+    reach the audit trail. An uploaded file (issue #120) is logged as its
+    filename and size, never its content.
 
     Args:
         data: Dictionary to serialize for logging.
@@ -141,7 +189,8 @@ def _serialize_data_for_log(data: dict[str, Any], max_length: int = 500, model_a
         Serialized JSON string, truncated if necessary with ellipsis.
     """
     adapter = TypeAdapter(dict[str, Any])
-    data_json = adapter.dump_json(_redact_sensitive(data, model_admin), fallback=str).decode("utf-8")
+    loggable = _redact_sensitive(summarize_uploads(data), model_admin)
+    data_json = adapter.dump_json(loggable, fallback=str).decode("utf-8")
 
     if len(data_json) > max_length:
         return data_json[: max_length - 3] + "..."
@@ -535,6 +584,11 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
     When ``model_admin`` is omitted, looks up the registered MCP admin for the
     instance's model so list/related/inline call sites still apply excludes.
 
+    Non-editable concrete fields (``auto_now``/``auto_now_add`` timestamps,
+    ``editable=False`` UUIDs, ...) are serialized like any other field and
+    obey the same visibility rules (issue #117). Private and many-to-many
+    fields keep ``model_to_dict()``'s editable-only behavior.
+
     Fields defined with ``choices`` additionally get a ``<name>_display``
     sidecar carrying their human-readable label (issue #113). Sidecars are
     only added for fields that survived visibility filtering, and never
@@ -552,8 +606,18 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
 
     fields_to_include, fields_to_exclude = resolve_field_visibility(model_admin)
 
-    # Use model_to_dict with fields/exclude parameters
-    obj_dict = model_to_dict(instance, fields=fields_to_include, exclude=fields_to_exclude)
+    # model_to_dict() semantics, except that non-editable concrete fields are
+    # kept: describe_* lists them, so get/list must return them (issue #117)
+    opts = instance._meta
+    obj_dict = {}
+    for field in chain(opts.concrete_fields, opts.private_fields, opts.many_to_many):
+        if not (field.concrete or getattr(field, "editable", False)):
+            continue
+        if fields_to_include is not None and field.name not in fields_to_include:
+            continue
+        if fields_to_exclude and field.name in fields_to_exclude:
+            continue
+        obj_dict[field.name] = field.value_from_object(instance)
 
     # Convert non-serializable fields
     serialized = {}
@@ -584,6 +648,125 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
         serialized[display_key] = getattr(instance, f"get_{field.name}_display")()
 
     return serialized
+
+
+# Scalar types pydantic serializes natively; anything else is stringified.
+_JSON_SCALARS = (bool, int, float, Decimal, datetime.date, datetime.time, datetime.timedelta, uuid.UUID)
+
+
+def _json_safe(value: Any) -> Any:
+    """Reduce a computed admin value to something JSON-serializable."""
+    if value is None or isinstance(value, _JSON_SCALARS):
+        return value
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list | tuple | set | frozenset | models.QuerySet):
+        return [_json_safe(item) for item in value]
+    # Strings (including SafeString / lazy proxies), model instances, files, ...
+    return str(value)
+
+
+def _model_attribute_names(model: type[models.Model]) -> set[str]:
+    """Names that resolve to a model field, FK column, or relation accessor."""
+    names = {"pk"}
+    for field in model._meta.get_fields():
+        names.add(field.name)
+        attname = getattr(field, "attname", None)
+        if attname:
+            names.add(attname)
+        accessor = getattr(field, "get_accessor_name", None)
+        if accessor is not None and accessor():
+            names.add(accessor())
+    return names
+
+
+def get_computed_entries(model_admin: Any, option: str, request: Any, obj: models.Model | None = None) -> list:
+    """
+    Resolve ``readonly_fields`` / ``list_display`` the way the admin does.
+
+    Uses ``get_readonly_fields(request, obj)`` / ``get_list_display(request)``
+    when the admin provides them, falling back to the plain attribute. A
+    failing getter yields no entries rather than failing the response.
+
+    Args:
+        model_admin: The ModelAdmin instance (may be None).
+        option: ``"readonly_fields"`` or ``"list_display"``.
+        request: HttpRequest passed to the admin getter.
+        obj: The instance being served (``readonly_fields`` only).
+    """
+    if model_admin is None:
+        return []
+    getter = getattr(model_admin, f"get_{option}", None)
+    try:
+        if not callable(getter):
+            entries = getattr(model_admin, option, None)
+        elif option == "readonly_fields":
+            entries = getter(request, obj)
+        else:
+            entries = getter(request)
+        return list(entries or [])
+    except Exception:
+        logger.warning(
+            "get_%s failed on %s; computed values omitted", option, type(model_admin).__name__, exc_info=True
+        )
+        return []
+
+
+def serialize_computed_fields(instance: models.Model, model_admin: Any, entries: Sequence[Any]) -> dict[str, Any]:
+    """
+    Evaluate the computed (non-field) entries of an admin option (issue #117).
+
+    ``entries`` is a resolved ``readonly_fields`` or ``list_display`` list.
+    Each entry that is not a model field — an admin method, a model method or
+    property, or a bare callable — is evaluated with the admin's own
+    ``lookup_field`` and returned keyed by its name.
+
+    Hidden data stays hidden:
+
+    - only entries declared on the admin are evaluated; nothing is looked up
+      by caller-supplied name
+    - entries naming a model field, FK column (``author_id``), ``pk`` or a
+      relation accessor are skipped: fields are served by
+      ``serialize_instance()`` under the visibility rules, never from here
+    - entries containing ``__`` (``__str__``, relation traversals such as
+      ``author__email``) are skipped, since they can read through to fields
+      this admin's visibility configuration does not govern
+    - the entry's own name must pass ``is_field_visible()``, so
+      ``mcp_exclude_fields`` / ``mcp_fields`` apply to computed values too
+
+    A failing callable yields ``None`` for its key and is logged; it never
+    fails the response.
+
+    Returns:
+        Dict of name -> JSON-safe value (empty when nothing applies).
+    """
+    if model_admin is None:
+        return {}
+
+    # Deferred import: admin utils require the app registry to be ready
+    from django.contrib.admin.utils import lookup_field  # noqa: PLC0415
+
+    fields_to_include, fields_to_exclude = resolve_field_visibility(model_admin)
+    field_names = _model_attribute_names(type(instance))
+
+    computed: dict[str, Any] = {}
+    for entry in entries:
+        name = entry if isinstance(entry, str) else getattr(entry, "__name__", None)
+        if not isinstance(name, str) or not name or LOOKUP_SEP in name:
+            continue
+        if name in field_names or name in computed:
+            continue
+        if fields_to_exclude is not None and name in fields_to_exclude:
+            continue
+        if fields_to_include is not None and name not in fields_to_include:
+            continue
+        try:
+            _field, _attr, value = lookup_field(entry, instance, model_admin)
+            computed[name] = _json_safe(value)
+        except Exception:
+            logger.warning("Computed admin value '%s' failed on %s", name, type(model_admin).__name__, exc_info=True)
+            computed[name] = None
+    return computed
 
 
 def get_model_name(model: type[models.Model]) -> str:
@@ -663,6 +846,297 @@ def get_admin_form_class(
     return modelform_factory(model, fields="__all__")
 
 
+def _field_was_sent(field: Any, data: dict, key: str) -> bool:
+    """Whether the caller supplied a value for a form field, under any key its widget reads."""
+    if key in data:
+        return True
+    widget = field.widget
+    if isinstance(widget, MultiWidget):
+        return not widget.value_omitted_from_data(data, MultiValueDict(), key)
+    # Widgets reading keys of their own (e.g. SelectDateWidget). Checkbox-style
+    # widgets answer False for "absent", which is not a caller-supplied value.
+    value = widget.value_from_datadict(data, MultiValueDict(), key)
+    return value is not None and value is not False
+
+
+def _split_for_multiwidget(form: Any, name: str, field: Any, value: Any) -> list:
+    """
+    Turn one caller-supplied value into the per-subwidget values of a MultiWidget.
+
+    The model field parses the value (e.g. an ISO 8601 string into a datetime)
+    and the widget's own ``decompress()`` splits it, so this works for any
+    MultiWidget rather than only ``AdminSplitDateTime``. A value that cannot be
+    parsed is handed to every subwidget so the form reports the format error.
+    """
+    widget = field.widget
+    size = len(widget.widgets)
+    if isinstance(value, (list, tuple)) and len(value) == size:
+        return list(value)
+    try:
+        model = getattr(getattr(form, "_meta", None), "model", None)
+        if model is not None:
+            try:
+                value = model._meta.get_field(name).to_python(value)
+            except FieldDoesNotExist:
+                pass
+        parts = list(widget.decompress(value))
+    except Exception:
+        return [value] * size
+    return parts if len(parts) == size else [value] * size
+
+
+def _shape_sent_value(form: Any, name: str, field: Any, data: dict, key: str) -> None:
+    """Rewrite a caller-supplied value into the shape the field's widget reads from POST data."""
+    value = data.get(key)
+    if value is None:
+        # Sent through the widget's own keys, or an explicit null
+        return
+    widget = field.widget
+    if isinstance(widget, MultiWidget):
+        suffixes = getattr(widget, "widgets_names", None) or [f"_{i}" for i in range(len(widget.widgets))]
+        del data[key]
+        for suffix, part in zip(suffixes, _split_for_multiwidget(form, name, field, value), strict=True):
+            data[key + suffix] = part
+    elif not isinstance(value, str):
+        # Python value -> widget value (e.g. JSONField dumps a dict, so that an
+        # empty container is not mistaken for an empty submission)
+        data[key] = field.prepare_value(value)
+
+
+def _keep_stored_value(field: Any) -> None:
+    """
+    Make an update form field keep the instance's value instead of reading POST data.
+
+    A disabled field is cleaned from the form's initial value — the instance's
+    Python value — so the widget never has to round-trip it. It is not the
+    caller's to fill in, so ``required`` is lifted, and the widget's display
+    precision does not apply to a value that is not displayed.
+    """
+    if isinstance(field, FileFormField):
+        # Without an upload a file field already cleans to its initial value;
+        # disabling it would make Django open the stored file to validate it.
+        return
+    field.disabled = True
+    field.required = False
+    field.widget.supports_microseconds = True
+
+
+def get_prepopulated_fields(model_admin: Any, request: HttpRequest) -> dict[str, Any]:
+    """Return the admin's ``prepopulated_fields`` for an add form ({} without an admin)."""
+    if model_admin is None:
+        return {}
+    try:
+        return dict(model_admin.get_prepopulated_fields(request))
+    except Exception:
+        return dict(getattr(model_admin, "prepopulated_fields", None) or {})
+
+
+def _prepopulate(form: Any, data: dict, prepopulated_fields: Mapping[str, Any]) -> None:
+    """
+    Fill omitted or empty prepopulated fields from their source fields (issue #115).
+
+    The admin does this in the browser; here the caller-supplied source values
+    are slugified, joined, and trimmed to the target field's max_length.
+    """
+    for target, sources in prepopulated_fields.items():
+        field = form.fields.get(target)
+        key = form.add_prefix(target)
+        if field is None or data.get(key) not in (None, ""):
+            continue
+        values = [data.get(form.add_prefix(source)) for source in sources]
+        text = " ".join(str(value) for value in values if value not in (None, ""))
+        slug = slugify(text, allow_unicode=getattr(field, "allow_unicode", False))
+        max_length = getattr(field, "max_length", None)
+        if max_length:
+            slug = slug[:max_length].rstrip("-_")
+        if slug:
+            data[key] = slug
+
+
+def build_admin_form(
+    form_class: type,
+    data: dict,
+    instance: models.Model | None = None,
+    prepopulated_fields: Mapping[str, Any] | None = None,
+) -> Any:
+    """
+    Bind an admin form to API-shaped data (issues #114, #115).
+
+    ``data`` maps field names to JSON values, which is not the POST shape admin
+    widgets read: ``AdminSplitDateTime`` reads ``<name>_0``/``<name>_1``, and
+    form fields treat empty Python containers as "nothing submitted". Rather
+    than patching each type, this works through the form's own fields:
+
+    - fields the caller sent are reshaped for their widget: a single value is
+      split across a ``MultiWidget`` by the widget's ``decompress()``, other
+      non-string values go through the field's ``prepare_value()``;
+    - a file field's value moves from the data into the form's ``files``:
+      a ``{"filename", "content_base64"}`` object becomes an upload and
+      ``null`` clears the field (issue #120, see ``uploads.bind_upload()``);
+    - on update (``instance`` given), every field the caller did not send is
+      disabled, so Django cleans it from the instance's value and the update
+      changes only the fields that were sent;
+    - on create, ``prepopulated_fields`` targets left out or empty are derived
+      from their sources, and every other omitted field that has an initial
+      value (the model default) is submitted with it, as the admin add form
+      does. Such a default is validated like any submitted value.
+
+    Args:
+        form_class: ModelForm class, typically from ``get_admin_form_class()``.
+        data: Field name -> value pairs supplied by the caller.
+        instance: Existing object for updates, None for creates.
+        prepopulated_fields: Admin ``prepopulated_fields`` mapping, used on create.
+
+    Returns:
+        A bound, not yet validated form instance.
+    """
+    post = dict(data)
+    form = form_class(data=post) if instance is None else form_class(data=post, instance=instance)
+    form.data = post
+    shape_admin_form(form, instance=instance, prepopulated_fields=prepopulated_fields)
+    return form
+
+
+def shape_admin_form(
+    form: Any,
+    instance: models.Model | None = None,
+    prepopulated_fields: Mapping[str, Any] | None = None,
+) -> None:
+    """
+    Apply ``build_admin_form()``'s reshaping to an already bound form.
+
+    Inline formsets construct their own forms, bound to the formset's POST
+    dict under a per-row prefix; this gives those forms the same treatment.
+    ``form.data`` must be a mutable dict and is rewritten in place; uploads
+    are added to ``form.files``, which the forms of a formset share.
+    """
+    post = form.data
+
+    if instance is None and prepopulated_fields:
+        _prepopulate(form, post, prepopulated_fields)
+
+    for name, field in form.fields.items():
+        key = form.add_prefix(name)
+        if isinstance(field, FileFormField) and key in post and not field.disabled:
+            # A file field reads form.files, never form.data (issue #120)
+            bind_upload(form, field, post, key)
+        elif _field_was_sent(field, post, key):
+            _shape_sent_value(form, name, field, post, key)
+        elif instance is not None:
+            _keep_stored_value(field)
+        elif form.get_initial_for_field(field, name) is not None:
+            # Omitted on create: a disabled field is cleaned from its initial
+            # value, i.e. the model default (issue #115)
+            field.disabled = True
+
+
+class _KeyRecorder(dict):
+    """A dict that records which keys were looked up, whether or not they exist."""
+
+    def __init__(self, data: Mapping[str, Any]):
+        super().__init__(data)
+        self.read: set[str] = set()
+
+    def __getitem__(self, key):
+        self.read.add(key)
+        return super().__getitem__(key)
+
+    def __contains__(self, key):
+        self.read.add(key)
+        return super().__contains__(key)
+
+    def get(self, key, default=None):
+        self.read.add(key)
+        return super().get(key, default)
+
+
+def unconsumed_keys(form: Any, data: Mapping[str, Any], skip_fields: Sequence[str] = ()) -> list[str]:
+    """
+    Return the keys of ``data`` that the bound form will not consume (issue #118).
+
+    A form silently ignores POST keys none of its fields read, so a write
+    carrying an unknown, read-only, non-editable or excluded field would
+    report success without storing the value. The accepted set is derived
+    from the form itself rather than from the model's fields:
+
+    - every key an enabled field's widget reads from POST data: the field's
+      own name for most widgets, the ``<name>_0`` / ``<name>_1`` sub-keys of
+      a ``MultiWidget``, the ``<name>-clear`` checkbox of a file input;
+    - the name of a ``MultiWidget`` field, whose single value
+      ``shape_admin_form()`` splits across the sub-keys;
+    - the name of a file field, whose value ``shape_admin_form()`` turns into
+      an upload (issue #120).
+
+    A field the form itself disables (``UserChangeForm.password``) ignores
+    submitted data, so its name is reported as unconsumed. Call this after
+    ``build_admin_form()`` / ``shape_admin_form()``: the fields they disable
+    are exactly those the caller did not send.
+
+    Args:
+        form: A bound form, already shaped.
+        data: The caller's field name -> value pairs, as bound to the form
+            (FK aliases normalized, keys without the form prefix).
+        skip_fields: Form fields whose keys the caller may not supply (the
+            bookkeeping fields of an inline formset).
+
+    Returns:
+        The offending keys, in the caller's order.
+    """
+    recorder = _KeyRecorder({form.add_prefix(key): value for key, value in data.items()})
+    files: MultiValueDict = MultiValueDict()
+    accepted = set()
+    for name, field in form.fields.items():
+        if field.disabled or name in skip_fields:
+            continue
+        key = form.add_prefix(name)
+        if isinstance(field.widget, MultiWidget) or isinstance(field, FileFormField):
+            accepted.add(key)
+        recorder.read.clear()
+        try:
+            field.widget.value_from_datadict(recorder, files, key)
+        except Exception:
+            # A widget choking on the value is form validation's to report
+            logger.debug("Widget of '%s' could not read the submitted data", name, exc_info=True)
+            accepted.add(key)
+        accepted |= recorder.read
+    return [key for key in data if form.add_prefix(key) not in accepted]
+
+
+def get_readonly_field_names(model_admin: Any, request: HttpRequest, obj: models.Model | None = None) -> set[str]:
+    """
+    Names in the admin's ``get_readonly_fields(request, obj)`` (issue #118).
+
+    Works for a ModelAdmin and for an InlineModelAdmin (``obj`` is then the
+    parent). Callable entries are display-only and have no name to write to.
+    """
+    entries = get_computed_entries(model_admin, "readonly_fields", request, obj)
+    return {entry for entry in entries if isinstance(entry, str)}
+
+
+def reject_unconsumed_keys(
+    form: Any,
+    data: Mapping[str, Any],
+    readonly_fields: set[str],
+    skip_fields: Sequence[str] = (),
+) -> dict[str, Any] | None:
+    """
+    Build the error payload for keys the form will not consume, or None when all are used.
+
+    Read-only fields are reported apart from other invalid keys, so a client
+    can tell "this admin does not let you write that" from a typo.
+    """
+    # Checked against the admin's list, not only the form: a form built
+    # without the admin's get_form() does not leave read-only fields out
+    readonly = [key for key in data if key in readonly_fields]
+    if readonly:
+        verb = "set" if form.instance._state.adding else "update"
+        return {"error": f"Cannot {verb} readonly fields: {', '.join(readonly)}", "readonly_fields": readonly}
+    unconsumed = unconsumed_keys(form, data, skip_fields)
+    if unconsumed:
+        return {"error": f"Invalid field: {unconsumed[0]}", "invalid_fields": unconsumed}
+    return None
+
+
 def normalize_fk_fields(model: type[models.Model], data: dict) -> dict:
     """
     Normalize foreign key field names for form compatibility.
@@ -731,7 +1205,7 @@ def check_inline_permission(
     inline_class: type,
     parent_admin: Any,
     request: HttpRequest,
-    parent_obj: models.Model,
+    parent_obj: models.Model | None,
     action: str,
 ) -> bool:
     """
@@ -744,7 +1218,7 @@ def check_inline_permission(
         inline_class: The inline class from parent_admin.inlines.
         parent_admin: The parent ModelAdmin instance.
         request: HttpRequest with user set.
-        parent_obj: The parent model instance being edited.
+        parent_obj: The parent model instance being edited (None while it is being added).
         action: One of 'view', 'add', 'change', 'delete'.
 
     Returns:

@@ -2,6 +2,9 @@
 Test models for testing django-admin-mcp
 """
 
+import uuid
+
+from django.core.validators import FileExtensionValidator
 from django.db import models
 
 
@@ -111,6 +114,32 @@ class CatalogItem(models.Model):
         return self.title
 
 
+class Product(models.Model):
+    """Test model with non-editable fields and admin-computed values (issue #117)."""
+
+    name = models.CharField(max_length=200)
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    cost = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    stock = models.IntegerField(default=0)
+    owner = models.ForeignKey(Author, null=True, blank=True, on_delete=models.SET_NULL, related_name="products")
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    internal_code = models.CharField(max_length=50, editable=False, default="")
+    stage = models.CharField(max_length=10, choices=[("new", "New"), ("live", "Live")], default="new", editable=False)
+    manual = models.FileField(upload_to="manuals/", blank=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def label(self):
+        return f"{self.name} ({self.stage})"
+
+
 class CatalogItemA(CatalogItem):
     """Proxy for channel A rows (admin-scoped via get_queryset)."""
 
@@ -125,3 +154,117 @@ class CatalogItemB(CatalogItem):
     class Meta:
         proxy = True
         app_label = "tests"
+
+
+class Event(models.Model):
+    """Test model whose admin form widgets do not read a single POST key (issues #114, #115)."""
+
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=50, unique=True)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    labels = models.JSONField(default=list, blank=True)
+    speakers = models.ManyToManyField(Author, blank=True, related_name="events")
+    brochure = models.FileField(upload_to="brochures/", blank=True)
+    capacity = models.PositiveIntegerField(default=0)
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    status = models.CharField(max_length=10, choices=[("draft", "Draft"), ("live", "Live")], default="draft")
+    is_public = models.BooleanField(default=True)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name
+
+
+class EventSession(models.Model):
+    """Inline child of Event with its own DateTime / JSON / default fields."""
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="sessions")
+    title = models.CharField(max_length=200)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(null=True, blank=True)
+    notes = models.JSONField(default=dict, blank=True)
+    seats = models.PositiveIntegerField(default=10)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.title
+
+
+class Category(models.Model):
+    """Related model for list_filter relation paths (issue #116)."""
+
+    name = models.CharField(max_length=100)
+    slug = models.SlugField()
+    internal_code = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name
+
+
+class Label(models.Model):
+    """Many-to-many target for multi-valued list_filter paths (issue #116)."""
+
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name
+
+
+class Widget(models.Model):
+    """Model whose admin declares list_filter / date_hierarchy (issue #116)."""
+
+    name = models.CharField(max_length=100)
+    price = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    size = models.CharField(max_length=1, choices=[("s", "Small"), ("l", "Large")], default="s")
+    release_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    cost_code = models.CharField(max_length=50, blank=True)
+    category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL, related_name="widgets")
+    customer = models.ForeignKey("auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    labels = models.ManyToManyField(Label, blank=True, related_name="widgets")
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.name
+
+
+class Document(models.Model):
+    """Test model with a required, extension-validated file field (issue #120)."""
+
+    title = models.CharField(max_length=200)
+    file = models.FileField(upload_to="documents/", validators=[FileExtensionValidator(["pdf", "txt"])])
+    appendix = models.FileField(upload_to="documents/appendix/", blank=True)
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.title
+
+
+class DocumentPage(models.Model):
+    """Inline child of Document carrying a file of its own (issue #120)."""
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="pages")
+    label = models.CharField(max_length=100)
+    scan = models.FileField(upload_to="pages/")
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return self.label

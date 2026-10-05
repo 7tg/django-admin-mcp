@@ -49,6 +49,8 @@ None required.
 }
 ```
 
+Descriptions are formatted as on the admin changelist: `%(verbose_name)s` and `%(verbose_name_plural)s` placeholders are filled with the model's names, so the built-in `"Delete selected %(verbose_name_plural)s"` is returned as `"Delete selected articles"`.
+
 ---
 
 ## action_\<model\>
@@ -113,6 +115,21 @@ On success, custom actions return:
 ```
 
 `result` is the serialized return value of the action function: `null` for actions returning `None`, a file payload for download responses (see [File downloads](#file-downloads)), and `str(value)` for anything else.
+
+Actions commonly report their outcome only through `self.message_user()`. Messages queued on the request during the call are returned in a `messages` list, each with the Django message `level` (`debug`, `info`, `success`, `warning`, `error`) and its text. The key is omitted when no message was queued, or when the admin sets [`mcp_return_messages = False`](../reference/settings.md#mcp_return_messages):
+
+```json
+{
+  "success": true,
+  "action": "discontinue",
+  "affected_count": 3,
+  "message": "Executed discontinue on 3 objects",
+  "result": null,
+  "messages": [
+    {"level": "success", "message": "3 products discontinued"}
+  ]
+}
+```
 
 `delete_selected` is special-cased: it bypasses Django's HTML confirmation page and calls `queryset.delete()` directly, returning:
 
@@ -258,7 +275,9 @@ Update multiple records. Each item in `items` contains an `id` and `data`:
 }
 ```
 
-`id` is required per item; items without one fail with `{"index": i, "error": "id is required for update"}`.
+`id` is required per item; items without one fail with `{"index": i, "error": "id is required for update"}`. An item may only contain `id` and `data`: inline operations are not available in bulk, and any other key fails the item with `{"index": i, "error": "Invalid item key: inlines"}`.
+
+File fields take the same [upload object](crud.md#file-uploads) in bulk create and bulk update data as in `create_*` / `update_*`; the size cap applies to each file.
 
 ### Bulk Delete
 
@@ -311,10 +330,14 @@ All bulk operations return a standardized response:
 
 Missing objects in update/delete yield `{"index": i, "error": "Object with id X not found"}`.
 
+Fields the admin form will not consume fail their item with the same `readonly_fields` / `invalid_fields` errors as [`create_*` and `update_*`](crud.md#rejected-fields).
+
+Messages the admin queues with `message_user()` while the items are processed are returned in a top-level `messages` list, as for [`create_*`](crud.md#create_model); the key is omitted when there are none or when the admin sets `mcp_return_messages = False`.
+
 ### Bulk Semantics
 
 - Each item runs in its own `transaction.atomic()` block: partial success is possible, and there is **no cross-item rollback** — items that succeeded stay committed even if later items fail.
-- Bulk operations use `form.save()` / `obj.delete()` directly, **bypassing** `ModelAdmin.save_model()`/`delete_model()` and admin-queryset scoping (unlike `create_*`/`update_*`/`delete_*`). Objects are fetched via `model.objects.get(pk=...)`.
+- Each item goes through the same admin pipeline as `create_*`/`update_*`/`delete_*`: the admin form, `save_model()` and `save_related()` for create and update, `delete_model()` for delete, with objects looked up in the admin's queryset.
 - An unknown operation returns `{"error": "operation must be 'create', 'update', or 'delete'"}`.
 
 ---

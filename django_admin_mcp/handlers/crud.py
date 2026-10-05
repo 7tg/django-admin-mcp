@@ -10,7 +10,6 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from django.db import models, transaction
 from django.db.models import Q
-from django.forms.models import model_to_dict
 from django.http import HttpRequest
 from pydantic import TypeAdapter
 
@@ -18,106 +17,31 @@ from django_admin_mcp.handlers.base import (
     OperationDenied,
     _log_action,
     _serialize_data_for_log,
+    attach_messages,
     check_related_view_permission,
-    format_form_errors,
-    get_admin_form_class,
     get_admin_queryset,
-    is_field_visible,
+    get_computed_entries,
     is_missing_id,
     json_response,
-    normalize_fk_fields,
     require_deletable,
     require_object_permission,
     resolve_related_admin,
     safe_error_message,
+    serialize_computed_fields,
     serialize_instance,
     validate_pagination,
 )
 from django_admin_mcp.handlers.decorators import require_permission, require_registered_model
-from django_admin_mcp.handlers.inlines import _get_inline_data, _update_inlines
+from django_admin_mcp.handlers.filters import (  # noqa: F401  (re-exported for backwards compatibility)
+    SAFE_FILTER_LOOKUPS,
+    InvalidFilterError,
+    _build_filter_query,
+    _queryable_field_names,
+    resolve_list_filters,
+)
+from django_admin_mcp.handlers.inlines import _get_inline_data
+from django_admin_mcp.handlers.write import WriteRejected, save_through_admin
 from django_admin_mcp.protocol.types import CreateResponse, ListResponse, TextContent, UpdateResponse
-
-# Lookups allowed in list filters. Anything else (regex, relation traversal, ...)
-# is rejected to prevent resource-intensive queries and data disclosure via
-# filtering on fields of related models the caller may not have access to.
-SAFE_FILTER_LOOKUPS = frozenset({"exact", "contains", "icontains", "gt", "gte", "lt", "lte", "in", "isnull"})
-
-
-class InvalidFilterError(ValueError):
-    """A list filter or ordering parameter was rejected (issue #111)."""
-
-
-def _queryable_field_names(model: type[models.Model], model_admin: Any = None) -> set[str]:
-    """
-    Names of the fields a caller may filter and order by.
-
-    Only the model's own fields that are visible over MCP (plus the primary
-    key): filtering or ordering on a field hidden by mcp_fields /
-    mcp_exclude_fields would let a caller recover its value one comparison
-    at a time, and reverse relations would probe models the caller may not
-    be able to view.
-    """
-    names = set()
-    for field in model._meta.get_fields():
-        if field.auto_created and not field.concrete:
-            continue  # reverse relation
-        if getattr(field, "primary_key", False) or is_field_visible(model_admin, field.name):
-            names.add(field.name)
-    return names
-
-
-def _build_filter_query(model: type[models.Model], filters: dict[str, Any], model_admin: Any = None) -> Q:
-    """
-    Build a Q object from filter parameters.
-
-    Supports lookups on direct, MCP-visible model fields only (no relation
-    traversal):
-    - field: exact match (default)
-    - field__exact, field__contains, field__icontains
-    - field__gt, field__gte, field__lt, field__lte
-    - field__in: value in list
-    - field__isnull: is null check
-
-    Args:
-        model: The Django model class.
-        filters: Dictionary of field:value filter criteria.
-        model_admin: Optional ModelAdmin with field visibility configuration.
-
-    Returns:
-        Q object for filtering queryset.
-
-    Raises:
-        InvalidFilterError: For unknown fields, disallowed lookups, or
-            relation traversal (e.g. "author__email"). Silently dropping
-            these would hand the caller a success-shaped but unfiltered
-            result set.
-    """
-    q = Q()
-    valid_fields = _queryable_field_names(model, model_admin)
-    allowed = ", ".join(sorted(SAFE_FILTER_LOOKUPS))
-
-    problems = []
-    for key, value in filters.items():
-        parts = key.split("__")
-        field_name = parts[0]
-        if field_name not in valid_fields:
-            problems.append(f"'{key}': unknown field '{field_name}'")
-            continue
-        if len(parts) > 2:
-            problems.append(f"'{key}': relation traversal is not supported")
-            continue
-        if len(parts) == 2 and parts[1] not in SAFE_FILTER_LOOKUPS:
-            problems.append(
-                f"'{key}': unsupported lookup '{parts[1]}' "
-                f"(relation filters are not supported; allowed lookups: {allowed})"
-            )
-            continue
-
-        q &= Q(**{key: value})
-
-    if problems:
-        raise InvalidFilterError("Invalid filters — " + "; ".join(problems))
-    return q
 
 
 def _build_search_query(model: type[models.Model], search_fields: list[str], search_term: str) -> Q:
@@ -178,7 +102,9 @@ async def handle_list(
         arguments: Dictionary containing:
             - limit: int (default 100) - Maximum items to return
             - offset: int (default 0) - Number of items to skip
-            - filters: dict of field:value filter criteria
+            - filters: dict of filter criteria: own fields, relation paths
+              declared in the admin's list_filter / date_hierarchy, and
+              SimpleListFilter parameter names (see handlers/filters.py)
             - search: str search term
             - order_by: list of field names (prefix with - for descending)
         request: HttpRequest with user for permission checking.
@@ -209,11 +135,12 @@ async def handle_list(
 
         # Validate filters and caller-supplied ordering up front: rejected
         # parameters must produce an error response, never a success-shaped
-        # unfiltered result (issue #111).
-        filter_q = None
+        # unfiltered result (issue #111). Resolution runs in a sync context
+        # because admin list filters may query the database for their choices.
+        resolved_filters = None
         if filters:
             try:
-                filter_q = _build_filter_query(model, filters, model_admin)
+                resolved_filters = await sync_to_async(resolve_list_filters)(model, filters, model_admin, request)
             except InvalidFilterError as e:
                 return json_response({"error": str(e)})
 
@@ -230,8 +157,8 @@ async def handle_list(
             queryset = get_admin_queryset(model, model_admin, request)
 
             # Apply filters
-            if filter_q is not None:
-                queryset = queryset.filter(filter_q)
+            if resolved_filters is not None:
+                queryset = resolved_filters.apply(queryset)
 
             # Apply search through the admin's own pipeline: it handles the
             # ^/=/@ operator prefixes, field__lookup forms, and custom
@@ -258,7 +185,17 @@ async def handle_list(
 
             # Apply pagination
             queryset = queryset[offset : offset + limit]
-            return total_count, [serialize_instance(obj, model_admin) for obj in queryset]
+
+            # Computed list_display columns ride along under "_computed" (issue #117)
+            computed_entries = get_computed_entries(model_admin, "list_display", request)
+            rows = []
+            for obj in queryset:
+                row = serialize_instance(obj, model_admin)
+                computed = serialize_computed_fields(obj, model_admin, computed_entries)
+                if computed:
+                    row["_computed"] = computed
+                rows.append(row)
+            return total_count, rows
 
         total_count, results = await get_objects()
 
@@ -307,6 +244,13 @@ async def handle_get(
             obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
             require_object_permission(request, model_admin, "view", obj, model_name)
             result = serialize_instance(obj, model_admin)
+
+            # Computed readonly_fields entries ride along under "_computed" (issue #117)
+            computed = serialize_computed_fields(
+                obj, model_admin, get_computed_entries(model_admin, "readonly_fields", request, obj)
+            )
+            if computed:
+                result["_computed"] = computed
 
             # Include inlines if requested
             if include_inlines and model_admin:
@@ -365,24 +309,29 @@ async def handle_create(
     """
     Create new model instance with form validation.
 
-    Uses Django admin's form system for validation when ModelAdmin is available.
-    Falls back to auto-generated ModelForm otherwise.
+    Runs the admin's own save pipeline (see ``handlers/write.py``): the
+    ModelAdmin's form, ``save_model()``, then ``save_related()`` with the
+    inline formsets. Falls back to an auto-generated ModelForm without a
+    ModelAdmin.
 
     Args:
         model_name: The lowercase name of the model.
         arguments: Dictionary containing:
             - data: dict of field:value pairs for the new instance
+            - inlines: optional dict of inline rows to create with it
         request: HttpRequest with user for permission checking and logging.
         model: Resolved Django model class (injected by decorator).
         model_admin: Resolved ModelAdmin instance (injected by decorator).
 
     Returns:
         List of TextContent with JSON response containing:
-        - On success: success, id, object
+        - On success: success, id, object, (optional) inlines
         - On validation error: error, code, validation_errors
+        - On an inline error: error, code, inlines.errors; nothing is saved
     """
     try:
         data = arguments.get("data", {})
+        inlines_data = arguments.get("inlines") or {}
         user = getattr(request, "user", None)
         if user and not user.is_authenticated:
             user = None
@@ -392,60 +341,35 @@ async def handle_create(
             # Deferred import: Django models require app registry to be ready
             from django.contrib.admin.models import ADDITION  # noqa: PLC0415
 
-            # Normalize FK field names (convert field_id to field)
-            normalized_data = normalize_fk_fields(model, data)
-
-            # Get the form class from ModelAdmin or generate one
-            form_class = get_admin_form_class(model, model_admin, request, obj=None)
-
-            # Instantiate form with submitted data
-            form = form_class(data=normalized_data)
-
-            # Validate the form
-            if not form.is_valid():
-                return None, format_form_errors(form.errors)
-
-            # Wrap save and logging in transaction for atomicity
+            # Save, inline writes, and logging are one transaction
             with transaction.atomic():
-                # Save the form to create the object
-                # Use ModelAdmin.save_model() when available for the standard Django admin pipeline
-                if model_admin is not None:
-                    obj = form.save(commit=False)
-                    model_admin.save_model(request, obj, form, change=False)
-                    form.save_m2m()
-                else:
-                    obj = form.save()
+                obj, inlines_result = save_through_admin(model, model_admin, request, data, inlines=inlines_data)
 
                 # Log the action - use Pydantic for serialization (truncated for log size)
-                data_json = _serialize_data_for_log(data, model_admin=model_admin)
+                change_message = [f"Created via MCP: {_serialize_data_for_log(data, model_admin=model_admin)}"]
+                if inlines_data:
+                    change_message.append(f"Created inlines: {list(inlines_data.keys())}")
                 _log_action(
                     user=user,
                     obj=obj,
                     action_flag=ADDITION,
-                    change_message=f"Created via MCP: {data_json}",
+                    change_message=" | ".join(change_message),
                 )
 
-            return obj.pk, serialize_instance(obj, model_admin)
+            return obj.pk, serialize_instance(obj, model_admin), inlines_result
 
-        result_id, result_data = await create_object()
-
-        # Check if validation failed
-        if result_id is None:
-            return json_response(
-                {
-                    "error": "Validation failed",
-                    "code": "validation_error",
-                    "validation_errors": result_data,
-                }
-            )
+        result_id, result_data, inlines_result = await create_object()
 
         response = CreateResponse(
             success=True,
             id=result_id,
             object=result_data,
+            inlines=inlines_result if inlines_result and any(inlines_result.values()) else None,
         )
 
-        return [TextContent(text=response.model_dump_json(indent=2))]
+        return json_response(attach_messages(response.model_dump(), request, model_admin), indent=2)
+    except WriteRejected as e:
+        return json_response(e.payload)
     except Exception as e:
         return json_response({"error": safe_error_message(e)})
 
@@ -458,8 +382,9 @@ async def handle_update(
     """
     Update model instance with form validation.
 
-    Uses Django admin's form system for validation when ModelAdmin is available.
-    The form is initialized with the existing instance and partial data is merged.
+    Runs the admin's own save pipeline (see ``handlers/write.py``). Only the
+    fields the caller sent change; inline operations are validated with the
+    parent and saved in the same transaction.
 
     Args:
         model_name: The lowercase name of the model.
@@ -475,32 +400,15 @@ async def handle_update(
         List of TextContent with JSON response containing:
         - On success: success, object, (optional) inlines
         - On validation error: error, code, validation_errors
+        - On an inline error: error, code, inlines.errors; nothing is saved
     """
     try:
         obj_id = arguments.get("id")
         data = arguments.get("data", {})
-        inlines_data = arguments.get("inlines", {})
+        inlines_data = arguments.get("inlines") or {}
 
         if is_missing_id(obj_id):
             return json_response({"error": "id parameter is required"})
-
-        # Validate that only model fields are being updated (protect against mass assignment)
-        valid_fields = {f.name for f in model._meta.get_fields() if hasattr(f, "name")}
-        for key in data.keys():
-            if key not in valid_fields:
-                return json_response({"error": f"Invalid field: {key}"})
-
-        # Check for readonly_fields - prevent updating them
-        if model_admin:
-            readonly_fields = set(getattr(model_admin, "readonly_fields", []))
-            readonly_attempted = set(data.keys()) & readonly_fields
-            if readonly_attempted:
-                return json_response(
-                    {
-                        "error": f"Cannot update readonly fields: {', '.join(readonly_attempted)}",
-                        "readonly_fields": list(readonly_attempted),
-                    }
-                )
 
         user = getattr(request, "user", None)
         if user and not user.is_authenticated:
@@ -516,38 +424,11 @@ async def handle_update(
             obj = get_admin_queryset(model, model_admin, request).get(pk=obj_id)
             require_object_permission(request, model_admin, "change", obj, model_name)
 
-            # Normalize FK field names (convert field_id to field)
-            normalized_data = normalize_fk_fields(model, data)
-
-            # Get the form class from ModelAdmin
-            form_class = get_admin_form_class(model, model_admin, request, obj=obj)
-
-            # For partial updates, merge existing data with new data
-            existing_data = model_to_dict(obj)
-            merged_data = {**existing_data, **normalized_data}
-
-            # Instantiate form with merged data and existing instance
-            form = form_class(data=merged_data, instance=obj)
-
-            # Validate the form
-            if not form.is_valid():
-                return None, format_form_errors(form.errors), {}
-
-            # Wrap save, inline updates, and logging in transaction for atomicity
+            # Save, inline writes, and logging are one transaction
             with transaction.atomic():
-                # Save the form to update the object
-                # Use ModelAdmin.save_model() when available for the standard Django admin pipeline
-                if model_admin is not None:
-                    obj = form.save(commit=False)
-                    model_admin.save_model(request, obj, form, change=True)
-                    form.save_m2m()
-                else:
-                    obj = form.save()
-
-                # Handle inlines if provided
-                inlines_result = {}
-                if inlines_data and model_admin:
-                    inlines_result = _update_inlines(obj, model_admin, inlines_data, request)
+                obj, inlines_result = save_through_admin(
+                    model, model_admin, request, data, obj=obj, inlines=inlines_data
+                )
 
                 # Log the action - use Pydantic for serialization (truncated for log size)
                 change_message = []
@@ -563,19 +444,9 @@ async def handle_update(
                     change_message=(" | ".join(change_message) if change_message else "Updated via MCP"),
                 )
 
-            return serialize_instance(obj, model_admin), None, inlines_result
+            return serialize_instance(obj, model_admin), inlines_result
 
-        obj_dict, validation_errors, inlines_result = await update_object()
-
-        # Check if validation failed
-        if obj_dict is None:
-            return json_response(
-                {
-                    "error": "Validation failed",
-                    "code": "validation_error",
-                    "validation_errors": validation_errors,
-                }
-            )
+        obj_dict, inlines_result = await update_object()
 
         response = UpdateResponse(
             success=True,
@@ -583,10 +454,10 @@ async def handle_update(
             inlines=inlines_result if inlines_result and any(inlines_result.values()) else None,
         )
 
-        return [TextContent(text=response.model_dump_json(indent=2))]
+        return json_response(attach_messages(response.model_dump(), request, model_admin), indent=2)
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})
-    except OperationDenied as e:
+    except (OperationDenied, WriteRejected) as e:
         return json_response(e.payload)
     except Exception as e:
         return json_response({"error": safe_error_message(e)})
@@ -654,10 +525,7 @@ async def handle_delete(
         await delete_object()
 
         return json_response(
-            {
-                "success": True,
-                "message": f"{model_name} deleted successfully",
-            }
+            attach_messages({"success": True, "message": f"{model_name} deleted successfully"}, request, model_admin)
         )
     except model.DoesNotExist:  # type: ignore[attr-defined]
         return json_response({"error": f"{model_name} not found"})

@@ -51,6 +51,10 @@ class UserAdmin(MCPAdminMixin, admin.ModelAdmin):
 
 When `True` (the default), list/get, actions, and bulk operations start from `ModelAdmin.get_queryset(request)`, matching the admin changelist (proxy filters, soft-delete, multi-tenant scoping). Set to `False` to use `model.objects.all()` instead.
 
+### mcp_return_messages
+
+When `True` (the default), messages queued with `self.message_user()` by actions and save/delete hooks are returned in the tool response's `messages` list. Set to `False` on admins whose messages may contain data MCP clients must not see.
+
 ### Standard Django Admin Options
 
 Django Admin MCP respects standard ModelAdmin options:
@@ -125,6 +129,9 @@ MCP_MAX_LIST_LIMIT = 1000
 
 # Max size of file downloads returned by admin actions (default: 5 MiB)
 MCP_ACTION_MAX_FILE_BYTES = 5 * 1024 * 1024
+
+# Max decoded size of a file uploaded to a FileField / ImageField (default: 5 MiB)
+MCP_UPLOAD_MAX_FILE_BYTES = 5 * 1024 * 1024
 
 # Write resolution for MCPToken.last_used_at in seconds (0 = every use)
 MCP_LAST_USED_RESOLUTION = 60
