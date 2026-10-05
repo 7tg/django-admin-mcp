@@ -5,6 +5,34 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-10-05
+
+This release closes the gaps found by driving every tool against a realistic admin. Several response and validation contracts change; read **Changed** before upgrading.
+
+### Fixed
+- **`update_*` no longer wipes or rejects `DateTimeField` values.** The update path fed `model_to_dict()` output to the admin form as if it were POST data, which the admin's split date/time widget does not read: any update silently set optional `DateTimeField`s to `None`, and models with a required one (including the stock `UserAdmin`, via `date_joined`) could not be updated at all. Updates, bulk updates, and inline updates now change only the fields the caller sent ([#114](https://github.com/7tg/django-admin-mcp/issues/114))
+- Updates no longer fail with a data integrity error when a `JSONField` holds `{}` or `[]` ([#114](https://github.com/7tg/django-admin-mcp/issues/114))
+- `DateTimeField`s accept a single ISO 8601 string on create and update; previously only the widget's `<field>_0`/`<field>_1` keys worked, and only on create ([#114](https://github.com/7tg/django-admin-mcp/issues/114))
+- `create_*` and `bulk_*` create apply model defaults to omitted fields instead of reporting them as required, and fill omitted `prepopulated_fields` targets by slugifying their source fields ([#115](https://github.com/7tg/django-admin-mcp/issues/115))
+- `save_related()` and `save_formset()` overrides now run: create, update, and bulk go through the admin's `save_form` → `save_model` → `save_related` pipeline, with inline rows saved through the admin's own formsets ([#118](https://github.com/7tg/django-admin-mcp/issues/118))
+- Read-only checks use `get_readonly_fields(request, obj)` rather than the bare `readonly_fields` attribute ([#118](https://github.com/7tg/django-admin-mcp/issues/118))
+- `actions_*` interpolates action descriptions (`"Delete selected articles"` instead of `"Delete selected %(verbose_name_plural)s"`) ([#119](https://github.com/7tg/django-admin-mcp/issues/119))
+
+### Added
+- **File uploads.** A `FileField`/`ImageField` value can be sent as `{"filename": ..., "content_base64": ..., "content_type": ...}` on create, update, bulk, and inline rows; `null` clears an optional file. The decoded size is capped by the new `MCP_UPLOAD_MAX_FILE_BYTES` setting (default 5 MiB), and the admin history records only the filename and size. Django's `DATA_UPLOAD_MAX_MEMORY_SIZE` still bounds the request body, so raise it to accept files above roughly 1.8 MB ([#120](https://github.com/7tg/django-admin-mcp/issues/120))
+- **`list_*` filters reproduce the admin changelist.** New lookups (`iexact`, `startswith`/`endswith` variants, `range`, `date`, `year`, `month`, `day`); relation paths declared in the admin's `list_filter` or `date_hierarchy` (for example `customer__is_staff`); and `SimpleListFilter` subclasses addressed by their `parameter_name`. `describe_*` lists the usable filters and their choices under `admin_config.filters`. Undeclared relation paths and hidden fields stay unfilterable ([#116](https://github.com/7tg/django-admin-mcp/issues/116))
+- **Computed admin values are returned under `_computed`.** `get_*` evaluates the non-field entries of `readonly_fields`, and `list_*` those of `list_display`, the way the admin does ([#117](https://github.com/7tg/django-admin-mcp/issues/117))
+- `create_*` accepts `inlines`, with the same shape as `update_*` ([#118](https://github.com/7tg/django-admin-mcp/issues/118))
+- `message_user()` output is returned as a `messages` list of `{level, message}` on `action_*`, `bulk_*`, and successful create/update/delete. Set `mcp_return_messages = False` on a ModelAdmin to suppress it; `MCPTokenAdmin` does, so a new token's plaintext is never returned over MCP ([#119](https://github.com/7tg/django-admin-mcp/issues/119))
+
+### Changed
+- **Non-editable fields are now serialized.** `auto_now`/`auto_now_add` timestamps, `editable=False` fields and the like appear in every serialized row, under the existing `mcp_fields`/`mcp_exclude_fields` rules. Review admins whose non-editable fields or computed `list_display`/`readonly_fields` methods expose data you do not want served, and add them to `mcp_exclude_fields`; a computed method that derives its value from a hidden field cannot be detected automatically ([#117](https://github.com/7tg/django-admin-mcp/issues/117))
+- **Parent and inline writes are atomic.** Any inline validation, permission, or `min_num`/`max_num` error now rolls back the whole call and returns an error with `"code": "inline_error"` and the per-row details under `inlines.errors`. Previously the valid rows were saved and the response still said `success: true` ([#118](https://github.com/7tg/django-admin-mcp/issues/118))
+- **Input the form would ignore is rejected.** Unknown, read-only, non-editable, and form-excluded keys return `Invalid field` / `Cannot set readonly fields` on create, update, and bulk instead of being dropped; malformed inline operations (unknown inline name, `_delete` without `id`, a duplicated row id, stray keys) are errors too ([#118](https://github.com/7tg/django-admin-mcp/issues/118))
+- `list_*` validates filter values: `in` needs a list, `range` a two-item list, `isnull` a boolean ([#116](https://github.com/7tg/django-admin-mcp/issues/116))
+- `tools/list` offers write tools only to tokens holding the matching permission: `create_*` needs add, `update_*` and `action_*` change, `delete_*` delete, and `bulk_*` any of the three ([#119](https://github.com/7tg/django-admin-mcp/issues/119))
+- `update_*` accepts `<field>_id` foreign-key aliases, as `create_*` already did ([#118](https://github.com/7tg/django-admin-mcp/issues/118))
+
 ## [0.9.0] - 2026-10-04
 
 ### Security
