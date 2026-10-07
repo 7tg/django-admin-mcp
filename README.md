@@ -130,6 +130,8 @@ Python 3.10+, Django 3.2 to 5.0, Pydantic 2. Tested against every Django release
 
 If this saved you time, a star on GitHub helps others find it. Issues and PRs are welcome; see the [contributing guide](https://7tg.github.io/django-admin-mcp/contributing/).
 
+[![Star History Chart](https://api.star-history.com/svg?repos=7tg/django-admin-mcp&type=Date)](https://star-history.com/#7tg/django-admin-mcp&Date)
+
 ## License
 
 MIT
