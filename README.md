@@ -26,7 +26,7 @@ A database connection hands the agent raw tables. The Django admin is where your
 
 ## How it compares
 
-A generic Django MCP server or a hand-rolled FastMCP wrapper asks you to define tools, schemas and permission checks yourself, one function at a time. This package reads the `ModelAdmin` classes you already maintain and generates the tools from them, so field choices, querysets, validation, actions and permissions stay in one place and the agent inherits every change you make to the admin. It also ships as a plain Django app with no MCP SDK or extra HTTP stack, and every release is published to the official [MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.7tg/django-admin-mcp&version=latest) as `io.github.7tg/django-admin-mcp`.
+A generic Django MCP server or a hand-rolled FastMCP wrapper asks you to define tools, schemas and permission checks yourself, one function at a time. This package reads the `ModelAdmin` classes you already maintain and generates the tools from them, so field choices, querysets, validation, actions and permissions stay in one place and the agent inherits every change you make to the admin. It also ships as a plain Django app with no MCP SDK or extra HTTP stack.
 
 ## Installation
 
