@@ -86,3 +86,7 @@ Created article #15: "Getting Started with Django"
 - [Exposing Models](../guide/exposing-models.md) — Learn about model exposure options
 - [Token Management](../guide/tokens.md) — Understand token configuration
 - [Tools Reference](../tools/overview.md) — Explore all available tools
+
+---
+
+If this saved you time, a [star on GitHub](https://github.com/7tg/django-admin-mcp) helps others find the project.
