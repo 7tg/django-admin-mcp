@@ -8,6 +8,7 @@
 [![codecov](https://codecov.io/gh/7tg/django-admin-mcp/graph/badge.svg)](https://codecov.io/gh/7tg/django-admin-mcp)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://7tg.github.io/django-admin-mcp/)
 [![License](https://img.shields.io/pypi/l/django-admin-mcp.svg)](https://github.com/7tg/django-admin-mcp/blob/main/LICENSE)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.7tg%2Fdjango--admin--mcp-6E56CF.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.7tg/django-admin-mcp&version=latest)
 
 Add a mixin to your `ModelAdmin` and MCP clients get CRUD, admin actions and relationship traversal, inside Django's existing permissions. Only Django and Pydantic as dependencies.
 
@@ -22,6 +23,10 @@ A database connection hands the agent raw tables. The Django admin is where your
 - **Audit history** — every create, update, delete and action is written to Django's `LogEntry` under the token's user. You can see what the agent changed, and the agent can read the history too.
 - **Admin actions** — "publish", "refund", "export CSV" and your other registered actions become tools, including two-step confirmation flows. The agent uses the operations you designed rather than inventing SQL.
 - **Scoped exposure** — `mcp_fields` / `mcp_exclude_fields` keep password hashes and secrets out of the agent's view; `get_queryset()` still limits which rows it can see.
+
+## How it compares
+
+A generic Django MCP server or a hand-rolled FastMCP wrapper asks you to define tools, schemas and permission checks yourself, one function at a time. This package reads the `ModelAdmin` classes you already maintain and generates the tools from them, so field choices, querysets, validation, actions and permissions stay in one place and the agent inherits every change you make to the admin. It also ships as a plain Django app with no MCP SDK or extra HTTP stack, and every release is published to the official [MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.7tg/django-admin-mcp&version=latest) as `io.github.7tg/django-admin-mcp`.
 
 ## Installation
 
