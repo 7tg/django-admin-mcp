@@ -62,6 +62,9 @@ nav:
   - Contributing: contributing.md
   - Changelog: changelog.md
 
+exclude_docs: |
+  media/*.py
+
 plugins:
   - search
 

@@ -14,6 +14,10 @@ Add a mixin to your `ModelAdmin` and MCP clients get CRUD, admin actions and rel
 
 <!-- mcp-name: io.github.7tg/django-admin-mcp -->
 
+[![Meet django-admin-mcp: one mixin turns a ModelAdmin into MCP tools, every call goes through the admin's permissions, validation and audit log, one token per user, a conversation with the agent, and how to get started](docs/media/demo.gif)](docs/media/demo.mp4)
+
+<sub>One mixin, the request's path through the admin, a token, a conversation with the agent, then getting started. 50 seconds · 1080p · 60 fps · original soundtrack. [Watch the film](docs/media/demo.mp4).</sub>
+
 ## Why not just give the agent database access?
 
 A database connection hands the agent raw tables. The Django admin is where your project already encodes who may touch what, how records are validated, and what the sanctioned bulk operations are. This package puts the agent behind that layer instead of around it:
