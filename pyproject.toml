@@ -110,7 +110,8 @@ omit = ["example/*", "django_admin_mcp/protocol/*"]
 [tool.ruff]
 target-version = "py310"
 line-length = 120
-exclude = ["migrations", ".venv", "build", "dist", "example"]
+# "*.md" keeps the formatter out of code blocks in the docs (ruff 0.16 formats them by default).
+exclude = ["migrations", ".venv", "build", "dist", "example", "*.md"]
 
 [tool.ruff.lint]
 select = [
