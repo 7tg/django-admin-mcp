@@ -5,6 +5,18 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-10-09
+
+No code changes. This release updates what the package says about itself.
+
+### Added
+- Django 5.1, 5.2 and 6.0 and Python 3.13 and 3.14 are tested in CI and declared in the package classifiers. The suite passed on them unchanged.
+- A demo film in the README and on the docs landing page, rendered from `docs/media/render_demo.py`.
+- A security policy with private vulnerability reporting, issue templates, and Dependabot for Actions and the uv lock.
+
+### Changed
+- Dev tooling updated (ruff 0.16, mypy 2.4, django-stubs 6). The ruff formatter is kept out of Markdown code blocks.
+
 ## [0.10.0] - 2026-10-05
 
 This release closes the gaps found by driving every tool against a realistic admin. Several response and validation contracts change; read **Changed** before upgrading.
