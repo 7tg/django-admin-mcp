@@ -1,0 +1,47 @@
+name: Bug report
+description: Something behaves differently from the docs or the Django admin.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: request
+    attributes:
+      label: Tool call or request
+      description: The tool name and arguments the client sent, or the raw JSON-RPC request, and the response. Remove token values.
+      render: json
+  - type: textarea
+    id: admin
+    attributes:
+      label: ModelAdmin configuration
+      description: The relevant `ModelAdmin` with its `mcp_*` attributes, and anything custom in `get_queryset()`, `has_*_permission()` or `save_model()`.
+      render: python
+  - type: input
+    id: permissions
+    attributes:
+      label: Token permissions
+      description: The permissions and groups on the token, and whether its user is staff or superuser.
+      placeholder: "blog.view_article, blog.change_article · group Editors · staff user"
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: django-admin-mcp, Django and Python.
+      placeholder: "django-admin-mcp 0.10.0 · Django 5.2 · Python 3.12"
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      placeholder: "Claude Code 2.x, Claude Desktop, Cursor, custom HTTP client"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or traceback
+      render: text

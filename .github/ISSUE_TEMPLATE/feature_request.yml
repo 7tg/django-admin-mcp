@@ -1,0 +1,20 @@
+name: Feature request
+description: Something the package should do that it does not do today.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The task the agent or the admin should handle, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: How it could look, for example a new `mcp_*` attribute, tool or setting. Sketches of the tool call and response help.
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround

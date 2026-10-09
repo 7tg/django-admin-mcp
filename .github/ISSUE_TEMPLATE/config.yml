@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/7tg/django-admin-mcp/discussions
+    about: Ask how to do something or discuss an idea before opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/7tg/django-admin-mcp/security/advisories/new
+    about: Report privately anything that lets a token see or change more than its user may.
+  - name: Documentation
+    url: https://7tg.github.io/django-admin-mcp/
+    about: Guides, tool reference and example conversations.
