@@ -7,7 +7,7 @@ This guide covers installing Django Admin MCP and configuring it in your Django 
 Before installing, ensure you have:
 
 - Python >= 3.10
-- Django >= 3.2 (tested against 3.2, 4.0, 4.1, 4.2, and 5.0)
+- Django >= 3.2 (tested against 3.2, 4.0, 4.1, 4.2, 5.0, 5.1, 5.2, and 6.0)
 - Pydantic >= 2.0
 
 ## Install the Package

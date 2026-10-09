@@ -14,9 +14,27 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
-        django-version: ['3.2', '4.0', '4.1', '4.2', '5.0']
-    
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        django-version: ['3.2', '4.0', '4.1', '4.2', '5.0', '5.1', '5.2', '6.0']
+        exclude:
+          # Django 6.0 needs Python 3.12 or newer.
+          - { python-version: '3.10', django-version: '6.0' }
+          - { python-version: '3.11', django-version: '6.0' }
+          # Django releases before 5.1 do not support Python 3.13 or newer.
+          - { python-version: '3.13', django-version: '3.2' }
+          - { python-version: '3.13', django-version: '4.0' }
+          - { python-version: '3.13', django-version: '4.1' }
+          - { python-version: '3.13', django-version: '4.2' }
+          - { python-version: '3.13', django-version: '5.0' }
+          # Only Django 6.0 supports Python 3.14.
+          - { python-version: '3.14', django-version: '3.2' }
+          - { python-version: '3.14', django-version: '4.0' }
+          - { python-version: '3.14', django-version: '4.1' }
+          - { python-version: '3.14', django-version: '4.2' }
+          - { python-version: '3.14', django-version: '5.0' }
+          - { python-version: '3.14', django-version: '5.1' }
+          - { python-version: '3.14', django-version: '5.2' }
+
     steps:
     - uses: actions/checkout@v4
 

@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
 [![Python versions](https://img.shields.io/pypi/pyversions/django-admin-mcp.svg)](https://pypi.org/project/django-admin-mcp/)
-[![Django](https://img.shields.io/badge/django-3.2%20%7C%204.x%20%7C%205.x-092E20.svg?logo=django)](https://www.djangoproject.com/)
+[![Django](https://img.shields.io/badge/django-3.2%20%7C%204.x%20%7C%205.x%20%7C%206.0-092E20.svg?logo=django)](https://www.djangoproject.com/)
 [![Tests](https://github.com/7tg/django-admin-mcp/actions/workflows/tests.yml/badge.svg)](https://github.com/7tg/django-admin-mcp/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/7tg/django-admin-mcp/graph/badge.svg)](https://codecov.io/gh/7tg/django-admin-mcp)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://7tg.github.io/django-admin-mcp/)
@@ -133,7 +133,7 @@ See [Permissions](https://7tg.github.io/django-admin-mcp/guide/permissions/) and
 
 ## Requirements
 
-Python 3.10+, Django 3.2 to 5.0, Pydantic 2. Tested against every Django release in that range.
+Python 3.10 to 3.14, Django 3.2 to 6.0, Pydantic 2. Tested against every Django release in that range.
 
 ## Support the project
 
