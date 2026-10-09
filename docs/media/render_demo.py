@@ -9,6 +9,7 @@ and FFmpeg. Every frame is a pure function of time, so the film is reproducible.
     uv run --with pillow --with numpy python docs/media/render_demo.py --frame 30.5 --output frame.png
 
 ``--output demo.mp4`` also writes ``demo.gif``, the README preview, beside it.
+``--social social.png`` writes the 1280x640 GitHub social preview image.
 The soundtrack comes from ``demo_audio.py`` in this directory.
 """
 
@@ -852,6 +853,33 @@ def ending(t):
     return im
 
 
+# Social preview ----------------------------------------------------------------
+
+
+def social():
+    """The 2:1 card GitHub shows when the repository is linked."""
+    im = base(0).crop((0, 60, W, H - 60))
+    mark(im, 100, 90, 64)
+    txt(im, 184, 96, "django-admin-mcp", 44, INK, "bold")
+    txt(im, 100, 232, "Your Django admin,", 140, INK, "bold")
+    txt(im, 100, 384, "as MCP tools.", 140, GREEN, "bold")
+    txt(
+        im,
+        104,
+        592,
+        "One mixin on your ModelAdmin. CRUD, admin actions and history for any MCP client,",
+        40,
+        INK,
+        "semibold",
+    )
+    txt(im, 104, 650, "inside Django's existing permissions. Only Django and Pydantic as dependencies.", 34, MUTED)
+    x = 104
+    for i, name in enumerate(("list_article", "action_article", "history_article")):
+        x += chip(im, x, 770, name, 32, GREEN if i % 2 == 0 else VIOLET, pad=20) + 24
+    txt(im, 1816, 788, "pip install django-admin-mcp", 32, MINT, "monobold", "right")
+    return im.resize((1280, 640), Image.Resampling.LANCZOS)
+
+
 # Assembly ----------------------------------------------------------------------
 
 SCENES = (hook, mixin, through, token, ask, get_started, ending)
@@ -987,12 +1015,17 @@ def main():
     p.add_argument("--frame", type=float, help="render one frame at this second as an image")
     p.add_argument("--storyboard", type=Path, help="write a contact sheet of every chapter")
     p.add_argument("--gif-from", type=Path, help="only rebuild the GIF preview from this film")
+    p.add_argument("--social", type=Path, help="write the 1280x640 social preview image")
     p.add_argument("--no-audio", action="store_true")
     p.add_argument("--fps", type=int, default=FPS)
     p.add_argument("--workers", type=int, default=None)
     args = p.parse_args()
     if args.storyboard:
         storyboard(args.storyboard)
+    if args.social:
+        args.social.parent.mkdir(parents=True, exist_ok=True)
+        social().save(args.social, optimize=True)
+        print(f"Wrote {args.social}", flush=True)
     if args.gif_from:
         encode_gif(args.gif_from, (args.output or args.gif_from).with_suffix(".gif"))
     elif args.output and args.frame is not None:
@@ -1010,8 +1043,8 @@ def main():
                 )
             encode_film(args.output, audio, args.fps, args.workers)
         encode_gif(args.output, args.output.with_suffix(".gif"))
-    elif not args.storyboard:
-        p.error("Use --output, --storyboard or --gif-from.")
+    elif not (args.storyboard or args.social):
+        p.error("Use --output, --storyboard, --social or --gif-from.")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,12 @@
 
 Expose Django admin models to MCP (Model Context Protocol) clients via HTTP. Add a mixin to your `ModelAdmin` classes and get instant access to CRUD operations, admin actions, model history, and more.
 
+<video controls playsinline preload="metadata" poster="media/demo-poster.jpg" style="width: 100%; border-radius: 8px;">
+  <source src="media/demo.mp4" type="video/mp4">
+</video>
+
+<small>One mixin, the request's path through the admin, a token, a conversation with the agent, then getting started. 50 seconds, with sound.</small>
+
 ---
 
 ## Features
@@ -56,7 +62,7 @@ Agent: [calls update_article with id=42, data={"published": true}]
 
 ### Supported Django Versions
 
-Django 3.2 LTS · 4.0 · 4.1 · 4.2 LTS · 5.0
+Django 3.2 LTS · 4.0 · 4.1 · 4.2 LTS · 5.0 · 5.1 · 5.2 LTS · 6.0
 
 ---
 
