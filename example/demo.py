@@ -126,7 +126,7 @@ async def demonstrate_mcp_tools():
     print("Demo Complete!")
     print("=" * 60)
     print("\nTo run the MCP server:")
-    print("  python manage.py run_mcp_server")
+    print("  python manage.py runserver")
     print("\nAvailable MCP tools:")
     for model_name in registered.keys():
         print(f"  - list_{model_name}")

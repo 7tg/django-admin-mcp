@@ -2,6 +2,7 @@
 Django settings for example_project.
 """
 
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -10,9 +11,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # This key is for testing/example purposes only - never use in production!
 SECRET_KEY = 'django-insecure-example-key-for-testing-only'
 
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
 
-ALLOWED_HOSTS = []
+# Comma-separated, e.g. DJANGO_ALLOWED_HOSTS='*' inside the Docker image.
+ALLOWED_HOSTS = [h for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -58,7 +60,7 @@ WSGI_APPLICATION = 'example_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.environ.get('DJANGO_DB_PATH', BASE_DIR / 'db.sqlite3'),
     }
 }
 
@@ -85,3 +87,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# django-admin-mcp: accept the bearer token as a URL path segment
+# (POST /api/mcp/mcp_<key>.<secret>/) for clients that cannot send headers.
+MCP_ALLOW_URL_TOKEN = os.environ.get('MCP_ALLOW_URL_TOKEN', '0') == '1'
