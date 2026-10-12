@@ -59,6 +59,24 @@ curl -X POST http://localhost:8000/api/mcp/ \
 
 The seeded token is public by design: use the image for demos and introspection only.
 
+### Stdio
+
+Registries that run servers through a stdio proxy (Glama's `mcp-proxy`, for example)
+can start the same project with the package's `mcp_stdio` command instead of a web
+server. Build steps and start command that work in such a harness, from the repository
+root:
+
+```bash
+uv sync --no-dev
+cd example && uv run python manage.py makemigrations blog --noinput \
+  && uv run python manage.py migrate --noinput \
+  && uv run python manage.py seed_mcp_token --token mcp_glama-inspect.glama-inspect-secret
+```
+
+```json
+["uv", "run", "--no-sync", "--directory", "example", "python", "manage.py", "mcp_stdio", "--token", "mcp_glama-inspect.glama-inspect-secret"]
+```
+
 ## Project Structure
 
 - `blog/` - A simple blog app with Article and Author models

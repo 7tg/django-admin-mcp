@@ -97,6 +97,37 @@ The endpoint behaves exactly like `/mcp/` — same handshake, same tools, same p
 !!! warning "Mint a dedicated token for this"
     The token is now part of the URL, so it lands in access logs and browser history. Create a separate token for the URL route with the narrowest permissions it needs and an `expires_at`, so revoking it doesn't disturb your header-authenticated clients. See [MCP_ALLOW_URL_TOKEN](../reference/settings.md#mcp_allow_url_token).
 
+### Stdio Clients and Hosting Registries
+
+Clients that can only launch a local process, and registries that boot a server to
+inspect its tools, can run the endpoint over stdio with the `mcp_stdio` management
+command. It reads newline-delimited JSON-RPC from stdin, runs each message through
+the same code path as `POST /mcp/` (token authentication, permission capping, audit
+logging) and writes the response to stdout:
+
+```bash
+python manage.py mcp_stdio --token mcp_<key>.<secret>
+# or
+DJANGO_ADMIN_MCP_TOKEN=mcp_<key>.<secret> python manage.py mcp_stdio
+```
+
+The command exits with an error before serving if the token is unknown, inactive or
+expired. Diagnostics go to stderr, so stdout carries protocol messages only. A client
+configuration for Claude Code:
+
+```json
+{
+  "mcpServers": {
+    "django-admin": {
+      "command": "python",
+      "args": ["manage.py", "mcp_stdio"],
+      "cwd": "/path/to/your/project",
+      "env": { "DJANGO_ADMIN_MCP_TOKEN": "mcp_<key>.<secret>" }
+    }
+  }
+}
+```
+
 ### Generic HTTP Client
 
 The endpoint speaks JSON-RPC 2.0: `tools/call` takes `name` and `arguments` nested under `params`. Test with curl:

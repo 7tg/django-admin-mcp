@@ -5,6 +5,15 @@ All notable changes to Django Admin MCP are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`mcp_stdio` management command serves the endpoint over stdio.** Clients that can only launch a local process, and registries that boot a server to inspect its tools, run `python manage.py mcp_stdio --token mcp_<key>.<secret>` (or set `DJANGO_ADMIN_MCP_TOKEN`). Each newline-delimited JSON-RPC message goes through the same code path as `POST /mcp/`, so authentication, permission capping and audit logging are unchanged. Notifications get no reply; diagnostics go to stderr.
+- A `Dockerfile` that serves the bundled example project, with a `seed_mcp_token` command that creates a token with a known value and sample data, so the server can be started without a host project.
+
+### Removed
+- The example project's `run_mcp_server` command, which imported a function the package no longer exports.
+
 ## [0.10.1] - 2026-10-09
 
 No code changes. This release updates what the package says about itself.
