@@ -12,7 +12,7 @@ from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import User
 
 from django_admin_mcp.handlers import create_mock_request, handle_bulk, handle_update
-from tests.models import Gadget
+from tests.models import Article, Author, Gadget
 
 
 def unique_id():
@@ -85,3 +85,48 @@ class TestBulkUpdateLogRedaction:
         message = await latest_log_message(gadget)
         assert '(truncated)"' not in message
         assert message.endswith("...")
+
+
+@sync_to_async
+def make_article_fixture(uid):
+    first = Author.objects.create(name=f"First {uid}", email=f"first_{uid}@example.com")
+    second = Author.objects.create(name=f"Second {uid}", email=f"second_{uid}@example.com")
+    article = Article.objects.create(title=f"Article {uid}", content="x", author=first)
+    user = User.objects.create_superuser(username=f"authlog_{uid}", email=f"authlog_{uid}@example.com", password="pw")
+    return article, second, user
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+class TestAuthorFieldNotRedacted:
+    """A field named ``author`` is not a credential; its change must stay readable in history."""
+
+    async def test_update_logs_author_value(self):
+        uid = unique_id()
+        article, second, user = await make_article_fixture(uid)
+        request = create_mock_request(user)
+
+        result = await handle_update("article", {"id": article.pk, "data": {"author": second.pk}}, request)
+        data = json.loads(result[0].text)
+        assert data.get("success") is True, data
+
+        message = await latest_log_message(article)
+        assert "REDACTED" not in message
+        assert f'"author":{second.pk}' in message.replace(" ", "")
+
+    async def test_bulk_update_logs_author_value(self):
+        uid = unique_id()
+        article, second, user = await make_article_fixture(uid)
+        request = create_mock_request(user)
+
+        result = await handle_bulk(
+            "article",
+            {"operation": "update", "items": [{"id": article.pk, "data": {"author": second.pk}}]},
+            request,
+        )
+        data = json.loads(result[0].text)
+        assert data["success_count"] == 1, data
+
+        message = await latest_log_message(article)
+        assert "REDACTED" not in message
+        assert f'"author":{second.pk}' in message.replace(" ", "")

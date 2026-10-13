@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - The example project's `run_mcp_server` command, which imported a function the package no longer exports.
 
+### Fixed
+- Admin history no longer redacts fields such as `author`, `authority` or `authored_at`. The audit-log redactor matched `auth` as a substring, so any change to an `author` foreign key was logged as `***REDACTED***`. Keys that contain `auth` anywhere else (`auth_token`, `basic_auth`, `authorization`, `authorize_url`, ...) are still redacted.
+
 ## [0.10.1] - 2026-10-09
 
 No code changes. This release updates what the package says about itself.
