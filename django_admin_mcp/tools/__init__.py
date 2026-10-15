@@ -11,6 +11,7 @@ from django_admin_mcp.tools.registry import (
     get_find_models_tool,
     get_model_tools,
     get_tools,
+    tool_exists,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "get_find_models_tool",
     "get_model_tools",
     "get_tools",
+    "tool_exists",
 ]

@@ -311,7 +311,7 @@ with each request.
 
 ### Permission Denied
 
-Tool calls that fail a permission check return HTTP 200 with an error object inside the JSON-RPC result:
+Tool calls that fail a permission check return HTTP 200 with an error object inside the JSON-RPC result, and the result has `isError: true`:
 
 ```json
 {"error": "Permission denied: cannot view article", "code": "permission_denied"}

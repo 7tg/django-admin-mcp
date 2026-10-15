@@ -44,7 +44,7 @@ from django_admin_mcp.protocol import (
     ToolsListResult,
 )
 from django_admin_mcp.resources import ResourceError, list_resource_templates, list_resources, read_resource
-from django_admin_mcp.tools import call_tool, get_tools
+from django_admin_mcp.tools import call_tool, get_tools, tool_exists
 
 
 class RequestBody(BaseModel):
@@ -375,6 +375,12 @@ async def handle_list_tools_request(request, request_id=None, token=None):
 
 async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token=None, request_id=None):
     """Handle tools/call request."""
+    # A name that resolves to no tool is a protocol error per the MCP spec,
+    # not a result; a tool that exists but fails is a result with isError
+    # (issue #126)
+    if not tool_exists(request_obj.name):
+        return _jsonrpc_error(request_id, INVALID_PARAMS, f"Unknown tool: {request_obj.name}")
+
     result = await _execute_tool(request_obj, token)
 
     # Extract text from result - content.text is already a JSON string
@@ -383,7 +389,7 @@ async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token
         # Validate that content.text is valid JSON using Pydantic TypeAdapter
         # This provides type safety without the overhead of parse-then-reserialize
         try:
-            dict_adapter.validate_json(content.text)
+            payload = dict_adapter.validate_json(content.text)
         except ValidationError as e:
             error_response = JsonRpcResponse(
                 id=request_id,
@@ -395,10 +401,11 @@ async def handle_call_tool_request(request, request_obj: ToolsCallRequest, token
             )
             return JsonResponse(error_response.model_dump())
 
-        # Pass through the JSON string as-is
+        # Pass through the JSON string as-is; handlers report failure with a
+        # top-level "error" key, which is what isError mirrors
         response = ToolsCallResponse(
             id=request_id,
-            result=ToolsCallResult(content=[TextContent(text=content.text)]),
+            result=ToolsCallResult(content=[TextContent(text=content.text)], isError="error" in payload),
         )
         return JsonResponse(response.model_dump())
     else:

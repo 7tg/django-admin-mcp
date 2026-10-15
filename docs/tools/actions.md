@@ -356,7 +356,7 @@ Messages the admin queues with `message_user()` while the items are processed ar
 
 ## Error Handling
 
-All errors are returned with HTTP 200 as JSON inside the JSON-RPC `result.content[0].text` — there is no `isError` flag.
+All errors are returned with HTTP 200 as JSON inside the JSON-RPC `result.content[0].text`, with `isError: true` on the result (see [Error Handling](crud.md#error-handling)).
 
 ### Unknown Action
 

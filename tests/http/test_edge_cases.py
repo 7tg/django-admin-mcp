@@ -39,7 +39,7 @@ class TestEmptyToolResult:
             client = AsyncClient()
             response = await client.post(
                 "/api/",
-                data=json.dumps({"method": "tools/call", "params": {"name": "test_tool", "arguments": {}}}),
+                data=json.dumps({"method": "tools/call", "params": {"name": "find_models", "arguments": {}}}),
                 content_type="application/json",
                 headers={"Authorization": f"Bearer {token.plaintext_token}"},
             )

@@ -195,7 +195,7 @@ Responses wrap the tool output as a JSON string inside `result.content[0].text`:
 }
 ```
 
-There is no `isError` flag. Tool-level errors (permission denied, not found, validation failures) are returned with HTTP 200 as JSON inside `result.content[0].text`:
+Tool-level errors (permission denied, not found, validation failures) are returned with HTTP 200 as JSON inside `result.content[0].text`, and the result carries `isError: true`. A tool name that does not exist is a JSON-RPC `-32602` error instead:
 
 ```json
 {
