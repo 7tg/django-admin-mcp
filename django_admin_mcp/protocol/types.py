@@ -155,9 +155,14 @@ class ToolsCallRequest(BaseModel):
 
 
 class ToolsCallResult(BaseModel):
-    """Result of tools/call request."""
+    """Result of tools/call request.
+
+    ``isError`` is the MCP flag for a tool that ran and failed (issue #126);
+    the error itself is in ``content``.
+    """
 
     content: list[TextContent]
+    isError: bool = False
 
 
 class ToolsCallResponse(JsonRpcResponse):

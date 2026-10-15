@@ -31,6 +31,7 @@ from django_admin_mcp.handlers import (
 from django_admin_mcp.handlers.base import (
     check_module_permission,
     check_permission,
+    get_model_admin,
     resolve_field_visibility,
     resolve_registered_admin,
     safe_error_message,
@@ -59,6 +60,24 @@ HANDLERS: dict[str, HandlerFunc] = {
     "history": handle_history,
     "autocomplete": handle_autocomplete,
 }
+
+
+def tool_exists(name: str) -> bool:
+    """
+    Whether ``name`` is a tool this server offers.
+
+    ``find_models`` always is; ``<operation>_<model>`` is when the operation
+    has a handler and the model is registered with ``mcp_expose = True``.
+    Permissions are not consulted: a tool the token may not use still exists,
+    and calling it is answered by the handler (issue #126).
+    """
+    if name == "find_models":
+        return True
+    operation, _, model_name = name.partition("_")
+    if operation not in HANDLERS or not model_name:
+        return False
+    model, model_admin = get_model_admin(model_name)
+    return model is not None and bool(getattr(model_admin, "mcp_expose", False))
 
 
 async def call_tool(name: str, arguments: dict[str, Any], request: HttpRequest) -> list[TextContent]:

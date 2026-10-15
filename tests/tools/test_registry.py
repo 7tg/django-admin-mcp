@@ -22,6 +22,7 @@ from django_admin_mcp.tools import (
     get_model_tools,
     get_tools,
     registry,
+    tool_exists,
 )
 from django_admin_mcp.tools.registry import (
     _format_fields_doc,
@@ -289,3 +290,38 @@ class TestCallToolExceptionGuard:
         data = json.loads(result[0].text)
         assert data == {"error": "An internal error occurred"}
         assert "internal details" not in result[0].text
+
+
+class TestToolExists:
+    """tool_exists tells a tool the server offers from a name that resolves to nothing (issue #126)."""
+
+    @pytest.mark.django_db
+    def test_find_models_exists(self, django_setup_with_admin):
+        assert tool_exists("find_models") is True
+
+    @pytest.mark.django_db
+    def test_operation_on_exposed_model_exists(self, django_setup_with_admin):
+        assert tool_exists("list_author") is True
+
+    @pytest.mark.django_db
+    def test_unknown_operation_does_not_exist(self, django_setup_with_admin):
+        assert tool_exists("no_such_tool") is False
+        assert tool_exists("frobnicate_author") is False
+
+    @pytest.mark.django_db
+    def test_unregistered_model_does_not_exist(self, django_setup_with_admin):
+        assert tool_exists("list_nosuchmodel") is False
+
+    @pytest.mark.django_db
+    def test_name_without_separator_does_not_exist(self, django_setup_with_admin):
+        assert tool_exists("invalidformat") is False
+        assert tool_exists("list_") is False
+
+    @pytest.mark.django_db
+    def test_non_exposed_model_does_not_exist(self, django_setup_with_admin, monkeypatch):
+        from django.contrib import admin  # noqa: PLC0415
+
+        from tests.models import CatalogItemB  # noqa: PLC0415
+
+        monkeypatch.setattr(admin.site._registry[CatalogItemB], "mcp_expose", False)
+        assert tool_exists("list_catalogitemb") is False

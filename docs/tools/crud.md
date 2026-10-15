@@ -778,7 +778,13 @@ In an inline row the same `validation_errors` object appears on that row's entry
 
 ## Error Handling
 
-All errors are returned with HTTP 200 as JSON inside the JSON-RPC `result.content[0].text` — there is no `isError` flag.
+A tool that runs and fails answers with HTTP 200 and a JSON-RPC result: the error is JSON in `result.content[0].text`, and the result carries `isError: true` so MCP clients can tell it from a success (which carries `isError: false`). The examples below show the text payload.
+
+A tool name that does not resolve to anything — an unknown operation, an unregistered or unexposed model, or a name without the `operation_model` shape — is a JSON-RPC error with code `-32602` and no result:
+
+```json
+{"jsonrpc": "2.0", "id": 3, "error": {"code": -32602, "message": "Unknown tool: no_such_tool"}}
+```
 
 ### Not Found
 

@@ -74,7 +74,8 @@ Responses use the JSON-RPC 2.0 envelope. A successful `tools/call` returns:
         "type": "text",
         "text": "{\"results\": [...], \"count\": 10, \"total_count\": 42}"
       }
-    ]
+    ],
+    "isError": false
   }
 }
 ```
@@ -83,7 +84,7 @@ The `text` field contains JSON-encoded data specific to each tool. Fields that a
 
 ### Tool-Level Errors
 
-Tool-level errors (permission denied, object not found, validation failure) arrive with HTTP 200 as a JSON error object inside `result.content[0].text` — there is no `isError` flag:
+Tool-level errors (permission denied, object not found, validation failure) arrive with HTTP 200 as a JSON error object inside `result.content[0].text`, and the result carries `isError: true` (a success carries `isError: false`):
 
 ```json
 {
@@ -95,7 +96,8 @@ Tool-level errors (permission denied, object not found, validation failure) arri
         "type": "text",
         "text": "{\"error\": \"Permission denied: cannot delete article\", \"code\": \"permission_denied\"}"
       }
-    ]
+    ],
+    "isError": true
   }
 }
 ```
@@ -127,7 +129,7 @@ Some failures use the JSON-RPC `error` member instead of `result`:
 |---------------|-------------|-------|
 | -32700 | 200 | Body is not a valid JSON-RPC request (parse error) |
 | -32601 | 200 | `Method not found: x` (unsupported method) |
-| -32602 | 200 | Malformed `tools/call` or `tools/list` params (sanitized details in `error.data`), unknown `prompts/get` name, or missing `resources/read` uri |
+| -32602 | 200 | Malformed `tools/call` or `tools/list` params (sanitized details in `error.data`), a `tools/call` name that is not a tool (`Unknown tool: x`), unknown `prompts/get` name, or missing `resources/read` uri |
 | -32002 | 200 | Resource error (e.g. unknown resource URI) |
 | -32000 | 200 | `Invalid JSON in tool result` or `No result from tool` |
 
@@ -287,7 +289,8 @@ curl -X POST http://localhost:8000/mcp/ \
         "type": "text",
         "text": "{\"results\": [...], \"count\": 10, \"total_count\": 42}"
       }
-    ]
+    ],
+    "isError": false
   }
 }
 ```
