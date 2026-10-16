@@ -152,16 +152,22 @@ def safe_error_message(exc: Exception) -> str:
     return "An internal error occurred"
 
 
-# Key-name markers whose values are redacted from admin LogEntry messages.
-SENSITIVE_KEY_MARKERS = ("password", "token", "secret", "api_key", "credential")
-# "auth" anywhere in a key name, except as the start of author/authority/authored/...;
+# Key-name patterns whose values are redacted from admin LogEntry messages.
+# "auth" matches anywhere except as the start of author/authority/authored/...;
 # authorization, authorize and authorise stay sensitive.
-SENSITIVE_AUTH_PATTERN = re.compile(r"auth(?!or(?!i[sz]))")
+SENSITIVE_KEY_PATTERNS = (
+    re.compile("password"),
+    re.compile("token"),
+    re.compile("secret"),
+    re.compile("api_key"),
+    re.compile("credential"),
+    re.compile(r"auth(?!or(?!i[sz]))"),
+)
 
 
 def _is_sensitive_key(key: str) -> bool:
     lowered = key.lower()
-    return any(marker in lowered for marker in SENSITIVE_KEY_MARKERS) or bool(SENSITIVE_AUTH_PATTERN.search(lowered))
+    return any(pattern.search(lowered) for pattern in SENSITIVE_KEY_PATTERNS)
 
 
 def _redact_sensitive(data: dict[str, Any], model_admin: Any = None) -> dict[str, Any]:

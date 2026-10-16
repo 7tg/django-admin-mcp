@@ -32,6 +32,15 @@ def latest_log_message(obj):
     return entry.change_message if entry else None
 
 
+@sync_to_async
+def make_article_fixture(uid):
+    first = Author.objects.create(name=f"First {uid}", email=f"first_{uid}@example.com")
+    second = Author.objects.create(name=f"Second {uid}", email=f"second_{uid}@example.com")
+    article = Article.objects.create(title=f"Article {uid}", content="x", author=first)
+    user = User.objects.create_superuser(username=f"authlog_{uid}", email=f"authlog_{uid}@example.com", password="pw")
+    return article, second, user
+
+
 @pytest.mark.asyncio
 @pytest.mark.django_db
 class TestBulkUpdateLogRedaction:
@@ -85,15 +94,6 @@ class TestBulkUpdateLogRedaction:
         message = await latest_log_message(gadget)
         assert '(truncated)"' not in message
         assert message.endswith("...")
-
-
-@sync_to_async
-def make_article_fixture(uid):
-    first = Author.objects.create(name=f"First {uid}", email=f"first_{uid}@example.com")
-    second = Author.objects.create(name=f"Second {uid}", email=f"second_{uid}@example.com")
-    article = Article.objects.create(title=f"Article {uid}", content="x", author=first)
-    user = User.objects.create_superuser(username=f"authlog_{uid}", email=f"authlog_{uid}@example.com", password="pw")
-    return article, second, user
 
 
 @pytest.mark.asyncio

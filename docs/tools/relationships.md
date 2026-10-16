@@ -211,7 +211,7 @@ History is recorded when:
 - Changes are made through Django Admin MCP with an authenticated user
 - `LogEntry` is manually created
 
-MCP writes `LogEntry` rows only when `request.user` is set and authenticated — token-less or anonymous requests are not logged. In MCP change messages, values of sensitive-looking keys (containing `password`, `token`, `secret`, `api_key`, `auth`, or `credential`) are redacted to `***REDACTED***`, and the serialized data is truncated to 500 characters.
+MCP writes `LogEntry` rows only when `request.user` is set and authenticated — token-less or anonymous requests are not logged. In MCP change messages, values of sensitive-looking keys (containing `password`, `token`, `secret`, `api_key` or `credential`, or `auth` anywhere except as the start of `author`, `authority`, `authored_at` and similar) are redacted to `***REDACTED***`, and the serialized data is truncated to 500 characters.
 
 !!! note "History Availability"
     History is only available for changes made through Django admin or MCP. Direct database modifications are not tracked.
