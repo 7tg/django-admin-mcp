@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-20
+
+Admin history shows changes to `author`-like fields again.
+
+### Fixed
+- Admin history no longer redacts fields such as `author`, `authority` or `authored_at`. The audit-log redactor matched `auth` as a substring, so any change to an `author` foreign key was logged as `***REDACTED***`. Keys that contain `auth` anywhere else (`auth_token`, `basic_auth`, `authorization`, `authorize_url`, ...) are still redacted. ([#127](https://github.com/7tg/django-admin-mcp/pull/127), thanks @vishalhabib99)
+
 ## [0.11.0] - 2026-10-16
 
 The endpoint can now run over stdio, and tool failures are reported the way the MCP spec describes.
@@ -20,9 +27,6 @@ The endpoint can now run over stdio, and tool failures are reported the way the 
 
 ### Removed
 - The example project's `run_mcp_server` command, which imported a function the package no longer exports.
-
-### Fixed
-- Admin history no longer redacts fields such as `author`, `authority` or `authored_at`. The audit-log redactor matched `auth` as a substring, so any change to an `author` foreign key was logged as `***REDACTED***`. Keys that contain `auth` anywhere else (`auth_token`, `basic_auth`, `authorization`, `authorize_url`, ...) are still redacted.
 
 ## [0.10.1] - 2026-10-09
 
