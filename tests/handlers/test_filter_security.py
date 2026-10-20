@@ -155,6 +155,22 @@ class TestSerializeDataForLogRedaction:
         assert "public name" in result
         assert "REDACTED" in result
 
+    @pytest.mark.parametrize(
+        "key",
+        ["auth", "auth_token", "authtoken", "basic_auth", "oauth_code", "authorization", "authorize_url", "x_authkey"],
+    )
+    def test_auth_keys_redacted(self, key):
+        result = _serialize_data_for_log({key: "s3cr3t-value"})
+        assert "s3cr3t-value" not in result
+        assert "REDACTED" in result
+
+    @pytest.mark.parametrize("key", ["author", "author_id", "co_author", "authored_at", "authorship", "authority"])
+    def test_author_like_keys_not_redacted(self, key):
+        """'auth' inside author/authority/authored is not a credential."""
+        result = _serialize_data_for_log({key: "public-value"})
+        assert "public-value" in result
+        assert "REDACTED" not in result
+
     def test_non_sensitive_data_unchanged(self):
         result = _serialize_data_for_log({"title": "hello", "count": 3})
         assert "hello" in result

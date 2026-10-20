@@ -7,6 +7,7 @@ for use across handler implementations.
 
 import datetime
 import logging
+import re
 import uuid
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
@@ -151,8 +152,22 @@ def safe_error_message(exc: Exception) -> str:
     return "An internal error occurred"
 
 
-# Key-name markers whose values are redacted from admin LogEntry messages.
-SENSITIVE_KEY_MARKERS = ("password", "token", "secret", "api_key", "auth", "credential")
+# Key-name patterns whose values are redacted from admin LogEntry messages.
+# "auth" matches anywhere except as the start of author/authority/authored/...;
+# authorization, authorize and authorise stay sensitive.
+SENSITIVE_KEY_PATTERNS = (
+    re.compile("password"),
+    re.compile("token"),
+    re.compile("secret"),
+    re.compile("api_key"),
+    re.compile("credential"),
+    re.compile(r"auth(?!or(?!i[sz]))"),
+)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    lowered = key.lower()
+    return any(pattern.search(lowered) for pattern in SENSITIVE_KEY_PATTERNS)
 
 
 def _redact_sensitive(data: dict[str, Any], model_admin: Any = None) -> dict[str, Any]:
@@ -164,7 +179,7 @@ def _redact_sensitive(data: dict[str, Any], model_admin: Any = None) -> dict[str
     """
     redacted = {}
     for key, value in data.items():
-        if any(marker in key.lower() for marker in SENSITIVE_KEY_MARKERS) or not is_field_visible(model_admin, key):
+        if _is_sensitive_key(key) or not is_field_visible(model_admin, key):
             redacted[key] = "***REDACTED***"
         else:
             redacted[key] = value
