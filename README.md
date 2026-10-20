@@ -9,6 +9,7 @@
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://7tg.github.io/django-admin-mcp/)
 [![License](https://img.shields.io/pypi/l/django-admin-mcp.svg)](https://github.com/7tg/django-admin-mcp/blob/main/LICENSE)
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.7tg%2Fdjango--admin--mcp-6E56CF.svg)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.7tg/django-admin-mcp&version=latest)
+[![Glama MCP server](https://glama.ai/mcp/servers/7tg/django-admin-mcp/badges/score.svg)](https://glama.ai/mcp/servers/7tg/django-admin-mcp)
 
 Add a mixin to your `ModelAdmin` and MCP clients get CRUD, admin actions and relationship traversal, inside Django's existing permissions. Only Django and Pydantic as dependencies.
 
