@@ -142,6 +142,8 @@ If this saved you time, a star on GitHub helps others find it. Issues and PRs ar
 
 [![Star History Chart](https://api.star-history.com/svg?repos=7tg/django-admin-mcp&type=Date)](https://star-history.com/#7tg/django-admin-mcp&Date)
 
+[![PyPI Download History](https://raw.githubusercontent.com/7tg/django-admin-mcp/main/docs/media/downloads.svg)](https://pypistats.org/packages/django-admin-mcp)
+
 ## License
 
 MIT

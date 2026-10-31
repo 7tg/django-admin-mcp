@@ -1,0 +1,26 @@
+name: Update download chart
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Render chart
+        run: python3 .github/download_chart.py
+
+      - name: Commit if changed
+        run: |
+          git diff --quiet docs/media && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "docs: update download chart"
+          git push
