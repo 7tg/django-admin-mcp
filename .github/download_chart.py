@@ -66,7 +66,7 @@ def render(history):
             x, _ = xy((month - start).days, 0)
             parts.append(
                 f'<text x="{x:.1f}" y="{TOP + ph + 24}" text-anchor="middle" font-size="13" fill="#666">'
-                f'{month.strftime("%b %Y")}</text>'
+                f"{month.strftime('%b %Y')}</text>"
             )
         month = date(month.year + month.month // 12, month.month % 12 + 1, 1)
     parts += [
