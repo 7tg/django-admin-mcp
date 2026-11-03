@@ -625,6 +625,7 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
     # kept: describe_* lists them, so get/list must return them (issue #117)
     opts = instance._meta
     obj_dict = {}
+    model_fields = {}
     for field in chain(opts.concrete_fields, opts.private_fields, opts.many_to_many):
         if not (field.concrete or getattr(field, "editable", False)):
             continue
@@ -633,6 +634,7 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
         if fields_to_exclude and field.name in fields_to_exclude:
             continue
         obj_dict[field.name] = field.value_from_object(instance)
+        model_fields[field.name] = field
 
     # Convert non-serializable fields
     serialized = {}
@@ -646,8 +648,12 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
         elif isinstance(value, FieldFile):
             # FileField/ImageField - .name is JSON-safe; .url raises ValueError when empty
             serialized[key] = value.name or ""
-        else:
+        elif value is None or isinstance(value, (str, bytes, dict, *_JSON_SCALARS)):
             serialized[key] = value
+        else:
+            # A custom field's value object (e.g. django-markitup's Markup) is not
+            # JSON-serializable; use the field's own serialization, as dumpdata does
+            serialized[key] = model_fields[key].value_to_string(instance)
 
     # Choice fields: attach "<name>_display" label sidecars (issue #113).
     # Only fields already present survived visibility filtering, so hidden
