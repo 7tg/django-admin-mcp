@@ -5,6 +5,8 @@ Covers:
 - a field whose Python value is not JSON-serializable (django-markitup's
   ``Markup``) is serialized with the field's own ``value_to_string()``, so
   get_* / list_* return it instead of failing
+- a partial update keeps such a field's stored value instead of saving the
+  ``str()`` of its value object (for ``Markup``, the rendered HTML)
 - an ``on_delete`` wrapped in a callable object without ``__name__``
   (django-polymorphic's ``PolymorphicGuard``) does not fail describe_*
 - get_* finds inline rows whose FK points at a multi-table parent of the
@@ -26,6 +28,7 @@ from django_admin_mcp.handlers import (
     handle_describe,
     handle_get,
     handle_list,
+    handle_update,
     serialize_instance,
 )
 from tests.models import Author, Booklet, DocumentPage, MarkedUp, Memo
@@ -115,6 +118,30 @@ class TestCustomFieldValues:
         data = json.loads(result[0].text)
         rows = {row["id"]: row for row in data["results"]}
         assert rows[memo.pk]["body"] == "Listed"
+
+    @pytest.mark.asyncio
+    async def test_update_keeps_omitted_custom_value(self):
+        memo = await sync_to_async(make_memo)("Keep *me*")
+        other = await sync_to_async(Author.objects.create)(name="Other", email=f"other_{unique_id()}@example.com")
+        with registered_admin(MemoAdmin, Memo):
+            result = await handle_update(
+                "memo", {"id": memo.pk, "data": {"author": other.pk}}, await superuser_request()
+            )
+        data = json.loads(result[0].text)
+        assert "error" not in data, data
+        memo = await sync_to_async(Memo.objects.get)(pk=memo.pk)
+        assert memo.body.raw == "Keep *me*"
+        assert memo.author_id == other.pk
+
+    @pytest.mark.asyncio
+    async def test_update_sets_sent_custom_value(self):
+        memo = await sync_to_async(make_memo)("Old")
+        with registered_admin(MemoAdmin, Memo):
+            result = await handle_update("memo", {"id": memo.pk, "data": {"body": "New"}}, await superuser_request())
+        data = json.loads(result[0].text)
+        assert data["object"]["body"] == "New"
+        memo = await sync_to_async(Memo.objects.get)(pk=memo.pk)
+        assert memo.body.raw == "New"
 
 
 @pytest.mark.django_db

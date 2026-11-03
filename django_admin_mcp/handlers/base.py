@@ -648,7 +648,7 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
         elif isinstance(value, FieldFile):
             # FileField/ImageField - .name is JSON-safe; .url raises ValueError when empty
             serialized[key] = value.name or ""
-        elif value is None or isinstance(value, (str, bytes, dict, *_JSON_SCALARS)):
+        elif _is_plain_value(value):
             serialized[key] = value
         else:
             # A custom field's value object (e.g. django-markitup's Markup) is not
@@ -673,6 +673,11 @@ def serialize_instance(instance: models.Model, model_admin: Any = None) -> dict:
 
 # Scalar types pydantic serializes natively; anything else is stringified.
 _JSON_SCALARS = (bool, int, float, Decimal, datetime.date, datetime.time, datetime.timedelta, uuid.UUID)
+
+
+def _is_plain_value(value: Any) -> bool:
+    """Whether a field value is a plain type pydantic serializes and form fields clean as is."""
+    return value is None or isinstance(value, (str, bytes, dict, *_JSON_SCALARS))
 
 
 def _json_safe(value: Any) -> Any:
@@ -942,6 +947,26 @@ def _keep_stored_value(field: Any) -> None:
     field.widget.supports_microseconds = True
 
 
+def _keep_stored_initial(form: Any, name: str, instance: models.Model) -> None:
+    """
+    Make a kept field clean to the stored value, not to the ``str()`` of a value object.
+
+    A disabled field is cleaned from its initial value. For a custom field whose
+    Python value is an object (e.g. django-markitup's ``Markup``, whose ``str()``
+    is the rendered HTML) a text form field would save that ``str()`` back,
+    replacing the source. The field's own ``value_to_string()`` gives the value
+    the form would have posted.
+    """
+    value = form.initial.get(name)
+    if _is_plain_value(value) or isinstance(value, list | tuple | FieldFile | models.Model):
+        return
+    try:
+        model_field = instance._meta.get_field(name)
+    except FieldDoesNotExist:
+        return
+    form.initial[name] = model_field.value_to_string(instance)
+
+
 def get_prepopulated_fields(model_admin: Any, request: HttpRequest) -> dict[str, Any]:
     """Return the admin's ``prepopulated_fields`` for an add form ({} without an admin)."""
     if model_admin is None:
@@ -1045,6 +1070,7 @@ def shape_admin_form(
             _shape_sent_value(form, name, field, post, key)
         elif instance is not None:
             _keep_stored_value(field)
+            _keep_stored_initial(form, name, instance)
         elif form.get_initial_for_field(field, name) is not None:
             # Omitted on create: a disabled field is cleaned from its initial
             # value, i.e. the model default (issue #115)
