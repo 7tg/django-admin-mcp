@@ -4,25 +4,25 @@
 <rect width="800" height="533.333" fill="#fff"/>
 <g transform="translate(70 60)">
 <path fill="none" d="M.5.5h700" filter="url(#xkcdify)" style="stroke:#000" transform="translate(0 423.333)"/>
-<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(73.853 423.333)">May</text>
-<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(173.394 423.333)">June</text>
-<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(269.725 423.333)">July</text>
-<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(369.266 423.333)">August</text>
-<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(468.807 423.333)">September</text>
-<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(565.138 423.333)">October</text>
-<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(664.679 423.333)">November</text>
+<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(73.516 423.333)">May</text>
+<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(172.603 423.333)">June</text>
+<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(268.493 423.333)">July</text>
+<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(367.580 423.333)">August</text>
+<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(466.667 423.333)">September</text>
+<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(562.557 423.333)">October</text>
+<text y="6" dy=".71em" text-anchor="middle" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(661.644 423.333)">November</text>
 <path fill="none" d="M-1 423.833H.5V.5H-1" filter="url(#xkcdify)" style="stroke:#000"/>
 <text x="-7" dy=".32em" text-anchor="end" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(0 317.500)">2k</text>
 <text x="-7" dy=".32em" text-anchor="end" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(0 211.667)">4k</text>
 <text x="-7" dy=".32em" text-anchor="end" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(0 105.833)">6k</text>
 <text x="-7" dy=".32em" text-anchor="end" style="font-family:xkcd;font-size:16px;fill:#000" transform="translate(0 0.000)">8k</text>
-<path fill="none" stroke="#dd4528" d="M0.000 423.333 L19.266 418.200 L41.743 417.036 L64.220 415.554 L86.697 413.438 L109.174 410.686 L131.651 408.940 L154.128 405.130 L176.606 403.278 L199.083 396.928 L221.560 393.647 L244.037 390.313 L266.514 380.629 L288.991 370.469 L311.468 357.981 L333.945 349.938 L356.422 342.635 L378.899 327.025 L401.376 322.844 L423.853 319.563 L446.330 314.431 L468.807 308.927 L491.284 305.170 L513.761 279.029 L536.239 242.094 L558.716 226.536 L581.193 197.273 L603.670 176.107 L626.147 148.960 L648.624 123.984 L671.101 98.478 L693.578 78.793 L700.000 67.733" filter="url(#xkcdify)"/>
+<path fill="none" stroke="#dd4528" d="M0.000 423.333 L19.178 418.200 L41.553 417.036 L63.927 415.554 L86.301 413.438 L108.676 410.686 L131.050 408.940 L153.425 405.130 L175.799 403.278 L198.174 396.928 L220.548 393.647 L242.922 390.313 L265.297 380.629 L287.671 370.469 L310.046 357.981 L332.420 349.938 L354.795 342.635 L377.169 327.025 L399.543 322.844 L421.918 319.563 L444.292 314.431 L466.667 308.927 L489.041 305.170 L511.416 279.029 L533.790 242.094 L556.164 226.536 L578.539 197.273 L600.913 176.107 L623.288 148.960 L645.662 123.984 L668.037 98.478 L690.411 78.793 L700.000 63.182" filter="url(#xkcdify)"/>
 <rect width="171" height="32" fill-opacity=".85" stroke="#000" stroke-width="2" filter="url(#xkcdify)" rx="5" ry="5" style="fill:#fff" transform="translate(8 5)"/>
 <g transform="translate(8 5)">
 <rect width="8" height="8" x="7" y="12" filter="url(#xkcdify)" rx="2" ry="2" style="fill:#dd4528"/>
 <text x="21" y="20" style="font-size:15px;fill:#000">django-admin-mcp</text>
 </g>
-<text x="700" y="411.333" text-anchor="end" style="font-size:16px;fill:#666">6,720 total</text>
+<text x="700" y="411.333" text-anchor="end" style="font-size:16px;fill:#666">6,806 total</text>
 </g>
 <text x="50%" y="30" text-anchor="middle" style="font-size:20px;font-weight:700;fill:#000">Download History</text>
 <text x="50%" y="523.333" text-anchor="middle" style="font-size:17px;fill:#000">Date</text>
