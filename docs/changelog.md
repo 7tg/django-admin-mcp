@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`MCP_INSTRUCTIONS` sets the server instructions.** Its value is returned as `instructions` in the `initialize` result, which MCP clients pass to the model as guidance for using the server. The field is omitted when the setting is unset or empty.
+
 ## [0.11.1] - 2026-10-20
 
 Admin history shows changes to `author`-like fields again.

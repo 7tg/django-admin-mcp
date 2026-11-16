@@ -46,7 +46,7 @@ path('admin-api/', include('django_admin_mcp.urls')),
 
 ### Optional Settings
 
-Five optional Django settings:
+Six optional Django settings:
 
 ```python title="settings.py"
 # Maximum page size for list_*, related_*, history_*, and autocomplete_*
@@ -71,6 +71,10 @@ MCP_LAST_USED_RESOLUTION = 60
 # Accept the bearer token as a URL path segment, for clients that cannot
 # send an Authorization header. Default: False
 MCP_ALLOW_URL_TOKEN = False
+
+# Text returned as "instructions" in the MCP initialize response. Clients
+# typically add it to the model's system prompt. Default: None (omitted)
+MCP_INSTRUCTIONS = None
 ```
 
 ### MCP_UPLOAD_MAX_FILE_BYTES
@@ -97,6 +101,19 @@ When the setting is false (the default) the route returns `404`. The header rout
     - Mint a **dedicated** token for the URL route so it can be revoked on its own
     - Give it the narrowest permissions and an `expires_at`
     - Prefer the header route for any client that supports it
+
+### MCP_INSTRUCTIONS
+
+A string sent as the `instructions` field of the `initialize` result. MCP clients usually pass it to the model as server-level guidance, so use it to describe your data and how the tools should be used:
+
+```python title="settings.py"
+MCP_INSTRUCTIONS = (
+    "This server manages the shop's catalogue. Prefer list_product with "
+    "search before creating products, and never delete orders."
+)
+```
+
+When unset or empty, the field is left out of the response.
 
 !!! note "Token expiry is not a Django setting"
     The 90-day default for programmatic creation is fixed in the `MCPToken` model. Set `expires_at` per token to override it; in the admin form, a blank **Expires At** means the token never expires.
