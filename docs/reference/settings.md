@@ -143,6 +143,29 @@ Default: `False`
 !!! note "`mcp_expose` controls both advertisement and reachability"
     Non-exposed models are hidden from `tools/list`, and a direct `tools/call` for them is rejected with the same "Model not found" error as for unregistered models.
 
+### mcp_description
+
+Tells the client what the model means for your business: what a row stands for, the rules it follows, and how its tools should (and shouldn't) be used:
+
+```python
+class OrderAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    mcp_description = (
+        "A customer purchase. Shipped orders are immutable; "
+        "use the 'refund' action instead of editing totals."
+    )
+```
+
+The text is:
+
+- prepended to the description of every tool for the model (`list_order`, `update_order`, ...), which is what the client's model reads when choosing a tool
+- returned as `description` by `describe_<model>` and the `models://<model>/schema` resource
+- returned as `description` for the model in `find_models` results
+
+Lazy translation strings work. Leave it unset, or empty, to keep the generated descriptions as they are. For guidance that spans the whole server, use [`MCP_INSTRUCTIONS`](#mcp_instructions).
+
+Default: `None`
+
 ### mcp_fields
 
 Allowlist of fields to include in serialized responses. Takes precedence over the admin's `fields`:

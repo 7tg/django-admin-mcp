@@ -59,6 +59,10 @@ class MCPAdminMixin:
             returned in the response's ``messages`` list. Set to False when those
             messages may carry data MCP clients must not see (e.g. secrets shown
             once in the admin UI).
+        mcp_description (str | None): What the model means for the business: its
+            purpose, rules and how its tools should be used. Prepended to every
+            tool description for the model and returned as ``description`` by
+            ``describe_<model>`` and ``find_models``.
     """
 
     # Type annotations for MCP-specific attributes (set by subclasses)
@@ -67,6 +71,7 @@ class MCPAdminMixin:
     mcp_exclude_fields: list[str] | None
     mcp_use_admin_queryset: bool = True
     mcp_return_messages: bool = True
+    mcp_description: str | None = None
 
     # Class-level registry to track registered models
     _registered_models: dict[str, dict[str, Any]] = {}
