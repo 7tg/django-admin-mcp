@@ -964,7 +964,8 @@ def _keep_stored_initial(form: Any, name: str, instance: models.Model) -> None:
         model_field = instance._meta.get_field(name)
     except FieldDoesNotExist:
         return
-    form.initial[name] = model_field.value_to_string(instance)
+    if isinstance(model_field, models.Field):
+        form.initial[name] = model_field.value_to_string(instance)
 
 
 def get_prepopulated_fields(model_admin: Any, request: HttpRequest) -> dict[str, Any]:
