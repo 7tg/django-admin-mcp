@@ -9,7 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`mcp_description` describes a model's business role.** Set it on a `ModelAdmin` and the text is prepended to every tool description for that model and returned as `description` by `describe_<model>`, the `models://` schema resource and `find_models`, so clients know what a model is for and the rules around it, not just its fields.
-- **`MCP_INSTRUCTIONS` sets the server instructions.** Its value is returned as `instructions` in the `initialize` result, which MCP clients pass to the model as guidance for using the server. The field is omitted when the setting is unset or empty.
+- **`MCP_INSTRUCTIONS` sets the server instructions.** Its value is returned as `instructions` in the `initialize` result, which MCP clients pass to the model as guidance for using the server. The field is omitted when the setting is unset or empty. ([#134](https://github.com/7tg/django-admin-mcp/pull/134), thanks @iddqd1)
+
+### Fixed
+- `get_*` and `list_*` serialize custom field values (such as django-markitup's `Markup`) through the field's `value_to_string()` instead of failing JSON serialization, and a partial `update_*` no longer overwrites an omitted custom-valued field with its `str()`. `describe_*` names a wrapped `on_delete` (django-polymorphic's `PolymorphicGuard`), and `get_*` with `include_inlines` finds inline rows whose foreign key points at a multi-table parent model. ([#132](https://github.com/7tg/django-admin-mcp/pull/132), thanks @Iv)
 
 ## [0.11.1] - 2026-10-20
 
