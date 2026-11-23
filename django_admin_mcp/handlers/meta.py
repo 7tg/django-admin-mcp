@@ -50,6 +50,17 @@ def _admin_config_list(value: Any) -> list[Any]:
     return [_json_safe_admin_item(item) for item in (value or [])]
 
 
+def _on_delete_name(on_delete: Any) -> str:
+    """
+    Name of an ``on_delete`` handler.
+
+    A handler may be a callable object without ``__name__``: django-polymorphic
+    wraps it in a ``PolymorphicGuard`` that keeps the real handler in ``action``.
+    """
+    name = getattr(on_delete, "__name__", None) or getattr(getattr(on_delete, "action", None), "__name__", None)
+    return name or type(on_delete).__name__
+
+
 def _get_field_metadata(field) -> dict[str, Any]:
     """
     Extract comprehensive metadata from a Django model field.
@@ -106,7 +117,7 @@ def _get_field_metadata(field) -> dict[str, Any]:
     if hasattr(field, "remote_field") and field.remote_field:
         on_delete = getattr(field.remote_field, "on_delete", None)
         if on_delete is not None:
-            metadata["on_delete"] = on_delete.__name__
+            metadata["on_delete"] = _on_delete_name(on_delete)
 
     # Primary key
     if getattr(field, "primary_key", False):

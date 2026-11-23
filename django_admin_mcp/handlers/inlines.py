@@ -81,10 +81,12 @@ def _get_inline_data(obj: models.Model, admin: Any, request: HttpRequest) -> dic
         if not check_permission(request, inline_admin, "view"):
             continue
 
-        # Find the FK field that points to our parent model
+        # Find the FK field that points to our parent model or, as Django's inline
+        # formsets accept, to one of its multi-table parents
+        parent_models = (type(obj), *type(obj)._meta.get_parent_list())
         fk_field = None
         for field in inline_model._meta.get_fields():
-            if hasattr(field, "related_model") and field.related_model is type(obj):
+            if isinstance(field, models.ForeignKey) and field.related_model in parent_models:
                 if fk_name is None or field.name == fk_name:
                     fk_field = field
                     break

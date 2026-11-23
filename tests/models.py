@@ -268,3 +268,64 @@ class DocumentPage(models.Model):
 
     def __str__(self):
         return self.label
+
+
+class Booklet(Document):
+    """Multi-table child of Document: DocumentPage rows point at the parent table."""
+
+    edition = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        app_label = "tests"
+
+
+class MarkedUp:
+    """A field value that is not JSON-serializable, like django-markitup's Markup."""
+
+    def __init__(self, raw):
+        self.raw = raw
+
+    def __str__(self):
+        return f"<p>{self.raw}</p>"
+
+
+class MarkedUpField(models.TextField):
+    """Text field whose Python value is a MarkedUp object; value_to_string() gives the source."""
+
+    def from_db_value(self, value, expression, connection):
+        return None if value is None else MarkedUp(value)
+
+    def to_python(self, value):
+        return value if value is None or isinstance(value, MarkedUp) else MarkedUp(value)
+
+    def get_prep_value(self, value):
+        return value.raw if isinstance(value, MarkedUp) else value
+
+    def value_to_string(self, obj):
+        value = self.value_from_object(obj)
+        return value.raw if isinstance(value, MarkedUp) else value
+
+
+class OnDeleteGuard:
+    """Callable wrapper around an on_delete handler, like django-polymorphic's PolymorphicGuard."""
+
+    def __init__(self, action):
+        self.action = action
+
+    def __call__(self, collector, field, sub_objs, using):
+        return self.action(collector, field, sub_objs, using)
+
+
+class Memo(models.Model):
+    """Test model with a custom-valued field and a wrapped on_delete."""
+
+    body = MarkedUpField(blank=True, default="")
+    author = models.ForeignKey(
+        Author, null=True, blank=True, on_delete=OnDeleteGuard(models.SET_NULL), related_name="memos"
+    )
+
+    class Meta:
+        app_label = "tests"
+
+    def __str__(self):
+        return f"Memo {self.pk}"
