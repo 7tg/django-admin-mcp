@@ -15,6 +15,7 @@ from django.http import HttpRequest
 from django_admin_mcp.handlers.base import (
     async_check_module_permission,
     async_check_permission,
+    get_mcp_description,
     json_response,
     resolve_field_visibility,
     safe_error_message,
@@ -270,6 +271,8 @@ async def handle_describe(
             "relationships": relationships,
             "admin_config": admin_config,
         }
+        if description := get_mcp_description(model_admin):
+            result["description"] = description
 
         return json_response(result)
     except Exception as e:
@@ -326,6 +329,7 @@ async def handle_find_models(
                     "verbose_name_plural": verbose_name_plural,
                     "app_label": model._meta.app_label,
                     "tools_exposed": bool(getattr(model_admin, "mcp_expose", False)),
+                    "description": get_mcp_description(model_admin),
                 }
             )
 
@@ -338,15 +342,16 @@ async def handle_find_models(
                 continue
             if await async_check_permission(request, candidate["model_admin"], "view"):
                 # Remove model_admin before adding to response
-                models_info.append(
-                    {
-                        "model_name": candidate["model_name"],
-                        "verbose_name": candidate["verbose_name"],
-                        "verbose_name_plural": candidate["verbose_name_plural"],
-                        "app_label": candidate["app_label"],
-                        "tools_exposed": candidate["tools_exposed"],
-                    }
-                )
+                model_info = {
+                    "model_name": candidate["model_name"],
+                    "verbose_name": candidate["verbose_name"],
+                    "verbose_name_plural": candidate["verbose_name_plural"],
+                    "app_label": candidate["app_label"],
+                    "tools_exposed": candidate["tools_exposed"],
+                }
+                if candidate["description"]:
+                    model_info["description"] = candidate["description"]
+                models_info.append(model_info)
 
         return json_response(
             {

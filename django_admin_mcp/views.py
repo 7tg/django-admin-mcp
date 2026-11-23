@@ -272,6 +272,7 @@ async def mcp_endpoint(request):
                 protocolVersion="2025-11-25",
                 serverInfo=ServerInfo(name="django-admin-mcp", version=__version__),
                 capabilities=ServerCapabilities(),
+                instructions=getattr(settings, "MCP_INSTRUCTIONS", None) or None,
             ),
         )
         return JsonResponse(response.model_dump())

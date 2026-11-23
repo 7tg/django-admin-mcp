@@ -316,6 +316,18 @@ def is_missing_id(obj_id: Any) -> bool:
     return obj_id is None or obj_id == ""
 
 
+def get_mcp_description(model_admin: Any) -> str | None:
+    """
+    Return the admin's ``mcp_description`` as a stripped string, or None.
+
+    ``str()`` resolves lazy translation strings; blank values count as unset.
+    """
+    description = getattr(model_admin, "mcp_description", None)
+    if description is None:
+        return None
+    return str(description).strip() or None
+
+
 def resolve_registered_admin(model: type[models.Model]) -> Any | None:
     """
     Return the registered MCP admin for a model, or None.

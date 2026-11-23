@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`mcp_description` describes a model's business role.** Set it on a `ModelAdmin` and the text is prepended to every tool description for that model and returned as `description` by `describe_<model>`, the `models://` schema resource and `find_models`, so clients know what a model is for and the rules around it, not just its fields.
+- **`MCP_INSTRUCTIONS` sets the server instructions.** Its value is returned as `instructions` in the `initialize` result, which MCP clients pass to the model as guidance for using the server. The field is omitted when the setting is unset or empty.
+
 ## [0.11.1] - 2026-10-20
 
 Admin history shows changes to `author`-like fields again.

@@ -31,6 +31,7 @@ from django_admin_mcp.handlers import (
 from django_admin_mcp.handlers.base import (
     check_module_permission,
     check_permission,
+    get_mcp_description,
     get_model_admin,
     resolve_field_visibility,
     resolve_registered_admin,
@@ -210,7 +211,7 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
         ),
     }
 
-    return [
+    tools = [
         Tool(
             name=f"list_{model_name}",
             description=(
@@ -501,6 +502,13 @@ def get_model_tools(model: type[models.Model], model_admin: Any = None) -> list[
             },
         ),
     ]
+
+    # The admin's business description leads every tool description
+    description = get_mcp_description(model_admin)
+    if description:
+        for tool in tools:
+            tool.description = f"{description}\n\n{tool.description}"
+    return tools
 
 
 def get_find_models_tool() -> Tool:

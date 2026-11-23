@@ -46,3 +46,38 @@ async def test_initialize_reports_package_version():
     assert response.status_code == 200
     data = json.loads(response.content)
     assert data["result"]["serverInfo"]["version"] == django_admin_mcp.__version__
+
+
+@skip_if_django_lt_42
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_initialize_omits_instructions_by_default():
+    """Without MCP_INSTRUCTIONS the optional field is not sent."""
+    token = await sync_to_async(MCPTokenFactory)()
+
+    response = await AsyncClient().post(
+        "/api/",
+        data=json.dumps({"method": "initialize", "id": 1}),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {token.plaintext_token}"},
+    )
+
+    assert "instructions" not in json.loads(response.content)["result"]
+
+
+@skip_if_django_lt_42
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_initialize_returns_configured_instructions(settings):
+    """MCP_INSTRUCTIONS is returned as the initialize instructions."""
+    settings.MCP_INSTRUCTIONS = "Only read orders; never delete them."
+    token = await sync_to_async(MCPTokenFactory)()
+
+    response = await AsyncClient().post(
+        "/api/",
+        data=json.dumps({"method": "initialize", "id": 1}),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {token.plaintext_token}"},
+    )
+
+    assert json.loads(response.content)["result"]["instructions"] == "Only read orders; never delete them."

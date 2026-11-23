@@ -46,7 +46,7 @@ path('admin-api/', include('django_admin_mcp.urls')),
 
 ### Optional Settings
 
-Five optional Django settings:
+Six optional Django settings:
 
 ```python title="settings.py"
 # Maximum page size for list_*, related_*, history_*, and autocomplete_*
@@ -71,6 +71,10 @@ MCP_LAST_USED_RESOLUTION = 60
 # Accept the bearer token as a URL path segment, for clients that cannot
 # send an Authorization header. Default: False
 MCP_ALLOW_URL_TOKEN = False
+
+# Text returned as "instructions" in the MCP initialize response. Clients
+# typically add it to the model's system prompt. Default: None (omitted)
+MCP_INSTRUCTIONS = None
 ```
 
 ### MCP_UPLOAD_MAX_FILE_BYTES
@@ -97,6 +101,19 @@ When the setting is false (the default) the route returns `404`. The header rout
     - Mint a **dedicated** token for the URL route so it can be revoked on its own
     - Give it the narrowest permissions and an `expires_at`
     - Prefer the header route for any client that supports it
+
+### MCP_INSTRUCTIONS
+
+A string sent as the `instructions` field of the `initialize` result. MCP clients usually pass it to the model as server-level guidance, so use it to describe your data and how the tools should be used:
+
+```python title="settings.py"
+MCP_INSTRUCTIONS = (
+    "This server manages the shop's catalogue. Prefer list_product with "
+    "search before creating products, and never delete orders."
+)
+```
+
+When unset or empty, the field is left out of the response.
 
 !!! note "Token expiry is not a Django setting"
     The 90-day default for programmatic creation is fixed in the `MCPToken` model. Set `expires_at` per token to override it; in the admin form, a blank **Expires At** means the token never expires.
@@ -125,6 +142,29 @@ Default: `False`
 
 !!! note "`mcp_expose` controls both advertisement and reachability"
     Non-exposed models are hidden from `tools/list`, and a direct `tools/call` for them is rejected with the same "Model not found" error as for unregistered models.
+
+### mcp_description
+
+Tells the client what the model means for your business: what a row stands for, the rules it follows, and how its tools should (and shouldn't) be used:
+
+```python
+class OrderAdmin(MCPAdminMixin, admin.ModelAdmin):
+    mcp_expose = True
+    mcp_description = (
+        "A customer purchase. Shipped orders are immutable; "
+        "use the 'refund' action instead of editing totals."
+    )
+```
+
+The text is:
+
+- prepended to the description of every tool for the model (`list_order`, `update_order`, ...), which is what the client's model reads when choosing a tool
+- returned as `description` by `describe_<model>` and the `models://<model>/schema` resource
+- returned as `description` for the model in `find_models` results
+
+Lazy translation strings work. Leave it unset, or empty, to keep the generated descriptions as they are. For guidance that spans the whole server, use [`MCP_INSTRUCTIONS`](#mcp_instructions).
+
+Default: `None`
 
 ### mcp_fields
 

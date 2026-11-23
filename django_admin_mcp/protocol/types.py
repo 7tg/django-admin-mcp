@@ -92,6 +92,7 @@ class InitializeResult(BaseModel):
     protocolVersion: str
     serverInfo: ServerInfo
     capabilities: ServerCapabilities
+    instructions: str | None = None
 
 
 class InitializeResponse(JsonRpcResponse):
