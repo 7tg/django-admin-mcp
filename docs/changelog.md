@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-24
+
+Models and the server can now describe themselves to MCP clients, and custom field types from packages like django-markitup and django-polymorphic work end to end.
+
 ### Added
 - **`mcp_description` describes a model's business role.** Set it on a `ModelAdmin` and the text is prepended to every tool description for that model and returned as `description` by `describe_<model>`, the `models://` schema resource and `find_models`, so clients know what a model is for and the rules around it, not just its fields.
 - **`MCP_INSTRUCTIONS` sets the server instructions.** Its value is returned as `instructions` in the `initialize` result, which MCP clients pass to the model as guidance for using the server. The field is omitted when the setting is unset or empty. ([#134](https://github.com/7tg/django-admin-mcp/pull/134), thanks @iddqd1)
